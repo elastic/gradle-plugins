@@ -1,6 +1,7 @@
 package co.elastic.cloud.gradle.docker;
 
 import org.gradle.api.GradleException;
+import org.gradle.api.Project;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
@@ -25,11 +26,9 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
     private DockerFileExtension extension;
     
     private final File dockerSave;
-    private final String tag;
 
     public DockerBuildTask() {
         dockerSave = new File(getProject().getBuildDir(), "docker/docker.img.tar");
-        tag = "gradle/" + getProject().getName() + ":" + getProject().getVersion();
     }
 
     @Nested
@@ -46,11 +45,6 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         return dockerSave;
     }
 
-    @Internal
-    public String getTag() {
-        return tag;
-    }
-
     @TaskAction
     public void doBuildDockerImage() throws IOException {
         if (!this.extension.getWorkingDir().isDirectory()) {
@@ -60,6 +54,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         generateDockerFile(dockerfile);
 
         ExecOperations execOperations = getExecOperations();
+        String tag = DockerBuildPlugin.getTag(getProject());
         ExecResult imageBuild = execOperations.exec(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             // Remain independent from the host environment
@@ -68,7 +63,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             spec.setCommandLine(
                     "docker" , "image", "build", "--progress=plain", "--no-cache", "--tag=" + tag, "."
             );
-            spec.isIgnoreExitValue();
+            spec.setIgnoreExitValue(true);
         });
         if (imageBuild.getExitValue() != 0) {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
@@ -77,7 +72,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             spec.setWorkingDir(dockerSave.getParent());
             spec.setEnvironment(Collections.emptyMap());
             spec.setCommandLine("docker", "save", "--output=" + dockerSave.getName(), tag);
-            spec.isIgnoreExitValue();
+            spec.setIgnoreExitValue(true);
         });
         if (imageSave.getExitValue() != 0) {
             throw new GradleException("Failed to save docker image, see the docker build log in the task output");
@@ -97,7 +92,14 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             writer.write("#############################\n");
             writer.write("# Auto generated Dockerfile #\n");
             writer.write("#############################\n\n");
-            writer.write("FROM " + extension.getFrom() + "\n");
+            if (!extension.getFromProject().isPresent()) {
+                writer.write("FROM " + extension.getFrom() + "\n");
+            } else {
+                Project otherProject = extension.getFromProject().get();
+                DockerFileExtension otherExtension = otherProject.getExtensions().getByType(DockerFileExtension.class);
+                writer.write("# " + otherProject.getPath() + " (a.k.a " + DockerBuildPlugin.getTag(otherProject) + ")\n");
+                writer.write("FROM " + otherExtension.getBuiltImageHash() + "\n");
+            }
 
             if (extension.getMaintainer() != null) {
                 writer.write("MAINTAINER " + extension.getMaintainer() + "\n");
