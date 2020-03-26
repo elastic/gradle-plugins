@@ -1,7 +1,9 @@
 package co.elastic.cloud.gradle.docker;
 
+import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
+import org.gradle.api.file.CopySpec;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
@@ -105,22 +107,12 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
                 writer.write("MAINTAINER " + extension.getMaintainer() + "\n");
             }
 
-            for (Map.Entry<String, String> entry : extension.getLabel().entrySet()) {
-                writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
-            }
-            if (!extension.getLabel().isEmpty()) {
-                writer.write("\n");
-            }
-
-            for (Map.Entry<String, String> entry : extension.getEnv().entrySet()) {
-                writer.write("ENV " + entry.getKey() + "=" + entry.getValue() + "\n");
-            }
-            if (!extension.getEnv().isEmpty()) {
-                writer.write("\n");
-            }
-
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
-            writer.write("COPY " + extension.getWorkingDir().getName() + " /\n\n");
+            List<Action<CopySpec>> copySpecs = extension.getCopySpecs();
+            for (int i = 0; i < copySpecs.size(); i++) {
+                // every copy spec is transferred to it's own layer$i folder
+                writer.write("COPY " + extension.getWorkingDir().getName() + "/" + "layer" + i + " /\n\n");
+            }
 
             for (List<String> commands : extension.getRun()) {
                 writer.write("RUN " + String.join(" && \\\n    ", commands) + "\n");
@@ -134,6 +126,20 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             }
             if (getExtension().getCmd() != null) {
                 writer.write("CMD " + extension.getEntryPoint() + "\n");
+            }
+
+            for (Map.Entry<String, String> entry : extension.getLabel().entrySet()) {
+                writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
+            }
+            if (!extension.getLabel().isEmpty()) {
+                writer.write("\n");
+            }
+
+            for (Map.Entry<String, String> entry : extension.getEnv().entrySet()) {
+                writer.write("ENV " + entry.getKey() + "=" + entry.getValue() + "\n");
+            }
+            if (!extension.getEnv().isEmpty()) {
+                writer.write("\n");
             }
 
         }
