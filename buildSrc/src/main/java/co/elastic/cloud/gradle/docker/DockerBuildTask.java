@@ -63,7 +63,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         ExecResult imageBuild = execOperations.exec(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             // Remain independent from the host environment
-            spec.setEnvironment(Collections.singletonMap("DOCKER_BUILDKIT", "1"));
+            spec.setEnvironment(Collections.emptyMap());
             // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
             spec.setCommandLine(
                     "docker" , "image", "build", "--progress=plain", "--no-cache", "--tag=" + tag, "."
