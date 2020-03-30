@@ -16,6 +16,7 @@ import javax.inject.Inject;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -25,7 +26,7 @@ import java.util.Map;
 @CacheableTask
 public class DockerBuildTask extends org.gradle.api.DefaultTask {
 
-    private DockerFileExtension extension;
+    private DockerBuildExtension extension;
     
     private final File dockerSave;
 
@@ -34,11 +35,11 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
     }
 
     @Nested
-    public DockerFileExtension getExtension() {
+    public DockerBuildExtension getExtension() {
         return extension;
     }
 
-    public void setExtension(DockerFileExtension extension) {
+    public void setExtension(DockerBuildExtension extension) {
         this.extension = extension;
     }
 
@@ -92,40 +93,49 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         }
         try (BufferedWriter writer = Files.newBufferedWriter(targetFile)) {
             writer.write("#############################\n");
+            writer.write("#                           #\n");
             writer.write("# Auto generated Dockerfile #\n");
+            writer.write("#                           #\n");
             writer.write("#############################\n\n");
             if (!extension.getFromProject().isPresent()) {
                 writer.write("FROM " + extension.getFrom() + "\n");
             } else {
                 Project otherProject = extension.getFromProject().get();
-                DockerFileExtension otherExtension = otherProject.getExtensions().getByType(DockerFileExtension.class);
+                DockerBuildExtension otherExtension = otherProject.getExtensions().getByType(DockerBuildExtension.class);
                 writer.write("# " + otherProject.getPath() + " (a.k.a " + DockerBuildPlugin.getTag(otherProject) + ")\n");
-                writer.write("FROM " + otherExtension.getBuiltImageHash() + "\n");
+                writer.write("FROM " + otherExtension.getBuiltImageHash() + "\n\n");
             }
 
             if (extension.getMaintainer() != null) {
-                writer.write("MAINTAINER " + extension.getMaintainer() + "\n");
+                writer.write("MAINTAINER " + extension.getMaintainer() + "\n\n");
             }
 
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
-            List<Action<CopySpec>> copySpecs = extension.getCopySpecs();
-            for (int i = 0; i < copySpecs.size(); i++) {
-                // every copy spec is transferred to it's own layer$i folder
-                writer.write("COPY " + extension.getWorkingDir().getName() + "/" + "layer" + i + " /\n\n");
-            }
+            writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
 
-            for (List<String> commands : extension.getRun()) {
-                writer.write("RUN " + String.join(" && \\\n    ", commands) + "\n");
-            }
-            if (!extension.getRun().isEmpty()) {
-                writer.write("\n");
-            }
+            extension.forEachCopyAndRunLayer(
+                    (ordinal, commands) -> {
+                        try {
+                            writer.write("RUN " + String.join(" && \\\n    ", commands) + "\n");
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    },
+                    (ordinal, copySpecAction) -> {
+                        try {
+                            writer.write("COPY " + extension.getWorkingDir().getName() + "/" + "layer" + ordinal + " /\n");
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    }
+            );
+            writer.write("\n");
 
             if (getExtension().getEntryPoint() != null) {
-                writer.write("ENTRYPOINT " + extension.getEntryPoint() + "\n");
+                writer.write("ENTRYPOINT " + extension.getEntryPoint() + "\n\n");
             }
             if (getExtension().getCmd() != null) {
-                writer.write("CMD " + extension.getEntryPoint() + "\n");
+                writer.write("CMD " + extension.getEntryPoint() + "\n\n");
             }
 
             for (Map.Entry<String, String> entry : extension.getLabel().entrySet()) {
