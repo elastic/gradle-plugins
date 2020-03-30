@@ -98,7 +98,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             writer.write("#                           #\n");
             writer.write("#############################\n\n");
             if (!extension.getFromProject().isPresent()) {
-                writer.write("FROM " + extension.getFrom() + "\n");
+                writer.write("FROM " + extension.getFrom() + "\n\n");
             } else {
                 Project otherProject = extension.getFromProject().get();
                 DockerBuildExtension otherExtension = otherProject.getExtensions().getByType(DockerBuildExtension.class);
@@ -131,11 +131,11 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             );
             writer.write("\n");
 
-            if (getExtension().getEntryPoint() != null) {
+            if (!getExtension().getEntryPoint().isEmpty()) {
                 writer.write("ENTRYPOINT " + extension.getEntryPoint() + "\n\n");
             }
-            if (getExtension().getCmd() != null) {
-                writer.write("CMD " + extension.getEntryPoint() + "\n\n");
+            if (!getExtension().getCmd().isEmpty()) {
+                writer.write("CMD " + extension.getCmd() + "\n\n");
             }
 
             for (Map.Entry<String, String> entry : extension.getLabel().entrySet()) {
