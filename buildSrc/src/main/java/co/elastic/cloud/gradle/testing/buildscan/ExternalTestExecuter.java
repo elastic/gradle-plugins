@@ -9,6 +9,9 @@ import org.gradle.api.internal.tasks.testing.TestExecuter;
 import org.gradle.api.internal.tasks.testing.TestExecutionSpec;
 import org.gradle.api.internal.tasks.testing.TestResultProcessor;
 import org.gradle.api.internal.tasks.testing.TestStartEvent;
+import org.gradle.api.logging.Logger;
+import org.gradle.api.logging.Logging;
+import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.testing.TestOutputEvent;
 import org.gradle.api.tasks.testing.TestResult;
 import org.gradle.internal.id.IdGenerator;
@@ -19,6 +22,8 @@ import java.io.File;
 
 public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
+    private final Logger log = Logging.getLogger(ExternalTestExecuter.class);
+
     private final File fromFile;
 
     public ExternalTestExecuter(File fromFile) {
@@ -27,6 +32,13 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
     @Override
     public void execute(TestExecutionSpec testExecutionSpec, TestResultProcessor processor) {
+        if (fromFile.exists() == false) {
+            log.lifecycle("Skip importing external test results as {} does not exist. " +
+                    "This is expected if the tests did not run.", fromFile);
+            // Exception skips the task, does not fail the build
+            throw new StopExecutionException();
+        }
+
         IdGenerator<?> idGenerator = new LongIdGenerator();
 
         XUnitResult result = XUnitResult.parse(fromFile);
