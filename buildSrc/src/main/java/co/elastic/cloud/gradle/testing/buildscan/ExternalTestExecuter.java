@@ -1,5 +1,7 @@
 package co.elastic.cloud.gradle.testing.buildscan;
 
+import org.gradle.api.GradleException;
+import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.testing.DefaultTestClassDescriptor;
 import org.gradle.api.internal.tasks.testing.DefaultTestMethodDescriptor;
 import org.gradle.api.internal.tasks.testing.DefaultTestOutputEvent;
@@ -25,18 +27,22 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
     private final Logger log = Logging.getLogger(ExternalTestExecuter.class);
 
     private final File fromFile;
+    private final Task generatorTask;
 
-    public ExternalTestExecuter(File fromFile) {
+    public ExternalTestExecuter(File fromFile, Task generatorTask) {
         this.fromFile = fromFile;
+        this.generatorTask = generatorTask;
     }
 
     @Override
     public void execute(TestExecutionSpec testExecutionSpec, TestResultProcessor processor) {
-        if (fromFile.exists() == false) {
-            log.lifecycle("Skip importing external test results as {} does not exist. " +
-                    "This is expected if the tests did not run.", fromFile);
-            // Exception skips the task, does not fail the build
+        if (generatorTask.getDidWork() == false) {
+            // The generator task was skipped, possibly because nothing changed so we don't have to re-run the tests.
+            // Exception will stop current task without failing the build
             throw new StopExecutionException();
+        }
+        if (fromFile.exists() == false) {
+            throw new GradleException("Can't find input file " + fromFile);
         }
 
         IdGenerator<?> idGenerator = new LongIdGenerator();
