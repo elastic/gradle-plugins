@@ -20,17 +20,20 @@ import org.gradle.internal.id.IdGenerator;
 import org.gradle.internal.id.LongIdGenerator;
 
 import java.io.File;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 
 public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
     private final Logger log = Logging.getLogger(ExternalTestExecuter.class);
 
-    private final File fromFile;
+    private final Set<File> fromFiles;
     private final Task generatorTask;
 
-    public ExternalTestExecuter(File fromFile, Task generatorTask) {
-        this.fromFile = fromFile;
+    public ExternalTestExecuter(Set<File> fromFile, Task generatorTask) {
+        this.fromFiles = fromFile;
         this.generatorTask = generatorTask;
     }
 
@@ -41,55 +44,62 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
             // Exception will stop current task without failing the build
             throw new StopExecutionException();
         }
-        if (fromFile.exists() == false) {
-            throw new GradleException("Can't find input file " + fromFile);
+
+        List<String> missingFiles = fromFiles.stream()
+                .filter(file -> !file.exists())
+                .map(File::getAbsolutePath)
+                .collect(Collectors.toList());
+        if (missingFiles.size() > 0) {
+            throw new GradleException("Can't find input files " + String.join(" ", missingFiles));
         }
 
         IdGenerator<?> idGenerator = new LongIdGenerator();
 
-        XUnitResult result = XUnitResult.parse(fromFile);
+        for (File fromFiles: fromFiles) {
+            XUnitResult result = XUnitResult.parse(fromFiles);
 
-        DefaultTestSuiteDescriptor testSuiteDescriptor = new DefaultTestSuiteDescriptor(idGenerator.generateId(), "ImportedXUnitTests");
-        processor.started(testSuiteDescriptor, new TestStartEvent(System.currentTimeMillis()));
-        for (XUnitTestClass testClass : result.getTestClasses()) {
-            DefaultTestClassDescriptor classDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testClass.getName());
-            processor.started(classDescriptor, new TestStartEvent(System.currentTimeMillis(), testSuiteDescriptor.getId()));
-            boolean isClassSuccess = true;
-            for (XUnitTestMethod testMethod : testClass.getTestMethods()) {
-                DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
-                        idGenerator.generateId(),
-                        testClass.getName(),
-                        // Add the ski reason to the method name, as build scans only show output on failure
-                        testMethod.isSkipped() ? testMethod.getName() + " (" + testMethod.getStdout() + ")" : testMethod.getName()
-                );
-                processor.started(methodDescriptor, new TestStartEvent(System.currentTimeMillis(), classDescriptor.getId()));
-                processor.output(
-                        methodDescriptor.getId(),
-                        new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, testMethod.getStdout())
-                );
-                processor.output(
-                        methodDescriptor.getId(),
-                        new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, testMethod.getStdErr())
-                );
-                if (testMethod.isSuccessful()) {
-                    processor.completed(
-                            methodDescriptor.getId(),
-                            new TestCompleteEvent(
-                                    System.currentTimeMillis(),
-                                    testMethod.isSkipped() ? TestResult.ResultType.SKIPPED :
-                                            TestResult.ResultType.SUCCESS
-                            )
+            DefaultTestSuiteDescriptor testSuiteDescriptor = new DefaultTestSuiteDescriptor(idGenerator.generateId(), "ImportedXUnitTests");
+            processor.started(testSuiteDescriptor, new TestStartEvent(System.currentTimeMillis()));
+            for (XUnitTestClass testClass : result.getTestClasses()) {
+                DefaultTestClassDescriptor classDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testClass.getName());
+                processor.started(classDescriptor, new TestStartEvent(System.currentTimeMillis(), testSuiteDescriptor.getId()));
+                boolean isClassSuccess = true;
+                for (XUnitTestMethod testMethod : testClass.getTestMethods()) {
+                    DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
+                            idGenerator.generateId(),
+                            testClass.getName(),
+                            // Add the ski reason to the method name, as build scans only show output on failure
+                            testMethod.isSkipped() ? testMethod.getName() + " (" + testMethod.getStdout() + ")" : testMethod.getName()
                     );
-                } else {
-                    processor.failure(
+                    processor.started(methodDescriptor, new TestStartEvent(System.currentTimeMillis(), classDescriptor.getId()));
+                    processor.output(
                             methodDescriptor.getId(),
-                            new ExternalTestFailureException("Test being imported failed, output follows")
+                            new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, testMethod.getStdout())
                     );
+                    processor.output(
+                            methodDescriptor.getId(),
+                            new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, testMethod.getStdErr())
+                    );
+                    if (testMethod.isSuccessful()) {
+                        processor.completed(
+                                methodDescriptor.getId(),
+                                new TestCompleteEvent(
+                                        System.currentTimeMillis(),
+                                        testMethod.isSkipped() ? TestResult.ResultType.SKIPPED :
+                                                TestResult.ResultType.SUCCESS
+                                )
+                        );
+                    } else {
+                        processor.failure(
+                                methodDescriptor.getId(),
+                                new ExternalTestFailureException("Test being imported failed, output follows")
+                        );
+                    }
                 }
+                processor.completed(classDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
             }
-            processor.completed(classDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
+            processor.completed(testSuiteDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
         }
-        processor.completed(testSuiteDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
     }
 
     @Override
