@@ -55,19 +55,19 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
         IdGenerator<?> idGenerator = new LongIdGenerator();
 
-        for (File fromFiles: fromFiles) {
-            XUnitResult result = XUnitResult.parse(fromFiles);
+        for (File fromFile : fromFiles) {
+            XUnitResult result = XUnitResult.parse(fromFile);
 
             DefaultTestSuiteDescriptor testSuiteDescriptor = new DefaultTestSuiteDescriptor(idGenerator.generateId(), "ImportedXUnitTests");
             processor.started(testSuiteDescriptor, new TestStartEvent(System.currentTimeMillis()));
             for (XUnitTestClass testClass : result.getTestClasses()) {
-                DefaultTestClassDescriptor classDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testClass.getName());
+                DefaultTestClassDescriptor classDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), fromFile.getName(), testClass.getName());
                 processor.started(classDescriptor, new TestStartEvent(System.currentTimeMillis(), testSuiteDescriptor.getId()));
                 boolean isClassSuccess = true;
                 for (XUnitTestMethod testMethod : testClass.getTestMethods()) {
                     DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
                             idGenerator.generateId(),
-                            testClass.getName(),
+                            testMethod.getClassName(),
                             // Add the ski reason to the method name, as build scans only show output on failure
                             testMethod.isSkipped() ? testMethod.getName() + " (" + testMethod.getStdout() + ")" : testMethod.getName()
                     );
