@@ -67,7 +67,7 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
                 for (XUnitTestMethod testMethod : testClass.getTestMethods()) {
                     DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
                             idGenerator.generateId(),
-                            testMethod.getClassName(),
+                            testMethod.getClassName().orElse(testClass.getName()),
                             // Add the ski reason to the method name, as build scans only show output on failure
                             testMethod.isSkipped() ? testMethod.getName() + " (" + testMethod.getStdout() + ")" : testMethod.getName()
                     );
