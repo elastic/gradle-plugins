@@ -64,7 +64,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             spec.setEnvironment(Collections.emptyMap());
             // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
             spec.setCommandLine(
-                    "docker" , "image", "build", "--progress=plain", "--no-cache", "--tag=" + tag, "."
+                    "docker" , "image", "build", "--no-cache", "--tag=" + tag, "."
             );
             spec.setIgnoreExitValue(true);
         });
