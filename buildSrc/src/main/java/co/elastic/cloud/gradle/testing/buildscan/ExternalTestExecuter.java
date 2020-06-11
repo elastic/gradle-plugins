@@ -63,7 +63,6 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
             for (XUnitTestClass testClass : result.getTestClasses()) {
                 DefaultTestClassDescriptor classDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), fromFile.getName(), testClass.getName());
                 processor.started(classDescriptor, new TestStartEvent(System.currentTimeMillis(), testSuiteDescriptor.getId()));
-                boolean isClassSuccess = true;
                 for (XUnitTestMethod testMethod : testClass.getTestMethods()) {
                     DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
                             idGenerator.generateId(),
@@ -95,6 +94,13 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
                                 new ExternalTestFailureException("Test being imported failed, output follows")
                         );
                     }
+                }
+                // If no methods was run check that the all class don't have errors or failures
+                if (testClass.getTestMethods().size() == 0 && (testClass.getErrors().orElseGet(() -> 0) > 0 || testClass.getFailures().orElseGet(() -> 0) > 0)) {
+                    processor.failure(
+                            classDescriptor.getId(),
+                            new ExternalTestFailureException("TestClass being imported has errors")
+                    );
                 }
                 processor.completed(classDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
             }
