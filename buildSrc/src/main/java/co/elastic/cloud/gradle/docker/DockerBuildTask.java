@@ -1,11 +1,8 @@
 package co.elastic.cloud.gradle.docker;
 
-import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
-import org.gradle.api.file.CopySpec;
 import org.gradle.api.tasks.CacheableTask;
-import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
@@ -20,7 +17,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 @CacheableTask
@@ -57,7 +53,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         generateDockerFile(dockerfile);
 
         ExecOperations execOperations = getExecOperations();
-        String tag = DockerBuildPlugin.getTag(getProject());
+        String tag = DockerPluginUtils.getTag(getProject());
         ExecResult imageBuild = execOperations.exec(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             // Remain independent from the host environment
@@ -102,8 +98,8 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             } else {
                 Project otherProject = extension.getFromProject().get();
                 DockerBuildExtension otherExtension = otherProject.getExtensions().getByType(DockerBuildExtension.class);
-                writer.write("# " + otherProject.getPath() + " (a.k.a " + DockerBuildPlugin.getTag(otherProject) + ")\n");
-                writer.write("FROM " + otherExtension.getBuiltImageHash() + "\n\n");
+                writer.write("# " + otherProject.getPath() + " (a.k.a " + DockerPluginUtils.getTag(otherProject) + ")\n");
+                writer.write("FROM " + otherExtension.getImageId() + "\n\n");
             }
 
             if (extension.getMaintainer() != null) {

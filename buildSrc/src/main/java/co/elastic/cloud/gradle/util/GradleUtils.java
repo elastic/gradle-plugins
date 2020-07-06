@@ -1,5 +1,6 @@
 package co.elastic.cloud.gradle.util;
 
+import org.gradle.api.Project;
 import org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.testing.Test;
@@ -25,5 +26,9 @@ public class GradleUtils {
                 })
                 .map(filters -> !filters.isEmpty())
                 .orElse(false);
+    }
+
+    public static boolean isCi() {
+        return System.getenv("BUILD_URL") != null;
     }
 }
