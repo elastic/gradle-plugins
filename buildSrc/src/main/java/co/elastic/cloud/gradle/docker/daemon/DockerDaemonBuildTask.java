@@ -1,33 +1,33 @@
-package co.elastic.cloud.gradle.docker;
+package co.elastic.cloud.gradle.docker.daemon;
 
+import co.elastic.cloud.gradle.docker.DockerBuildExtension;
+import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import com.google.cloud.tools.jib.api.ImageReference;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
-import org.gradle.api.tasks.CacheableTask;
-import org.gradle.api.tasks.Nested;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.tasks.*;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
 
 import javax.inject.Inject;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
 
 @CacheableTask
-public class DockerBuildTask extends org.gradle.api.DefaultTask {
+public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
 
     private DockerBuildExtension extension;
-    
+
     private final File dockerSave;
 
-    public DockerBuildTask() {
-        dockerSave = new File(getProject().getBuildDir(), "docker/docker.img.tar");
+    public DockerDaemonBuildTask() {
+        super();
+        dockerSave = DockerPluginConventions.projectTarImagePath(getProject()).toFile();
     }
 
     @Nested
@@ -46,21 +46,23 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
 
     @TaskAction
     public void doBuildDockerImage() throws IOException {
-        if (!this.extension.getWorkingDir().isDirectory()) {
-            throw new GradleException("Can't build docker image, missing working directory " + extension.getWorkingDir());
+        File workingDir = DockerPluginConventions.contextPath(getProject()).toFile();
+        if (!workingDir.isDirectory()) {
+            throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
-        Path dockerfile = extension.getWorkingDir().toPath().getParent().resolve("Dockerfile");
+        Path dockerfile = workingDir.toPath().getParent().resolve("Dockerfile");
         generateDockerFile(dockerfile);
 
         ExecOperations execOperations = getExecOperations();
-        String tag = DockerPluginUtils.getTag(getProject());
+
+        String tag = DockerPluginConventions.imageReference(getProject()).toString();
         ExecResult imageBuild = execOperations.exec(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             // Remain independent from the host environment
             spec.setEnvironment(Collections.emptyMap());
             // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
             spec.setCommandLine(
-                    "docker" , "image", "build", "--no-cache", "--tag=" + tag, "."
+                    "docker", "image", "build", "--no-cache", "--tag=" + tag, "."
             );
             spec.setIgnoreExitValue(true);
         });
@@ -76,11 +78,21 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
         if (imageSave.getExitValue() != 0) {
             throw new GradleException("Failed to save docker image, see the docker build log in the task output");
         }
-    }
 
-    @Inject
-    public ExecOperations getExecOperations() {
-        throw new IllegalStateException("not implemented");
+        // Load imageId
+        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
+        execOperations.exec(spec -> {
+            spec.setStandardOutput(commandOutput);
+            spec.setEnvironment(Collections.emptyMap());
+            spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
+        });
+        String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
+        ImageReference imageReference = DockerPluginConventions.imageReference(getProject(), imageId);
+        getLogger().info("Built image {}", imageReference);
+
+        getProject().getExtensions().add(DockerBuildResultExtension.class,
+                "dockerBuildResult",
+                new DockerBuildResultExtension(imageId, dockerSave.toPath()));
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {
@@ -93,14 +105,13 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             writer.write("# Auto generated Dockerfile #\n");
             writer.write("#                           #\n");
             writer.write("#############################\n\n");
-            if (!extension.getFromProject().isPresent()) {
-                writer.write("FROM " + extension.getFrom() + "\n\n");
-            } else {
-                Project otherProject = extension.getFromProject().get();
-                DockerBuildExtension otherExtension = otherProject.getExtensions().getByType(DockerBuildExtension.class);
-                writer.write("# " + otherProject.getPath() + " (a.k.a " + DockerPluginUtils.getTag(otherProject) + ")\n");
-                writer.write("FROM " + otherExtension.getImageId() + "\n\n");
-            }
+
+            writer.write(
+                    extension.getFromProject().map(otherProject -> {
+                        ImageReference otherProjectImageReference = DockerPluginConventions.imageReference(otherProject);
+                        return "# " + otherProject.getPath() + " (a.k.a " + otherProjectImageReference + ")\n" +
+                                "FROM " + otherProjectImageReference + "\n\n";
+                    }).orElse("FROM " + extension.getFrom() + "\n\n"));
 
             if (extension.getMaintainer() != null) {
                 writer.write("MAINTAINER " + extension.getMaintainer() + "\n\n");
@@ -119,7 +130,7 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            writer.write("COPY " + extension.getWorkingDir().getName() + "/" + "layer" + ordinal + " /\n");
+                            writer.write("COPY " + DockerPluginConventions.contextPath(getProject()).toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
@@ -149,5 +160,10 @@ public class DockerBuildTask extends org.gradle.api.DefaultTask {
             }
 
         }
+    }
+
+    @Inject
+    public ExecOperations getExecOperations() {
+        throw new IllegalStateException("not implemented");
     }
 }
