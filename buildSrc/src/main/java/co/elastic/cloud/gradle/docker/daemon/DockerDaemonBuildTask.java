@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @CacheableTask
 public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
@@ -139,7 +140,7 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
             writer.write("\n");
 
             if (!getExtension().getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + extension.getEntryPoint() + "\n\n");
+                writer.write("ENTRYPOINT " + extension.getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
             }
             if (!getExtension().getCmd().isEmpty()) {
                 writer.write("CMD " + extension.getCmd() + "\n\n");

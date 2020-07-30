@@ -4,14 +4,17 @@ import co.elastic.cloud.gradle.docker.*;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
+import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.*;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
@@ -49,7 +52,9 @@ public class JibBuildTask extends DefaultTask {
                         if (contextFolder.exists() && contextFolder.isDirectory() && contextFolder.listFiles().length > 0) {
                             Arrays.stream(contextFolder.listFiles()).forEach(file -> {
                                 try {
-                                    jibBuilder.addFileEntriesLayer(FileEntriesLayer.builder().addEntryRecursive(file.toPath(), AbsoluteUnixPath.get("/" + file.getName())).build());
+                                    jibBuilder.addFileEntriesLayer(
+                                            FileEntriesLayer.builder()
+                                                    .addEntryRecursive(file.toPath(), AbsoluteUnixPath.get("/" + file.getName()), JibBuildTask::getJibFilePermission).build());
                                 } catch (IOException e) {
                                     throw new GradleException("Error configuring layer" + ordinal + " for Jib docker image", e);
                                 }
@@ -105,6 +110,32 @@ public class JibBuildTask extends DefaultTask {
 
     public void setExtension(DockerBuildExtension extension) {
         this.extension = extension;
+    }
+
+    private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
+        try {
+            return FilePermissions.fromPosixFilePermissions(Files.getPosixFilePermissions(sourcePath));
+        } catch (UnsupportedOperationException e) {
+            Set<PosixFilePermission> permissions = new HashSet<>();
+            File sourceFile = sourcePath.toFile();
+            if (sourceFile.canRead()) {
+                permissions.add(PosixFilePermission.OWNER_READ);
+                permissions.add(PosixFilePermission.GROUP_READ);
+                permissions.add(PosixFilePermission.OTHERS_READ);
+            }
+            if (sourceFile.canWrite()) {
+                permissions.add(PosixFilePermission.OWNER_WRITE);
+                permissions.add(PosixFilePermission.GROUP_WRITE);
+            }
+            if (sourceFile.canExecute() || sourceFile.isDirectory()) {
+                permissions.add(PosixFilePermission.OWNER_EXECUTE);
+                permissions.add(PosixFilePermission.GROUP_EXECUTE);
+                permissions.add(PosixFilePermission.OTHERS_EXECUTE);
+            }
+            return FilePermissions.fromPosixFilePermissions(permissions);
+        } catch (IOException | SecurityException e) {
+            throw new GradleException("Error while detecting permissions for "+sourcePath.toString(), e);
+        }
     }
 
 }
