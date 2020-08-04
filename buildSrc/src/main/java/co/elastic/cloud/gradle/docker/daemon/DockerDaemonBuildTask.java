@@ -3,6 +3,7 @@ package co.elastic.cloud.gradle.docker.daemon;
 import co.elastic.cloud.gradle.docker.DockerBuildExtension;
 import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import co.elastic.cloud.gradle.util.CacheUtil;
 import com.google.cloud.tools.jib.api.ImageReference;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -94,6 +95,8 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
         getProject().getExtensions().add(DockerBuildResultExtension.class,
                 "dockerBuildResult",
                 new DockerBuildResultExtension(imageId, dockerSave.toPath()));
+
+        CacheUtil.ensureCacheLimit(this);
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {

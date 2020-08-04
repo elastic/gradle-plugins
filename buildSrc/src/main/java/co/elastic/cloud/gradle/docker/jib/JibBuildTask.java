@@ -1,6 +1,7 @@
 package co.elastic.cloud.gradle.docker.jib;
 
 import co.elastic.cloud.gradle.docker.*;
+import co.elastic.cloud.gradle.util.CacheUtil;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
@@ -34,6 +35,9 @@ public class JibBuildTask extends DefaultTask {
     @TaskAction
     public void build() {
         try {
+            // Clean application cache before build to avoid useless application layer in the cache
+            getProject().delete(getApplicationLayerCache());
+
             // Base image is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(
@@ -91,6 +95,8 @@ public class JibBuildTask extends DefaultTask {
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
             throw new GradleException("Error running Jib docker image build", e);
         }
+
+        CacheUtil.ensureCacheLimit(this);
     }
 
     @OutputDirectory
