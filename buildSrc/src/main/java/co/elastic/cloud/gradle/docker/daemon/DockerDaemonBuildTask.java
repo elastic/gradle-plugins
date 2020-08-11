@@ -121,6 +121,22 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                 writer.write("MAINTAINER " + extension.getMaintainer() + "\n\n");
             }
 
+            if (extension.getUser() != null) {
+                writer.write(String.format(
+                    "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
+                    "       groupadd -g %4$s %3$s ; \\ \n" +
+                    "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" + 
+                    "   else \\ \n" + // Specific case for Alpine and Busybox
+                    "       addgroup --gid %4$s %3$s ; \\ \n" + 
+                    "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" + 
+                    "   fi \n\n",
+                    extension.getUser().user,
+                    extension.getUser().uid,
+                    extension.getUser().group,
+                    extension.getUser().gid
+                ));
+            }
+
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
             writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
 
@@ -134,7 +150,10 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            writer.write("COPY " + DockerPluginConventions.contextPath(getProject()).toFile().getName() + "/" + "layer" + ordinal + " /\n");
+                            String chown = extension.getUser() != null ? 
+                                "--chown=" + extension.getUser().uid + ":" + extension.getUser().gid + " ":
+                                "";
+                            writer.write("COPY " + chown + DockerPluginConventions.contextPath(getProject()).toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
