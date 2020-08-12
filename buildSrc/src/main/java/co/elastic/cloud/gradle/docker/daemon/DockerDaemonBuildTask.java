@@ -118,7 +118,7 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                     }).orElse("FROM " + extension.getFrom() + "\n\n"));
 
             if (extension.getMaintainer() != null) {
-                writer.write("MAINTAINER " + extension.getMaintainer() + "\n\n");
+                writer.write("LABEL maintainer=" + extension.getMaintainer() + "\n\n");
             }
 
             if (extension.getUser() != null) {
