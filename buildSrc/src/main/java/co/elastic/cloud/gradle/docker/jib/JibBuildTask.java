@@ -31,13 +31,9 @@ public class JibBuildTask extends DefaultTask {
         this.applicationLayerCache = DockerPluginConventions.jibApplicationLayerCachePath(getProject());
         this.projectImageArchive = DockerPluginConventions.projectTarImagePath(getProject());
     }
-
-    @TaskAction
+    
     public void build() {
         try {
-            // Clean application cache before build to avoid useless application layer in the cache
-            getProject().delete(getApplicationLayerCache());
-
             // Base image is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(
@@ -95,7 +91,13 @@ public class JibBuildTask extends DefaultTask {
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
             throw new GradleException("Error running Jib docker image build", e);
         }
+    }
 
+    @TaskAction
+    public void cleanAndBuild() {
+        // Clean application cache before build to avoid useless application layer in the cache
+        getProject().delete(getApplicationLayerCache());
+        build();
         CacheUtil.ensureCacheLimit(this);
     }
 
