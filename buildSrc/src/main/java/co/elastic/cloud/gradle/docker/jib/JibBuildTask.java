@@ -53,8 +53,16 @@ public class JibBuildTask extends DefaultTask {
                             Arrays.stream(contextFolder.listFiles()).forEach(file -> {
                                 try {
                                     jibBuilder.addFileEntriesLayer(
-                                            FileEntriesLayer.builder()
-                                                    .addEntryRecursive(file.toPath(), AbsoluteUnixPath.get("/" + file.getName()), JibBuildTask::getJibFilePermission).build());
+                                        FileEntriesLayer.builder()
+                                                .addEntryRecursive(
+                                                    file.toPath(), 
+                                                    AbsoluteUnixPath.get("/" + file.getName()), 
+                                                    JibBuildTask::getJibFilePermission,
+                                                    FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
+                                                    _action.owner.isPresent() ? 
+                                                        (sourcePath, destinationPath) -> _action.owner.get() :
+                                                        FileEntriesLayer.DEFAULT_OWNERSHIP_PROVIDER
+                                                ).build());
                                 } catch (IOException e) {
                                     throw new GradleException("Error configuring layer" + ordinal + " for Jib docker image", e);
                                 }
@@ -145,5 +153,4 @@ public class JibBuildTask extends DefaultTask {
             throw new GradleException("Error while detecting permissions for "+sourcePath.toString(), e);
         }
     }
-
 }

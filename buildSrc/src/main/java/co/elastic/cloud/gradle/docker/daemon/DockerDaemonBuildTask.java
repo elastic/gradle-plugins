@@ -150,8 +150,8 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            String chown = extension.getUser() != null ? 
-                                "--chown=" + extension.getUser().uid + ":" + extension.getUser().gid + " ":
+                            String chown = copySpecAction.owner.isPresent() ? 
+                                "--chown=" + copySpecAction.owner.get() + " ":
                                 "";
                             writer.write("COPY " + chown + DockerPluginConventions.contextPath(getProject()).toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
