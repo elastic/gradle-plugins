@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="8" failures="2" time="697.972">
+    <testsuite name="FileName.test.js" errors="1" failures="1" skipped="1" timestamp="2020-08-26T16:18:47" time="6.568" tests="4">
+        <testcase classname=" success test name" name=" success test name" time="0.006">
+            <system-out>STDOUT text</system-out>
+            <system-err>STDERR text</system-err>
+        </testcase>
+        <testcase classname=" error test name" name=" error test name" time="0.061">
+            <error message="error message" type="error message type">error description</error>
+        </testcase>
+        <testcase classname=" skipped test name" name=" skipped test name" time="0.001">
+            <skipped message="skipped message" />
+        </testcase>
+        <testcase classname=" failure test name" name=" failure test name" time="0">
+            <failure message="failure message"  type="some failure type">failure description</failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="FileName.test.tsx" errors="1" failures="1" skipped="1" timestamp="2020-08-26T16:18:47" time="6.568" tests="4">
+        <testcase classname=" success test name" name=" success test name" time="0.006">
+            <system-out>STDOUT text</system-out>
+            <system-err>STDERR text</system-err>
+        </testcase>
+        <testcase classname=" error test name" name=" error test name" time="0.061">
+            <error message="error message" type="error message type">error description</error>
+        </testcase>
+        <testcase classname=" skipped test name" name=" skipped test name" time="0.001">
+            <skipped message="skipped message" />
+        </testcase>
+        <testcase classname=" failure test name" name=" failure test name" time="0">
+            <failure message="failure message"  type="some failure type">failure description</failure>
+        </testcase>
+    </testsuite>
+</testsuites>
