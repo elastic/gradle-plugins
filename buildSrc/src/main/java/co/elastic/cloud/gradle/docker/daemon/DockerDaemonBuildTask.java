@@ -1,10 +1,13 @@
 package co.elastic.cloud.gradle.docker.daemon;
 
 import co.elastic.cloud.gradle.docker.DockerBuildExtension;
+import co.elastic.cloud.gradle.docker.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.CacheUtil;
 import com.google.cloud.tools.jib.api.ImageReference;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.tasks.*;
@@ -26,10 +29,12 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
     private DockerBuildExtension extension;
 
     private final File dockerSave;
+    private final Path imageBuildInfo;
 
     public DockerDaemonBuildTask() {
         super();
-        dockerSave = DockerPluginConventions.projectTarImagePath(getProject()).toFile();
+        this.dockerSave = DockerPluginConventions.projectTarImagePath(getProject()).toFile();
+        this.imageBuildInfo = DockerPluginConventions.imageBuildInfo(getProject());
     }
 
     @Nested
@@ -97,6 +102,15 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                 new DockerBuildResultExtension(imageId, dockerSave.toPath()));
 
         CacheUtil.ensureCacheLimit(this);
+
+        try (FileWriter writer = new FileWriter(imageBuildInfo.toFile())) {
+            writer.write(new Gson().toJson(new DockerBuildInfo()
+                    .setTag(tag)
+                    .setBuilder(DockerBuildInfo.Builder.DAEMON)
+                    .setImageId(imageId)));
+        } catch (IOException e) {
+            throw new GradleException("Error writing image info file", e);
+        }
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {

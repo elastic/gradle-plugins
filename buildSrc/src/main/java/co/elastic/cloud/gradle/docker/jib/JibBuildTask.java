@@ -1,22 +1,30 @@
 package co.elastic.cloud.gradle.docker.jib;
 
-import co.elastic.cloud.gradle.docker.*;
+import co.elastic.cloud.gradle.docker.DockerBuildExtension;
+import co.elastic.cloud.gradle.docker.DockerBuildInfo;
+import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.CacheUtil;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.*;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 @CacheableTask
@@ -24,15 +32,17 @@ public class JibBuildTask extends DefaultTask {
 
     private final Path applicationLayerCache;
     private final Path projectImageArchive;
+    private final Path imageBuildInfo;
     private DockerBuildExtension extension;
 
     public JibBuildTask() {
         super();
         this.applicationLayerCache = DockerPluginConventions.jibApplicationLayerCachePath(getProject());
         this.projectImageArchive = DockerPluginConventions.projectTarImagePath(getProject());
+        this.imageBuildInfo = DockerPluginConventions.imageBuildInfo(getProject());
     }
-    
-    public void build() {
+
+    public void build(ImageReference imageReference) {
         try {
             // Base image is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
@@ -85,17 +95,25 @@ public class JibBuildTask extends DefaultTask {
             Optional.ofNullable(getExtension().getEnv())
                     .ifPresent(envs -> envs.forEach(jibBuilder::addEnvironmentVariable));
 
-            ImageReference imageReference = DockerPluginConventions.imageReference(getProject());
+
             JibContainer jibContainer = jibBuilder.containerize(
                     Containerizer
                             .to(TarImage.at(getProjectImageArchive()).named(imageReference))
                             .setApplicationLayersCache(getApplicationLayerCache()));
 
-
-
             getProject().getExtensions().add(DockerBuildResultExtension.class,
                     "dockerBuildResult",
                     new DockerBuildResultExtension(jibContainer.getImageId().toString(), getProjectImageArchive()));
+
+            try (FileWriter writer = new FileWriter(imageBuildInfo.toFile())) {
+                writer.write(new Gson().toJson(new DockerBuildInfo()
+                        .setTag(imageReference.toString())
+                        .setBuilder(DockerBuildInfo.Builder.JIB)
+                        .setImageId(jibContainer.getImageId().getHash())));
+
+            } catch (IOException e) {
+                throw new GradleException("Error writing image info file", e);
+            }
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
             throw new GradleException("Error running Jib docker image build", e);
         }
@@ -105,7 +123,10 @@ public class JibBuildTask extends DefaultTask {
     public void cleanAndBuild() {
         // Clean application cache before build to avoid useless application layer in the cache
         getProject().delete(getApplicationLayerCache());
-        build();
+
+        ImageReference imageReference = DockerPluginConventions.imageReference(getProject());
+
+        build(imageReference);
         CacheUtil.ensureCacheLimit(this);
     }
 
@@ -117,6 +138,11 @@ public class JibBuildTask extends DefaultTask {
     @Internal
     public Path getProjectImageArchive() {
         return projectImageArchive;
+    }
+
+    @OutputFile
+    public Path getImageBuildInfo() {
+        return imageBuildInfo;
     }
 
     @Nested
@@ -150,7 +176,7 @@ public class JibBuildTask extends DefaultTask {
             }
             return FilePermissions.fromPosixFilePermissions(permissions);
         } catch (IOException | SecurityException e) {
-            throw new GradleException("Error while detecting permissions for "+sourcePath.toString(), e);
+            throw new GradleException("Error while detecting permissions for " + sourcePath.toString(), e);
         }
     }
 }
