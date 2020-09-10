@@ -2,17 +2,7 @@ package co.elastic.cloud.gradle.testing.buildscan;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.Task;
-import org.gradle.api.internal.tasks.testing.DefaultTestClassDescriptor;
-import org.gradle.api.internal.tasks.testing.DefaultTestMethodDescriptor;
-import org.gradle.api.internal.tasks.testing.DefaultTestOutputEvent;
-import org.gradle.api.internal.tasks.testing.DefaultTestSuiteDescriptor;
-import org.gradle.api.internal.tasks.testing.TestCompleteEvent;
-import org.gradle.api.internal.tasks.testing.TestExecuter;
-import org.gradle.api.internal.tasks.testing.TestExecutionSpec;
-import org.gradle.api.internal.tasks.testing.TestResultProcessor;
-import org.gradle.api.internal.tasks.testing.TestStartEvent;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
+import org.gradle.api.internal.tasks.testing.*;
 import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.testing.TestOutputEvent;
@@ -21,14 +11,14 @@ import org.gradle.internal.id.IdGenerator;
 import org.gradle.internal.id.LongIdGenerator;
 
 import java.io.File;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 
 public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
-
-    private final Logger log = Logging.getLogger(ExternalTestExecuter.class);
 
     private final Set<File> fromFiles;
     private final TaskProvider<? extends Task> generatorTask;
@@ -56,71 +46,76 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
         IdGenerator<?> idGenerator = new LongIdGenerator();
 
-        for (File fromFile : fromFiles) {
-            DefaultTestSuiteDescriptor testSuiteDescriptor = new DefaultTestSuiteDescriptor(idGenerator.generateId(), "ImportedXUnitTests");
-            processor.started(testSuiteDescriptor, new TestStartEvent(System.currentTimeMillis()));
-            XUnitXmlParser.parse(fromFile).forEach(testSuite -> {
-                DefaultTestClassDescriptor suiteDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testSuite.getName());
-                processor.started(suiteDescriptor, new TestStartEvent(System.currentTimeMillis()));
-                testSuite.getTests().forEach(testCase -> {
-                    DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
-                            idGenerator.generateId(),
-                            testSuite.getName(),
-                            testCase.getName());
-                    processor.started(methodDescriptor, new TestStartEvent(System.currentTimeMillis(), suiteDescriptor.getId()));
-                    // Cannot switch on types ...
-                    if (testCase.getStatus() instanceof TestCaseSuccess) {
-                        TestCaseSuccess success = (TestCaseSuccess) testCase.getStatus();
-                        success.getStdout().ifPresent(stdout -> processor.output(
-                                methodDescriptor.getId(),
-                                new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, stdout)
-                        ));
-                        success.getStderr().ifPresent(stderr -> processor.output(
-                                methodDescriptor.getId(),
-                                new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, stderr)
-                        ));
-                        processor.completed(
-                                methodDescriptor.getId(),
-                                new TestCompleteEvent(System.currentTimeMillis(), TestResult.ResultType.SUCCESS)
-                        );
-                    } else if (testCase.getStatus() instanceof TestCaseFailure) {
-                        TestCaseFailure failure = (TestCaseFailure) testCase.getStatus();
+        fromFiles.stream()
+                .flatMap(resultFile -> XUnitXmlParser.parse(resultFile).stream())
+                .forEach(testSuite -> {
+                    DefaultTestClassDescriptor suiteDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testSuite.getName());
+                    LocalDateTime suiteStartTime = testSuite.startedTime(LocalDateTime::now);
+                    processor.started(suiteDescriptor, new TestStartEvent(toEpochMilli(suiteStartTime)));
+                    testSuite.getTests().forEach(testCase -> {
+                        DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
+                                idGenerator.generateId(),
+                                testSuite.getName(),
+                                testCase.getName());
+                        processor.started(methodDescriptor, new TestStartEvent(toEpochMilli(suiteStartTime), suiteDescriptor.getId()));
+
+                        // Cannot switch on types ...
+                        if (testCase.getStatus() instanceof TestCaseSuccess) {
+                            TestCaseSuccess success = (TestCaseSuccess) testCase.getStatus();
+                            success.getStdout().ifPresent(stdout -> processor.output(
+                                    methodDescriptor.getId(),
+                                    new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, stdout)
+                            ));
+                            success.getStderr().ifPresent(stderr -> processor.output(
+                                    methodDescriptor.getId(),
+                                    new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, stderr)
+                            ));
+                            processor.completed(
+                                    methodDescriptor.getId(),
+                                    new TestCompleteEvent(toEpochMilli(testCase.endTime(suiteStartTime)), TestResult.ResultType.SUCCESS)
+                            );
+                        } else if (testCase.getStatus() instanceof TestCaseFailure) {
+                            TestCaseFailure failure = (TestCaseFailure) testCase.getStatus();
+                            processor.failure(
+                                    methodDescriptor.getId(), new ExternalTestFailureException(
+                                            "Test case being imported failed (" + failure.getType().orElse("Untyped") + "): " +
+                                                    failure.getMessage().orElse("") + " " +
+                                                    failure.getDescription().orElse(""))
+                            );
+                        } else if (testCase.getStatus() instanceof TestCaseError) {
+                            TestCaseError error = (TestCaseError) testCase.getStatus();
+                            processor.failure(
+                                    methodDescriptor.getId(), new ExternalTestFailureException(
+                                            "Test case being imported failed (" + error.getType().orElse("Untyped") + "): " +
+                                                    error.getMessage().orElse("") +
+                                                    error.getDescription().map(desc -> "\n" + desc).orElse(""))
+                            );
+                        } else if (testCase.getStatus() instanceof TestCaseSkipped) {
+                            TestCaseSkipped skipped = (TestCaseSkipped) testCase.getStatus();
+                            skipped.getMessage().ifPresent(message -> processor.output(
+                                    methodDescriptor.getId(),
+                                    new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, message)
+                            ));
+                            processor.completed(
+                                    methodDescriptor.getId(),
+                                    new TestCompleteEvent(toEpochMilli(testCase.endTime(suiteStartTime)), TestResult.ResultType.SKIPPED)
+                            );
+                        }
+                    });
+                    // If no methods was run check that the all class don't have errors or failures
+                    if (testSuite.getTests().size() == 0 && (testSuite.getErrors() > 0 || testSuite.getFailures() > 0)) {
                         processor.failure(
-                                methodDescriptor.getId(), new ExternalTestFailureException(
-                                        "Test case being imported failed (" + failure.getType().orElse("Untyped") + "): " +
-                                                failure.getMessage().orElse("") + " " +
-                                                failure.getDescription().orElse(""))
-                        );
-                    } else if (testCase.getStatus() instanceof TestCaseError) {
-                        TestCaseError error = (TestCaseError) testCase.getStatus();
-                        processor.failure(
-                                methodDescriptor.getId(), new ExternalTestFailureException(
-                                        "Test case being imported failed (" + error.getType().orElse("Untyped") + "): " +
-                                                error.getMessage().orElse("") +
-                                                error.getDescription().map(desc -> "\n"+desc).orElse(""))
-                        );
-                    } else if (testCase.getStatus() instanceof TestCaseSkipped) {
-                        TestCaseSkipped skipped = (TestCaseSkipped) testCase.getStatus();
-                        skipped.getMessage().ifPresent(message -> processor.output(
-                                methodDescriptor.getId(),
-                                new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, message)
-                        ));
-                        processor.completed(
-                                methodDescriptor.getId(),
-                                new TestCompleteEvent(System.currentTimeMillis(), TestResult.ResultType.SKIPPED)
+                                suiteDescriptor.getId(),
+                                new ExternalTestFailureException("TestSuite being imported has errors")
                         );
                     }
+                    processor.completed(suiteDescriptor.getId(), new TestCompleteEvent(toEpochMilli(testSuite.endTime(() -> suiteStartTime))));
                 });
-                // If no methods was run check that the all class don't have errors or failures
-                if (testSuite.getTests().size() == 0 && (testSuite.getErrors() > 0 || testSuite.getFailures() > 0)) {
-                    processor.failure(
-                            suiteDescriptor.getId(),
-                            new ExternalTestFailureException("TestSuite being imported has errors")
-                    );
-                }
-                processor.completed(suiteDescriptor.getId(), new TestCompleteEvent(System.currentTimeMillis()));
-            });
-        }
+    }
+
+
+    private long toEpochMilli(LocalDateTime time) {
+        return time.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 
     @Override
