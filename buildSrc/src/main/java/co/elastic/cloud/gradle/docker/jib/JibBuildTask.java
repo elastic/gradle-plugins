@@ -127,7 +127,6 @@ public class JibBuildTask extends DefaultTask {
         ImageReference imageReference = DockerPluginConventions.imageReference(getProject());
 
         build(imageReference);
-        CacheUtil.ensureCacheLimit(this);
     }
 
     @OutputDirectory

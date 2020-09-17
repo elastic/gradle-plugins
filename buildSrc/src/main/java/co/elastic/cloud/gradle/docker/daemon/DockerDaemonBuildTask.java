@@ -101,8 +101,6 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                 "dockerBuildResult",
                 new DockerBuildResultExtension(imageId, dockerSave.toPath()));
 
-        CacheUtil.ensureCacheLimit(this);
-
         try (FileWriter writer = new FileWriter(imageBuildInfo.toFile())) {
             writer.write(new Gson().toJson(new DockerBuildInfo()
                     .setTag(tag)
