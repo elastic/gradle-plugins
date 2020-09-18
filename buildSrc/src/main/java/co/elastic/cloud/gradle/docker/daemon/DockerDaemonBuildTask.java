@@ -42,6 +42,12 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
         return extension;
     }
 
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public Path getContextPath() {
+        return DockerPluginConventions.contextPath(getProject());
+    }
+
     public void setExtension(DockerBuildExtension extension) {
         this.extension = extension;
     }
