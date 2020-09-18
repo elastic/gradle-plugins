@@ -66,6 +66,9 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
         Path dockerfile = workingDir.toPath().getParent().resolve("Dockerfile");
         generateDockerFile(dockerfile);
 
+        // Create a dockerignore file
+        Files.write(workingDir.toPath().getParent().resolve(".dockerignore"), "**\n!context".getBytes());
+
         ExecOperations execOperations = getExecOperations();
 
         String tag = DockerPluginConventions.imageReference(getProject()).toString();
