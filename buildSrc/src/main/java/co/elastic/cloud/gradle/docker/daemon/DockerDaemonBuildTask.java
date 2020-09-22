@@ -57,6 +57,11 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
         return dockerSave;
     }
 
+    @OutputFile
+    public Path getImageBuildInfo() {
+        return imageBuildInfo;
+    }
+
     @TaskAction
     public void doBuildDockerImage() throws IOException {
         File workingDir = DockerPluginConventions.contextPath(getProject()).toFile();
