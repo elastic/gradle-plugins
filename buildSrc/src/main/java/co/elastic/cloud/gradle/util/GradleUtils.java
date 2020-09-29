@@ -5,6 +5,9 @@ import org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.testing.Test;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
@@ -30,5 +33,14 @@ public class GradleUtils {
 
     public static boolean isCi() {
         return System.getenv("BUILD_URL") != null;
+    }
+
+    public static String listPathsRelativeToProject(Project project, Collection<Path> files) {
+        if (files.isEmpty()) { return ""; }
+        Path projectPath = project.getProjectDir().toPath();
+        return "\n    " + files.stream()
+                .map(path -> projectPath.relativize(path))
+                .map(Path::toString)
+                .collect(Collectors.joining("\n    ,"));
     }
 }
