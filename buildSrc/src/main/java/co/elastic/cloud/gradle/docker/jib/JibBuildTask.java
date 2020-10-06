@@ -1,16 +1,15 @@
 package co.elastic.cloud.gradle.docker.jib;
 
-import co.elastic.cloud.gradle.docker.DockerBuildExtension;
-import co.elastic.cloud.gradle.docker.DockerBuildInfo;
-import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
+import co.elastic.cloud.gradle.docker.DockerBuildContext;
+import co.elastic.cloud.gradle.docker.DockerFileExtension;
+import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
+import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
-import co.elastic.cloud.gradle.util.CacheUtil;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.*;
@@ -30,17 +29,7 @@ import java.util.concurrent.ExecutionException;
 @CacheableTask
 public class JibBuildTask extends DefaultTask {
 
-    private final Path applicationLayerCache;
-    private final Path projectImageArchive;
-    private final Path imageBuildInfo;
-    private DockerBuildExtension extension;
-
-    public JibBuildTask() {
-        super();
-        this.applicationLayerCache = DockerPluginConventions.jibApplicationLayerCachePath(getProject());
-        this.projectImageArchive = DockerPluginConventions.projectTarImagePath(getProject());
-        this.imageBuildInfo = DockerPluginConventions.imageBuildInfo(getProject());
-    }
+    private DockerFileExtension extension;
 
     public void build(ImageReference imageReference) {
         try {
@@ -48,8 +37,8 @@ public class JibBuildTask extends DefaultTask {
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(
                     TarImage.at(
-                            extension.getFromProject().map(DockerPluginConventions::projectTarImagePath)
-                                    .orElseGet(() -> DockerPluginConventions.jibBaseImagePath(getProject()))));
+                            extension.getFromProject().map(project -> new DockerBuildContext(project, "dockerBuild").projectTarImagePath()) // TODO should be able to retrieve it from project instead of recreating it
+                                    .orElseGet(() -> extension.getContext().jibBaseImagePath())));
 
             Optional.ofNullable(getExtension().getMaintainer())
                     .ifPresent(maintainer -> jibBuilder.addLabel("maintainer", maintainer));
@@ -58,7 +47,7 @@ public class JibBuildTask extends DefaultTask {
                     (ordinal, _action) -> {
                         // We can't add directly to / causing a NPE in Jib
                         // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-                        File contextFolder = DockerPluginConventions.contextPath(getProject()).resolve("layer" + ordinal).toFile();
+                        File contextFolder = extension.getContext().contextPath().resolve("layer" + ordinal).toFile();
                         if (contextFolder.exists() && contextFolder.isDirectory() && contextFolder.listFiles().length > 0) {
                             Arrays.stream(contextFolder.listFiles()).forEach(file -> {
                                 try {
@@ -105,7 +94,7 @@ public class JibBuildTask extends DefaultTask {
                     "dockerBuildResult",
                     new DockerBuildResultExtension(jibContainer.getImageId().toString(), getProjectImageArchive()));
 
-            try (FileWriter writer = new FileWriter(imageBuildInfo.toFile())) {
+            try (FileWriter writer = new FileWriter(getImageBuildInfo().toFile())) {
                 writer.write(new Gson().toJson(new DockerBuildInfo()
                         .setTag(imageReference.toString())
                         .setBuilder(DockerBuildInfo.Builder.JIB)
@@ -131,32 +120,33 @@ public class JibBuildTask extends DefaultTask {
 
     @OutputDirectory
     public Path getApplicationLayerCache() {
-        return applicationLayerCache;
+        return extension.getContext().jibApplicationLayerCachePath();
     }
 
     @Internal
     public Path getProjectImageArchive() {
-        return projectImageArchive;
+        return extension.getContext().projectTarImagePath();
     }
 
     @OutputFile
     public Path getImageBuildInfo() {
-        return imageBuildInfo;
+        return extension.getContext().imageBuildInfo();
     }
 
     @Nested
-    public DockerBuildExtension getExtension() {
+    public DockerFileExtension getExtension() {
         return extension;
+    }
+
+    public JibBuildTask setExtension(DockerFileExtension extension) {
+        this.extension = extension;
+        return this;
     }
 
     @InputDirectory
     @PathSensitive(PathSensitivity.RELATIVE)
     public Path getContextPath() {
-        return DockerPluginConventions.contextPath(getProject());
-    }
-
-    public void setExtension(DockerBuildExtension extension) {
-        this.extension = extension;
+        return extension.getContext().contextPath();
     }
 
     private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {

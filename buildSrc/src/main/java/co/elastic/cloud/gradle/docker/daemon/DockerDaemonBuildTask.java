@@ -1,15 +1,13 @@
 package co.elastic.cloud.gradle.docker.daemon;
 
-import co.elastic.cloud.gradle.docker.DockerBuildExtension;
-import co.elastic.cloud.gradle.docker.DockerBuildInfo;
-import co.elastic.cloud.gradle.docker.DockerBuildResultExtension;
+import co.elastic.cloud.gradle.docker.DockerBuildContext;
+import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
-import co.elastic.cloud.gradle.util.CacheUtil;
+import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
+import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
 import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import org.gradle.api.GradleException;
-import org.gradle.api.Project;
 import org.gradle.api.tasks.*;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
@@ -26,45 +24,38 @@ import java.util.stream.Collectors;
 @CacheableTask
 public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
 
-    private DockerBuildExtension extension;
-
-    private final File dockerSave;
-    private final Path imageBuildInfo;
-
-    public DockerDaemonBuildTask() {
-        super();
-        this.dockerSave = DockerPluginConventions.projectTarImagePath(getProject()).toFile();
-        this.imageBuildInfo = DockerPluginConventions.imageBuildInfo(getProject());
-    }
+    private DockerFileExtension extension;
 
     @Nested
-    public DockerBuildExtension getExtension() {
+    public DockerFileExtension getExtension() {
         return extension;
     }
+
+    public DockerDaemonBuildTask setExtension(DockerFileExtension extension) {
+        this.extension = extension;
+        return this;
+    }
+
 
     @InputDirectory
     @PathSensitive(PathSensitivity.RELATIVE)
     public Path getContextPath() {
-        return DockerPluginConventions.contextPath(getProject());
-    }
-
-    public void setExtension(DockerBuildExtension extension) {
-        this.extension = extension;
+        return extension.getContext().contextPath();
     }
 
     @OutputFile
     public File getDockerSave() {
-        return dockerSave;
+        return extension.getContext().projectTarImagePath().toFile();
     }
 
     @OutputFile
     public Path getImageBuildInfo() {
-        return imageBuildInfo;
+        return extension.getContext().imageBuildInfo();
     }
 
     @TaskAction
     public void doBuildDockerImage() throws IOException {
-        File workingDir = DockerPluginConventions.contextPath(getProject()).toFile();
+        File workingDir = extension.getContext().contextPath().toFile();
         if (!workingDir.isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
@@ -91,9 +82,9 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
         }
         ExecResult imageSave = execOperations.exec(spec -> {
-            spec.setWorkingDir(dockerSave.getParent());
+            spec.setWorkingDir(getDockerSave().getParent());
             spec.setEnvironment(Collections.emptyMap());
-            spec.setCommandLine("docker", "save", "--output=" + dockerSave.getName(), tag);
+            spec.setCommandLine("docker", "save", "--output=" + getDockerSave().getName(), tag);
             spec.setIgnoreExitValue(true);
         });
         if (imageSave.getExitValue() != 0) {
@@ -113,9 +104,9 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
 
         getProject().getExtensions().add(DockerBuildResultExtension.class,
                 "dockerBuildResult",
-                new DockerBuildResultExtension(imageId, dockerSave.toPath()));
+                new DockerBuildResultExtension(imageId, getDockerSave().toPath()));
 
-        try (FileWriter writer = new FileWriter(imageBuildInfo.toFile())) {
+        try (FileWriter writer = new FileWriter(extension.getContext().imageBuildInfo().toFile())) {
             writer.write(new Gson().toJson(new DockerBuildInfo()
                     .setTag(tag)
                     .setBuilder(DockerBuildInfo.Builder.DAEMON)
@@ -179,7 +170,7 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                             String chown = copySpecAction.owner.isPresent() ? 
                                 "--chown=" + copySpecAction.owner.get() + " ":
                                 "";
-                            writer.write("COPY " + chown + DockerPluginConventions.contextPath(getProject()).toFile().getName() + "/" + "layer" + ordinal + " /\n");
+                            writer.write("COPY " + chown + extension.getContext().contextPath().toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
