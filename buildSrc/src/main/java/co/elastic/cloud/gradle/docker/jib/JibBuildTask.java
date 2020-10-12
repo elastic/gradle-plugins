@@ -1,16 +1,15 @@
 package co.elastic.cloud.gradle.docker.jib;
 
 import co.elastic.cloud.gradle.docker.DockerBuildContext;
-import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import co.elastic.cloud.gradle.docker.build.DockerBuildBaseTask;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.gson.Gson;
-import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.*;
 
@@ -27,9 +26,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 @CacheableTask
-public class JibBuildTask extends DefaultTask {
-
-    private DockerFileExtension extension;
+public class JibBuildTask extends DockerBuildBaseTask {
 
     public void build(ImageReference imageReference) {
         try {
@@ -37,8 +34,8 @@ public class JibBuildTask extends DefaultTask {
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(
                     TarImage.at(
-                            extension.getFromProject().map(project -> new DockerBuildContext(project, "dockerBuild").projectTarImagePath()) // TODO should be able to retrieve it from project instead of recreating it
-                                    .orElseGet(() -> extension.getContext().jibBaseImagePath())));
+                            getExtension().getFromProject().map(project -> new DockerBuildContext(project, "dockerBuild").projectTarImagePath()) // TODO should be able to retrieve it from project instead of recreating it
+                                    .orElseGet(() -> getExtension().getContext().jibBaseImagePath())));
 
             Optional.ofNullable(getExtension().getMaintainer())
                     .ifPresent(maintainer -> jibBuilder.addLabel("maintainer", maintainer));
@@ -47,7 +44,7 @@ public class JibBuildTask extends DefaultTask {
                     (ordinal, _action) -> {
                         // We can't add directly to / causing a NPE in Jib
                         // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-                        File contextFolder = extension.getContext().contextPath().resolve("layer" + ordinal).toFile();
+                        File contextFolder = getExtension().getContext().contextPath().resolve("layer" + ordinal).toFile();
                         if (contextFolder.exists() && contextFolder.isDirectory() && contextFolder.listFiles().length > 0) {
                             Arrays.stream(contextFolder.listFiles()).forEach(file -> {
                                 try {
@@ -120,33 +117,17 @@ public class JibBuildTask extends DefaultTask {
 
     @OutputDirectory
     public Path getApplicationLayerCache() {
-        return extension.getContext().jibApplicationLayerCachePath();
+        return getExtension().getContext().jibApplicationLayerCachePath();
     }
 
     @Internal
     public Path getProjectImageArchive() {
-        return extension.getContext().projectTarImagePath();
+        return getExtension().getContext().projectTarImagePath();
     }
 
     @OutputFile
     public Path getImageBuildInfo() {
-        return extension.getContext().imageBuildInfo();
-    }
-
-    @Nested
-    public DockerFileExtension getExtension() {
-        return extension;
-    }
-
-    public JibBuildTask setExtension(DockerFileExtension extension) {
-        this.extension = extension;
-        return this;
-    }
-
-    @InputDirectory
-    @PathSensitive(PathSensitivity.RELATIVE)
-    public Path getContextPath() {
-        return extension.getContext().contextPath();
+        return getExtension().getContext().imageBuildInfo();
     }
 
     private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {

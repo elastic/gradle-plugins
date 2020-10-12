@@ -1,8 +1,8 @@
 package co.elastic.cloud.gradle.docker.daemon;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import co.elastic.cloud.gradle.docker.build.DockerBuildBaseTask;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
 import com.google.cloud.tools.jib.api.ImageReference;
@@ -22,40 +22,21 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @CacheableTask
-public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
-
-    private DockerFileExtension extension;
-
-    @Nested
-    public DockerFileExtension getExtension() {
-        return extension;
-    }
-
-    public DockerDaemonBuildTask setExtension(DockerFileExtension extension) {
-        this.extension = extension;
-        return this;
-    }
-
-
-    @InputDirectory
-    @PathSensitive(PathSensitivity.RELATIVE)
-    public Path getContextPath() {
-        return extension.getContext().contextPath();
-    }
+public class DockerDaemonBuildTask extends DockerBuildBaseTask {
 
     @OutputFile
     public File getDockerSave() {
-        return extension.getContext().projectTarImagePath().toFile();
+        return getExtension().getContext().projectTarImagePath().toFile();
     }
 
     @OutputFile
     public Path getImageBuildInfo() {
-        return extension.getContext().imageBuildInfo();
+        return getExtension().getContext().imageBuildInfo();
     }
 
     @TaskAction
     public void doBuildDockerImage() throws IOException {
-        File workingDir = extension.getContext().contextPath().toFile();
+        File workingDir = getExtension().getContext().contextPath().toFile();
         if (!workingDir.isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
@@ -106,7 +87,7 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
                 "dockerBuildResult",
                 new DockerBuildResultExtension(imageId, getDockerSave().toPath()));
 
-        try (FileWriter writer = new FileWriter(extension.getContext().imageBuildInfo().toFile())) {
+        try (FileWriter writer = new FileWriter(getExtension().getContext().imageBuildInfo().toFile())) {
             writer.write(new Gson().toJson(new DockerBuildInfo()
                     .setTag(tag)
                     .setBuilder(DockerBuildInfo.Builder.DAEMON)
@@ -127,18 +108,19 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
             writer.write("#                           #\n");
             writer.write("#############################\n\n");
 
+            DockerFileExtension extension = getExtension();
             writer.write(
-                    extension.getFromProject().map(otherProject -> {
+                    getExtension().getFromProject().map(otherProject -> {
                         ImageReference otherProjectImageReference = DockerPluginConventions.imageReference(otherProject);
                         return "# " + otherProject.getPath() + " (a.k.a " + otherProjectImageReference + ")\n" +
                                 "FROM " + otherProjectImageReference + "\n\n";
-                    }).orElse("FROM " + extension.getFrom() + "\n\n"));
+                    }).orElse("FROM " + getExtension().getFrom() + "\n\n"));
 
-            if (extension.getMaintainer() != null) {
-                writer.write("LABEL maintainer=" + extension.getMaintainer() + "\n\n");
+            if (getExtension().getMaintainer() != null) {
+                writer.write("LABEL maintainer=" + getExtension().getMaintainer() + "\n\n");
             }
 
-            if (extension.getUser() != null) {
+            if (getExtension().getUser() != null) {
                 writer.write(String.format(
                     "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
                     "       groupadd -g %4$s %3$s ; \\ \n" +
@@ -157,7 +139,7 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
             writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
 
-            extension.forEachCopyAndRunLayer(
+            getExtension().forEachCopyAndRunLayer(
                     (ordinal, commands) -> {
                         try {
                             writer.write("RUN " + String.join(" && \\\n    ", commands) + "\n");
@@ -179,23 +161,23 @@ public class DockerDaemonBuildTask extends org.gradle.api.DefaultTask {
             writer.write("\n");
 
             if (!getExtension().getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + extension.getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
+                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
             }
             if (!getExtension().getCmd().isEmpty()) {
-                writer.write("CMD " + extension.getCmd() + "\n\n");
+                writer.write("CMD " + getExtension().getCmd() + "\n\n");
             }
 
-            for (Map.Entry<String, String> entry : extension.getLabel().entrySet()) {
+            for (Map.Entry<String, String> entry : getExtension().getLabel().entrySet()) {
                 writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
             }
-            if (!extension.getLabel().isEmpty()) {
+            if (!getExtension().getLabel().isEmpty()) {
                 writer.write("\n");
             }
 
-            for (Map.Entry<String, String> entry : extension.getEnv().entrySet()) {
+            for (Map.Entry<String, String> entry : getExtension().getEnv().entrySet()) {
                 writer.write("ENV " + entry.getKey() + "=" + entry.getValue() + "\n");
             }
-            if (!extension.getEnv().isEmpty()) {
+            if (!getExtension().getEnv().isEmpty()) {
                 writer.write("\n");
             }
 
