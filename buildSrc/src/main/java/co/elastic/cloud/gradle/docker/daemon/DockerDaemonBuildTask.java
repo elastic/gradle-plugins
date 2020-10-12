@@ -5,10 +5,13 @@ import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.build.DockerBuildBaseTask;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
+import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
 import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.gson.Gson;
 import org.gradle.api.GradleException;
-import org.gradle.api.tasks.*;
+import org.gradle.api.tasks.CacheableTask;
+import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
 
@@ -110,8 +113,12 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
 
             DockerFileExtension extension = getExtension();
             writer.write(
-                    getExtension().getFromProject().map(otherProject -> {
-                        ImageReference otherProjectImageReference = DockerPluginConventions.imageReference(otherProject);
+                    extension.getFromProject().map(otherProject -> {
+                        String otherProjectImageReference = otherProject.getExtensions()
+                                .getByType(DockerImageExtension.class)
+                                .getContext()
+                                .loadBuildInfo()
+                                .getTag();
                         return "# " + otherProject.getPath() + " (a.k.a " + otherProjectImageReference + ")\n" +
                                 "FROM " + otherProjectImageReference + "\n\n";
                     }).orElse("FROM " + getExtension().getFrom() + "\n\n"));
@@ -122,17 +129,17 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
 
             if (getExtension().getUser() != null) {
                 writer.write(String.format(
-                    "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
-                    "       groupadd -g %4$s %3$s ; \\ \n" +
-                    "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" + 
-                    "   else \\ \n" + // Specific case for Alpine and Busybox
-                    "       addgroup --gid %4$s %3$s ; \\ \n" + 
-                    "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" + 
-                    "   fi \n\n",
-                    extension.getUser().user,
-                    extension.getUser().uid,
-                    extension.getUser().group,
-                    extension.getUser().gid
+                        "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
+                                "       groupadd -g %4$s %3$s ; \\ \n" +
+                                "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" +
+                                "   else \\ \n" + // Specific case for Alpine and Busybox
+                                "       addgroup --gid %4$s %3$s ; \\ \n" +
+                                "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" +
+                                "   fi \n\n",
+                        extension.getUser().user,
+                        extension.getUser().uid,
+                        extension.getUser().group,
+                        extension.getUser().gid
                 ));
             }
 
@@ -149,9 +156,9 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            String chown = copySpecAction.owner.isPresent() ? 
-                                "--chown=" + copySpecAction.owner.get() + " ":
-                                "";
+                            String chown = copySpecAction.owner.isPresent() ?
+                                    "--chown=" + copySpecAction.owner.get() + " " :
+                                    "";
                             writer.write("COPY " + chown + extension.getContext().contextPath().toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
@@ -161,7 +168,7 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
             writer.write("\n");
 
             if (!getExtension().getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
+                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "\n\n");
             }
             if (!getExtension().getCmd().isEmpty()) {
                 writer.write("CMD " + getExtension().getCmd() + "\n\n");
