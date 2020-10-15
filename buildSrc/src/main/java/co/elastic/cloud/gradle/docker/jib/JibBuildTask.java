@@ -75,7 +75,7 @@ public class JibBuildTask extends DockerBuildBaseTask {
             Optional.ofNullable(getExtension().getCmd())
                     .ifPresent(jibBuilder::setProgramArguments);
 
-            Optional.ofNullable(getExtension().getLabel())
+            Optional.ofNullable(getExtension().getLabels())
                     .ifPresent(labels -> labels.forEach(jibBuilder::addLabel));
 
             Optional.ofNullable(getExtension().getEnv())

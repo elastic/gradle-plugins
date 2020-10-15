@@ -174,10 +174,10 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
                 writer.write("CMD " + getExtension().getCmd() + "\n\n");
             }
 
-            for (Map.Entry<String, String> entry : getExtension().getLabel().entrySet()) {
+            for (Map.Entry<String, String> entry : getExtension().getLabels().entrySet()) {
                 writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
             }
-            if (!getExtension().getLabel().isEmpty()) {
+            if (!getExtension().getLabels().isEmpty()) {
                 writer.write("\n");
             }
 
