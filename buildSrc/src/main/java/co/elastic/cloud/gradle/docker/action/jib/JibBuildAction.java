@@ -1,17 +1,34 @@
-package co.elastic.cloud.gradle.docker.jib;
+/*
+ *
+ *  * ELASTICSEARCH CONFIDENTIAL
+ *  * __________________
+ *  *
+ *  *  Copyright Elasticsearch B.V. All rights reserved.
+ *  *
+ *  * NOTICE:  All information contained herein is, and remains
+ *  * the property of Elasticsearch B.V. and its suppliers, if any.
+ *  * The intellectual and technical concepts contained herein
+ *  * are proprietary to Elasticsearch B.V. and its suppliers and
+ *  * may be covered by U.S. and Foreign Patents, patents in
+ *  * process, and are protected by trade secret or copyright
+ *  * law.  Dissemination of this information or reproduction of
+ *  * this material is strictly forbidden unless prior written
+ *  * permission is obtained from Elasticsearch B.V.
+ *
+ */
+
+package co.elastic.cloud.gradle.docker.action.jib;
 
 import co.elastic.cloud.gradle.docker.DockerBuildContext;
+import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
-import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
-import co.elastic.cloud.gradle.docker.DockerPluginConventions;
-import co.elastic.cloud.gradle.docker.build.DockerBuildBaseTask;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.gson.Gson;
 import org.gradle.api.GradleException;
-import org.gradle.api.tasks.*;
+import org.gradle.api.Project;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -25,11 +42,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-@CacheableTask
-public class JibBuildTask extends DockerBuildBaseTask {
+public class JibBuildAction {
 
-    public void build(ImageReference imageReference) {
+    private final DockerFileExtension extension;
+    private final Project project;
+
+    public JibBuildAction(DockerFileExtension extension, Project project) {
+        this.extension = extension;
+        this.project = project;
+    }
+
+    public void build(String imageTag) {
         try {
+            ImageReference imageReference = JibUtil.parse(imageTag);
             // Base image is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(
@@ -53,7 +78,7 @@ public class JibBuildTask extends DockerBuildBaseTask {
                                                 .addEntryRecursive(
                                                     file.toPath(), 
                                                     AbsoluteUnixPath.get("/" + file.getName()), 
-                                                    JibBuildTask::getJibFilePermission,
+                                                    JibBuildAction::getJibFilePermission,
                                                     FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
                                                     _action.owner.isPresent() ? 
                                                         (sourcePath, destinationPath) -> _action.owner.get() :
@@ -87,11 +112,7 @@ public class JibBuildTask extends DockerBuildBaseTask {
                             .to(TarImage.at(getProjectImageArchive()).named(imageReference))
                             .setApplicationLayersCache(getApplicationLayerCache()));
 
-            getProject().getExtensions().add(DockerBuildResultExtension.class,
-                    "dockerBuildResult",
-                    new DockerBuildResultExtension(jibContainer.getImageId().toString(), getProjectImageArchive()));
-
-            try (FileWriter writer = new FileWriter(getImageBuildInfo().toFile())) {
+            try (FileWriter writer = new FileWriter(getExtension().getContext().imageBuildInfo().toFile())) {
                 writer.write(new Gson().toJson(new DockerBuildInfo()
                         .setTag(imageReference.toString())
                         .setBuilder(DockerBuildInfo.Builder.JIB)
@@ -105,29 +126,10 @@ public class JibBuildTask extends DockerBuildBaseTask {
         }
     }
 
-    @TaskAction
-    public void cleanAndBuild() {
+    public void cleanAndBuild(String imageTag) {
         // Clean application cache before build to avoid useless application layer in the cache
         getProject().delete(getApplicationLayerCache());
-
-        ImageReference imageReference = DockerPluginConventions.imageReference(getProject());
-
-        build(imageReference);
-    }
-
-    @OutputDirectory
-    public Path getApplicationLayerCache() {
-        return getExtension().getContext().jibApplicationLayerCachePath();
-    }
-
-    @Internal
-    public Path getProjectImageArchive() {
-        return getExtension().getContext().projectTarImagePath();
-    }
-
-    @OutputFile
-    public Path getImageBuildInfo() {
-        return getExtension().getContext().imageBuildInfo();
+        build(imageTag);
     }
 
     private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
@@ -154,5 +156,21 @@ public class JibBuildTask extends DockerBuildBaseTask {
         } catch (IOException | SecurityException e) {
             throw new GradleException("Error while detecting permissions for " + sourcePath.toString(), e);
         }
+    }
+
+    public DockerFileExtension getExtension() {
+        return extension;
+    }
+
+    public Project getProject() {
+        return project;
+    }
+
+    public Path getApplicationLayerCache() {
+        return getExtension().getContext().jibApplicationLayerCachePath();
+    }
+
+    public Path getProjectImageArchive() {
+        return getExtension().getContext().projectTarImagePath();
     }
 }

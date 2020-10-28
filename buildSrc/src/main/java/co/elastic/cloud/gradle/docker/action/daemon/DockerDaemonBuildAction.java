@@ -1,21 +1,34 @@
-package co.elastic.cloud.gradle.docker.daemon;
+/*
+ *
+ *  * ELASTICSEARCH CONFIDENTIAL
+ *  * __________________
+ *  *
+ *  *  Copyright Elasticsearch B.V. All rights reserved.
+ *  *
+ *  * NOTICE:  All information contained herein is, and remains
+ *  * the property of Elasticsearch B.V. and its suppliers, if any.
+ *  * The intellectual and technical concepts contained herein
+ *  * are proprietary to Elasticsearch B.V. and its suppliers and
+ *  * may be covered by U.S. and Foreign Patents, patents in
+ *  * process, and are protected by trade secret or copyright
+ *  * law.  Dissemination of this information or reproduction of
+ *  * this material is strictly forbidden unless prior written
+ *  * permission is obtained from Elasticsearch B.V.
+ *
+ */
+
+package co.elastic.cloud.gradle.docker.action.daemon;
 
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
-import co.elastic.cloud.gradle.docker.DockerPluginConventions;
-import co.elastic.cloud.gradle.docker.build.DockerBuildBaseTask;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
-import co.elastic.cloud.gradle.docker.build.DockerBuildResultExtension;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
 import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.gson.Gson;
 import org.gradle.api.GradleException;
-import org.gradle.api.tasks.CacheableTask;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.Project;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
 
-import javax.inject.Inject;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,21 +37,27 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@CacheableTask
-public class DockerDaemonBuildTask extends DockerBuildBaseTask {
+public class DockerDaemonBuildAction {
 
-    @OutputFile
+    private final DockerFileExtension extension;
+    private final ExecOperations execOperations;
+    private final Project project;
+
+    public DockerDaemonBuildAction(DockerFileExtension extension, ExecOperations execOperations, Project project) {
+        this.extension = extension;
+        this.execOperations = execOperations;
+        this.project = project;
+    }
+
     public File getDockerSave() {
         return getExtension().getContext().projectTarImagePath().toFile();
     }
 
-    @OutputFile
     public Path getImageBuildInfo() {
         return getExtension().getContext().imageBuildInfo();
     }
 
-    @TaskAction
-    public void doBuildDockerImage() throws IOException {
+    public void execute(String tag) throws IOException {
         File workingDir = getExtension().getContext().contextPath().toFile();
         if (!workingDir.isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
@@ -51,7 +70,6 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
 
         ExecOperations execOperations = getExecOperations();
 
-        String tag = DockerPluginConventions.imageReference(getProject()).toString();
         ExecResult imageBuild = execOperations.exec(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             // Remain independent from the host environment
@@ -83,12 +101,8 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
             spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
         });
         String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
-        ImageReference imageReference = DockerPluginConventions.imageReference(getProject(), imageId);
-        getLogger().info("Built image {}", imageReference);
 
-        getProject().getExtensions().add(DockerBuildResultExtension.class,
-                "dockerBuildResult",
-                new DockerBuildResultExtension(imageId, getDockerSave().toPath()));
+        getProject().getLogger().info("Built image {} sha256:{}", tag, imageId);
 
         try (FileWriter writer = new FileWriter(getExtension().getContext().imageBuildInfo().toFile())) {
             writer.write(new Gson().toJson(new DockerBuildInfo()
@@ -129,17 +143,17 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
 
             if (getExtension().getUser() != null) {
                 writer.write(String.format(
-                        "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
-                                "       groupadd -g %4$s %3$s ; \\ \n" +
-                                "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" +
-                                "   else \\ \n" + // Specific case for Alpine and Busybox
-                                "       addgroup --gid %4$s %3$s ; \\ \n" +
-                                "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" +
-                                "   fi \n\n",
-                        extension.getUser().user,
-                        extension.getUser().uid,
-                        extension.getUser().group,
-                        extension.getUser().gid
+                    "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
+                    "       groupadd -g %4$s %3$s ; \\ \n" +
+                    "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" + 
+                    "   else \\ \n" + // Specific case for Alpine and Busybox
+                    "       addgroup --gid %4$s %3$s ; \\ \n" + 
+                    "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" + 
+                    "   fi \n\n",
+                    extension.getUser().user,
+                    extension.getUser().uid,
+                    extension.getUser().group,
+                    extension.getUser().gid
                 ));
             }
 
@@ -156,9 +170,9 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            String chown = copySpecAction.owner.isPresent() ?
-                                    "--chown=" + copySpecAction.owner.get() + " " :
-                                    "";
+                            String chown = copySpecAction.owner.isPresent() ? 
+                                "--chown=" + copySpecAction.owner.get() + " ":
+                                "";
                             writer.write("COPY " + chown + extension.getContext().contextPath().toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
@@ -168,7 +182,7 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
             writer.write("\n");
 
             if (!getExtension().getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "\n\n");
+                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
             }
             if (!getExtension().getCmd().isEmpty()) {
                 writer.write("CMD " + getExtension().getCmd() + "\n\n");
@@ -191,8 +205,15 @@ public class DockerDaemonBuildTask extends DockerBuildBaseTask {
         }
     }
 
-    @Inject
     public ExecOperations getExecOperations() {
-        throw new IllegalStateException("not implemented");
+        return execOperations;
+    }
+
+    public DockerFileExtension getExtension() {
+        return extension;
+    }
+
+    public Project getProject() {
+        return project;
     }
 }
