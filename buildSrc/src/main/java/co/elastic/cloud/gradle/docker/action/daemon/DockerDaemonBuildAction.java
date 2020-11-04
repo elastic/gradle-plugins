@@ -170,10 +170,7 @@ public class DockerDaemonBuildAction {
                     },
                     (ordinal, copySpecAction) -> {
                         try {
-                            String chown = copySpecAction.owner.isPresent() ? 
-                                "--chown=" + copySpecAction.owner.get() + " ":
-                                "";
-                            writer.write("COPY " + chown + extension.getContext().contextPath().toFile().getName() + "/" + "layer" + ordinal + " /\n");
+                            writer.write("COPY " + copySpecAction.owner.map(s -> "--chown=" + s + " ").orElse("") + extension.getContext().contextPath().toFile().getName() + "/" + "layer" + ordinal + " /\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
