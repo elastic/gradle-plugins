@@ -20,9 +20,9 @@
 package co.elastic.cloud.gradle.docker.action.daemon;
 
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
+import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
-import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.gson.Gson;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -33,8 +33,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class DockerDaemonBuildAction {
@@ -143,18 +142,28 @@ public class DockerDaemonBuildAction {
 
             if (getExtension().getUser() != null) {
                 writer.write(String.format(
-                    "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
-                    "       groupadd -g %4$s %3$s ; \\ \n" +
-                    "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" + 
-                    "   else \\ \n" + // Specific case for Alpine and Busybox
-                    "       addgroup --gid %4$s %3$s ; \\ \n" + 
-                    "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" + 
-                    "   fi \n\n",
-                    extension.getUser().user,
-                    extension.getUser().uid,
-                    extension.getUser().group,
-                    extension.getUser().gid
+                        "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
+                                "       groupadd -g %4$s %3$s ; \\ \n" +
+                                "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" +
+                                "   else \\ \n" + // Specific case for Alpine and Busybox
+                                "       addgroup --gid %4$s %3$s ; \\ \n" +
+                                "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" +
+                                "   fi \n\n",
+                        extension.getUser().user,
+                        extension.getUser().uid,
+                        extension.getUser().group,
+                        extension.getUser().gid
                 ));
+            }
+
+            if (!extension.getPackages().isEmpty()) {
+                writer.write("# Packages installation\n");
+                writer.write("RUN " + extension.getPackages()
+                        .entrySet()
+                        .stream()
+                        .flatMap(entry -> installCommands(entry.getKey(), entry.getValue()).stream())
+                        .collect(Collectors.joining("&& \\ \n \t")) + "\n");
+                writer.newLine();
             }
 
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
@@ -179,7 +188,7 @@ public class DockerDaemonBuildAction {
             writer.write("\n");
 
             if (!getExtension().getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\""+x+"\"").collect(Collectors.joining(", ")) + "\n\n");
+                writer.write("ENTRYPOINT " + getExtension().getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "\n\n");
             }
             if (!getExtension().getCmd().isEmpty()) {
                 writer.write("CMD " + getExtension().getCmd() + "\n\n");
@@ -200,6 +209,49 @@ public class DockerDaemonBuildAction {
             }
 
         }
+    }
+
+    public List<String> installCommands(Package.PackageInstaller installer, List<Package> packages) {
+        List<String> result = new ArrayList<>();
+        switch (installer) {
+            case YUM:
+                /*
+                    yum install -y {package}-{version} {package}-{version} &&
+                    yum clean all &&
+                    rm -rf /var/cache/yum
+                 */
+                result.addAll(Arrays.asList(
+                        "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
+                        "yum clean all",
+                        "rm -rf /var/cache/yum"
+                ));
+            case APT:
+                /*
+                    apt-get update &&
+                    apt-get install -y {package}={version} {package}={version} &&
+                    apt-get clean &&
+                    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+                 */
+                result.addAll(Arrays.asList(
+                        "apt-get update",
+                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
+                        "apt-get clean",
+                        "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"));
+                break;
+            case APK:
+                /* apk update &&
+                    apk add {package}={version} &&
+                    rm -rf /var/cache/apk/*
+                */
+                result.addAll(Arrays.asList(
+                        "apk update",
+                        "apk add " + packages.stream().map(aPackage -> aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
+                        "rm -rf /var/cache/apk/*"));
+                break;
+            default:
+                throw new GradleException("Unexpected value for package installer generating command for " + installer);
+        }
+        return result;
     }
 
     public ExecOperations getExecOperations() {
