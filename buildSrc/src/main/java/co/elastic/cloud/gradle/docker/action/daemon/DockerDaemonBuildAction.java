@@ -56,7 +56,7 @@ public class DockerDaemonBuildAction {
         return getExtension().getContext().imageBuildInfo();
     }
 
-    public void execute(String tag) throws IOException {
+    public DockerBuildInfo execute(String tag) throws IOException {
         File workingDir = getExtension().getContext().contextPath().toFile();
         if (!workingDir.isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
@@ -103,14 +103,10 @@ public class DockerDaemonBuildAction {
 
         getProject().getLogger().info("Built image {} sha256:{}", tag, imageId);
 
-        try (FileWriter writer = new FileWriter(getExtension().getContext().imageBuildInfo().toFile())) {
-            writer.write(new Gson().toJson(new DockerBuildInfo()
-                    .setTag(tag)
-                    .setBuilder(DockerBuildInfo.Builder.DAEMON)
-                    .setImageId(imageId)));
-        } catch (IOException e) {
-            throw new GradleException("Error writing image info file", e);
-        }
+        return new DockerBuildInfo()
+                .setTag(tag)
+                .setBuilder(DockerBuildInfo.Builder.DAEMON)
+                .setImageId(imageId);
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {
@@ -129,8 +125,7 @@ public class DockerDaemonBuildAction {
                     extension.getFromProject().map(otherProject -> {
                         String otherProjectImageReference = otherProject.getExtensions()
                                 .getByType(DockerImageExtension.class)
-                                .getContext()
-                                .loadBuildInfo()
+                                .getBuildInfo()
                                 .getTag();
                         return "# " + otherProject.getPath() + " (a.k.a " + otherProjectImageReference + ")\n" +
                                 "FROM " + otherProjectImageReference + "\n\n";
