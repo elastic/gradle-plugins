@@ -61,7 +61,7 @@ public class JibBuildAction {
         this.project = project;
     }
 
-    public void build(String imageTag) {
+    public DockerBuildInfo build(String imageTag) {
         try {
             ImageReference imageReference = JibUtil.parse(imageTag);
 
@@ -132,24 +132,13 @@ public class JibBuildAction {
                             .to(TarImage.at(getProjectImageArchive()).named(imageReference))
                             .setApplicationLayersCache(getApplicationLayerCache()));
 
-            try (FileWriter writer = new FileWriter(getExtension().getContext().imageBuildInfo().toFile())) {
-                writer.write(new Gson().toJson(new DockerBuildInfo()
-                        .setTag(imageReference.toString())
-                        .setBuilder(DockerBuildInfo.Builder.JIB)
-                        .setImageId(jibContainer.getImageId().getHash())));
-
-            } catch (IOException e) {
-                throw new GradleException("Error writing config info file", e);
-            }
+            return new DockerBuildInfo()
+                    .setTag(imageReference.toString())
+                    .setBuilder(DockerBuildInfo.Builder.JIB)
+                    .setImageId(jibContainer.getImageId().toString());
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
             throw new GradleException("Error running Jib docker config build", e);
         }
-    }
-
-    public void cleanAndBuild(String imageTag) {
-        // Clean application cache before build to avoid useless application layer in the cache
-        getProject().delete(getApplicationLayerCache());
-        build(imageTag);
     }
 
     private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
