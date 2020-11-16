@@ -157,7 +157,7 @@ public class DockerDaemonBuildAction {
                         .entrySet()
                         .stream()
                         .flatMap(entry -> installCommands(entry.getKey(), entry.getValue()).stream())
-                        .collect(Collectors.joining("&& \\ \n \t")) + "\n");
+                        .collect(Collectors.joining(" && \\ \n \t")) + "\n");
                 writer.newLine();
             }
 
@@ -216,10 +216,12 @@ public class DockerDaemonBuildAction {
                     rm -rf /var/cache/yum
                  */
                 result.addAll(Arrays.asList(
+                        "yum update -y",
                         "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "yum clean all",
                         "rm -rf /var/cache/yum"
                 ));
+                break;
             case APT:
                 /*
                     apt-get update &&
