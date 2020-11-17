@@ -48,10 +48,6 @@ public class DockerDaemonBuildAction {
         this.project = project;
     }
 
-    public File getDockerSave() {
-        return getExtension().getContext().projectTarImagePath().toFile();
-    }
-
     public Path getImageBuildInfo() {
         return getExtension().getContext().imageBuildInfo();
     }
@@ -80,15 +76,6 @@ public class DockerDaemonBuildAction {
         });
         if (imageBuild.getExitValue() != 0) {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
-        }
-        ExecResult imageSave = execOperations.exec(spec -> {
-            spec.setWorkingDir(getDockerSave().getParent());
-            spec.setEnvironment(Collections.emptyMap());
-            spec.setCommandLine("docker", "save", "--output=" + getDockerSave().getName(), tag);
-            spec.setIgnoreExitValue(true);
-        });
-        if (imageSave.getExitValue() != 0) {
-            throw new GradleException("Failed to save docker image, see the docker build log in the task output");
         }
 
         // Load imageId
