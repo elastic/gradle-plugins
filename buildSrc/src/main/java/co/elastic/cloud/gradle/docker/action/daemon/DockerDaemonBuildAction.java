@@ -23,7 +23,6 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
-import com.google.gson.Gson;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.process.ExecOperations;
@@ -35,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DockerDaemonBuildAction {
 
@@ -64,7 +64,6 @@ public class DockerDaemonBuildAction {
         Path dockerfile = workingDir.toPath().getParent().resolve("Dockerfile");
         generateDockerFile(dockerfile);
 
-        // Create a dockerignore file
         Files.write(workingDir.toPath().getParent().resolve(".dockerignore"), "**\n!context".getBytes());
 
         ExecOperations execOperations = getExecOperations();
@@ -203,6 +202,23 @@ public class DockerDaemonBuildAction {
                 writer.write("\n");
             }
 
+            if(getExtension().getWorkDir() != null) {
+                writer.write("WORKDIR " + getExtension().getWorkDir() + "\n");
+            }
+
+            if(!getExtension().getExposeTcp().isEmpty() ||
+                    !getExtension().getExposeUdp().isEmpty()) {
+                writer.write(
+                        "EXPOSE " + Stream.concat(
+                                getExtension().getExposeTcp().stream()
+                                        .map(each -> each + "/tcp"),
+                                getExtension().getExposeUdp().stream()
+                                        .map(each -> each + "/udp")
+                        )
+                                .collect(Collectors.joining(" ")) +
+                                "\n"
+                );
+            }
         }
     }
 
