@@ -23,10 +23,12 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
+import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ExecSpec;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -62,19 +64,9 @@ public class DockerDaemonBuildAction {
 
         Files.write(workingDir.toPath().getParent().resolve(".dockerignore"), "**\n!context".getBytes());
 
-        ExecOperations execOperations = getExecOperations();
-
-        ExecResult imageBuild = execOperations.exec(spec -> {
-            spec.setWorkingDir(dockerfile.getParent());
-            // Remain independent from the host environment
-            spec.setEnvironment(Collections.emptyMap());
-            // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
-            spec.setCommandLine(
-                    "docker", "image", "build", "--no-cache", "--tag=" + tag, "."
-            );
-            spec.setIgnoreExitValue(true);
-        });
-        if (imageBuild.getExitValue() != 0) {
+        // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
+        int imageBuild = runDocker(dockerfile.getParent(),"docker", "image", "build", "--no-cache", "--tag=" + tag, ".");
+        if (imageBuild != 0) {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
         }
 
@@ -93,6 +85,26 @@ public class DockerDaemonBuildAction {
                 .setTag(tag)
                 .setBuilder(DockerBuildInfo.Builder.DAEMON)
                 .setImageId(imageId);
+    }
+
+    public ExecResult execDocker(Action<? super ExecSpec> action) {
+        Map<String,String> environment = new HashMap<>();
+        // Only pass specific env vars for more reproducible builds
+        environment.put("LANG", System.getenv("LANG"));
+        environment.put("LC_ALL", System.getenv("LC_ALL"));
+        return getExecOperations().exec(spec -> {
+            action.execute(spec);
+            spec.setEnvironment(environment);
+        });
+    }
+
+    private int runDocker(Path cwd, String... cmdLine) {
+        ExecResult result = execDocker(spec -> {
+            spec.setWorkingDir(cwd);
+            spec.setCommandLine(Arrays.asList(cmdLine));
+            spec.setIgnoreExitValue(true);
+        });
+        return result.getExitValue();
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {
@@ -147,6 +159,10 @@ public class DockerDaemonBuildAction {
                 writer.newLine();
             }
 
+            writer.write(getExtension().getEnv().entrySet().stream()
+                    .map(entry -> "ENV " + entry.getKey() + "=" + entry.getValue() + "\n")
+                    .reduce("" , String::concat));
+
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
             writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
 
@@ -179,13 +195,6 @@ public class DockerDaemonBuildAction {
                 writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
             }
             if (!getExtension().getLabels().isEmpty()) {
-                writer.write("\n");
-            }
-
-            for (Map.Entry<String, String> entry : getExtension().getEnv().entrySet()) {
-                writer.write("ENV " + entry.getKey() + "=" + entry.getValue() + "\n");
-            }
-            if (!getExtension().getEnv().isEmpty()) {
                 writer.write("\n");
             }
 
