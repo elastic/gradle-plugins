@@ -129,8 +129,8 @@ public class DockerDaemonBuildAction {
                                 "FROM " + otherProjectImageReference + "\n\n";
                     }).orElse("FROM " + getExtension().getFrom() + "\n\n"));
 
-            if (getExtension().getMaintainer() != null) {
-                writer.write("LABEL maintainer=" + getExtension().getMaintainer() + "\n\n");
+            if (extension.getMaintainer() != null) {
+                writer.write("LABEL maintainer=\"" + extension.getMaintainer() + "\"\n\n");
             }
 
             if (getExtension().getUser() != null) {
@@ -221,6 +221,10 @@ public class DockerDaemonBuildAction {
     public List<String> installCommands(Package.PackageInstaller installer, List<Package> packages) {
         List<String> result = new ArrayList<>();
         switch (installer) {
+            // temporary workaround (https://github.com/elastic/cloud/issues/70170)
+            case CONFIG:
+                result.addAll(packages.stream().map(aPackage -> aPackage.getName()).collect(Collectors.toList()));
+                break;
             case YUM:
                 /*
                     yum install -y {package}-{version} {package}-{version} &&

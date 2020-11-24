@@ -65,7 +65,7 @@ public class Package implements Serializable {
     }
 
     public enum PackageInstaller {
-        YUM("yum"), APT("apt-get"), APK("apk");
+        YUM("yum"), APT("apt-get"), APK("apk"), CONFIG("config");
 
         private final String command;
 
@@ -96,6 +96,11 @@ public class Package implements Serializable {
 
         public void apk(String name, String version, String licence, String source) {
             add(PackageInstaller.APK, name, version, licence, source);
+        }
+
+        public void config(String instruction) {
+            // Temp workaround
+            add(PackageInstaller.CONFIG, instruction, "", "", "");
         }
 
         public Map<PackageInstaller, List<Package>> getPackages() {
