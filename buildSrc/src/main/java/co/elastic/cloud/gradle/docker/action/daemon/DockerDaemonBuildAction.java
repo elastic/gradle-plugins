@@ -23,11 +23,12 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
-import com.google.gson.Gson;
+import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ExecSpec;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DockerDaemonBuildAction {
 
@@ -46,10 +48,6 @@ public class DockerDaemonBuildAction {
         this.extension = extension;
         this.execOperations = execOperations;
         this.project = project;
-    }
-
-    public File getDockerSave() {
-        return getExtension().getContext().projectTarImagePath().toFile();
     }
 
     public Path getImageBuildInfo() {
@@ -64,32 +62,12 @@ public class DockerDaemonBuildAction {
         Path dockerfile = workingDir.toPath().getParent().resolve("Dockerfile");
         generateDockerFile(dockerfile);
 
-        // Create a dockerignore file
         Files.write(workingDir.toPath().getParent().resolve(".dockerignore"), "**\n!context".getBytes());
 
-        ExecOperations execOperations = getExecOperations();
-
-        ExecResult imageBuild = execOperations.exec(spec -> {
-            spec.setWorkingDir(dockerfile.getParent());
-            // Remain independent from the host environment
-            spec.setEnvironment(Collections.emptyMap());
-            // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
-            spec.setCommandLine(
-                    "docker", "image", "build", "--no-cache", "--tag=" + tag, "."
-            );
-            spec.setIgnoreExitValue(true);
-        });
-        if (imageBuild.getExitValue() != 0) {
+        // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
+        int imageBuild = runDocker(dockerfile.getParent(),"docker", "image", "build", "--no-cache", "--tag=" + tag, ".");
+        if (imageBuild != 0) {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
-        }
-        ExecResult imageSave = execOperations.exec(spec -> {
-            spec.setWorkingDir(getDockerSave().getParent());
-            spec.setEnvironment(Collections.emptyMap());
-            spec.setCommandLine("docker", "save", "--output=" + getDockerSave().getName(), tag);
-            spec.setIgnoreExitValue(true);
-        });
-        if (imageSave.getExitValue() != 0) {
-            throw new GradleException("Failed to save docker image, see the docker build log in the task output");
         }
 
         // Load imageId
@@ -107,6 +85,26 @@ public class DockerDaemonBuildAction {
                 .setTag(tag)
                 .setBuilder(DockerBuildInfo.Builder.DAEMON)
                 .setImageId(imageId);
+    }
+
+    public ExecResult execDocker(Action<? super ExecSpec> action) {
+        Map<String,String> environment = new HashMap<>();
+        // Only pass specific env vars for more reproducible builds
+        environment.put("LANG", System.getenv("LANG"));
+        environment.put("LC_ALL", System.getenv("LC_ALL"));
+        return getExecOperations().exec(spec -> {
+            action.execute(spec);
+            spec.setEnvironment(environment);
+        });
+    }
+
+    private int runDocker(Path cwd, String... cmdLine) {
+        ExecResult result = execDocker(spec -> {
+            spec.setWorkingDir(cwd);
+            spec.setCommandLine(Arrays.asList(cmdLine));
+            spec.setIgnoreExitValue(true);
+        });
+        return result.getExitValue();
     }
 
     private void generateDockerFile(Path targetFile) throws IOException {
@@ -131,8 +129,8 @@ public class DockerDaemonBuildAction {
                                 "FROM " + otherProjectImageReference + "\n\n";
                     }).orElse("FROM " + getExtension().getFrom() + "\n\n"));
 
-            if (getExtension().getMaintainer() != null) {
-                writer.write("LABEL maintainer=" + getExtension().getMaintainer() + "\n\n");
+            if (extension.getMaintainer() != null) {
+                writer.write("LABEL maintainer=\"" + extension.getMaintainer() + "\"\n\n");
             }
 
             if (getExtension().getUser() != null) {
@@ -157,9 +155,13 @@ public class DockerDaemonBuildAction {
                         .entrySet()
                         .stream()
                         .flatMap(entry -> installCommands(entry.getKey(), entry.getValue()).stream())
-                        .collect(Collectors.joining("&& \\ \n \t")) + "\n");
+                        .collect(Collectors.joining(" && \\ \n \t")) + "\n");
                 writer.newLine();
             }
+
+            writer.write(getExtension().getEnv().entrySet().stream()
+                    .map(entry -> "ENV " + entry.getKey() + "=" + entry.getValue() + "\n")
+                    .reduce("" , String::concat));
 
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
             writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
@@ -196,19 +198,33 @@ public class DockerDaemonBuildAction {
                 writer.write("\n");
             }
 
-            for (Map.Entry<String, String> entry : getExtension().getEnv().entrySet()) {
-                writer.write("ENV " + entry.getKey() + "=" + entry.getValue() + "\n");
-            }
-            if (!getExtension().getEnv().isEmpty()) {
-                writer.write("\n");
+            if(getExtension().getWorkDir() != null) {
+                writer.write("WORKDIR " + getExtension().getWorkDir() + "\n");
             }
 
+            if(!getExtension().getExposeTcp().isEmpty() ||
+                    !getExtension().getExposeUdp().isEmpty()) {
+                writer.write(
+                        "EXPOSE " + Stream.concat(
+                                getExtension().getExposeTcp().stream()
+                                        .map(each -> each + "/tcp"),
+                                getExtension().getExposeUdp().stream()
+                                        .map(each -> each + "/udp")
+                        )
+                                .collect(Collectors.joining(" ")) +
+                                "\n"
+                );
+            }
         }
     }
 
     public List<String> installCommands(Package.PackageInstaller installer, List<Package> packages) {
         List<String> result = new ArrayList<>();
         switch (installer) {
+            // temporary workaround (https://github.com/elastic/cloud/issues/70170)
+            case CONFIG:
+                result.addAll(packages.stream().map(aPackage -> aPackage.getName()).collect(Collectors.toList()));
+                break;
             case YUM:
                 /*
                     yum install -y {package}-{version} {package}-{version} &&
@@ -216,10 +232,12 @@ public class DockerDaemonBuildAction {
                     rm -rf /var/cache/yum
                  */
                 result.addAll(Arrays.asList(
+                        "yum update -y",
                         "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "yum clean all",
                         "rm -rf /var/cache/yum"
                 ));
+                break;
             case APT:
                 /*
                     apt-get update &&

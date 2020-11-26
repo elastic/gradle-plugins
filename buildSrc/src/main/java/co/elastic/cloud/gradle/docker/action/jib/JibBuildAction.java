@@ -19,7 +19,6 @@
 
 package co.elastic.cloud.gradle.docker.action.jib;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
@@ -31,18 +30,17 @@ import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
+import com.google.cloud.tools.jib.api.buildplan.Port;
 import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
 import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.cloud.tools.jib.tar.TarExtractor;
-import com.google.gson.Gson;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 
 import javax.annotation.Nullable;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -126,6 +124,16 @@ public class JibBuildAction {
             Optional.ofNullable(getExtension().getEnv())
                     .ifPresent(envs -> envs.forEach(jibBuilder::addEnvironmentVariable));
 
+            Optional.ofNullable(getExtension().getWorkDir()).ifPresent(workingDirectory ->
+                    jibBuilder.setWorkingDirectory(AbsoluteUnixPath.get(workingDirectory))
+            );
+
+            getExtension().getExposeTcp().stream()
+                    .map(Port::tcp)
+                    .forEach(jibBuilder::addExposedPort);
+            getExtension().getExposeUdp().stream()
+                    .map(Port::udp)
+                    .forEach(jibBuilder::addExposedPort);
 
             JibContainer jibContainer = jibBuilder.containerize(
                     Containerizer
