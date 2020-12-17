@@ -232,7 +232,6 @@ public class DockerDaemonBuildAction {
                     rm -rf /var/cache/yum
                  */
                 result.addAll(Arrays.asList(
-                        "yum update -y",
                         "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "yum clean all",
                         "rm -rf /var/cache/yum"
