@@ -80,7 +80,7 @@ public class TarExtractor {
     }
 
     @NotNull
-    private static InputStream getSpecificInputStream(BufferedInputStream inFile) throws IOException {
+    public static InputStream getSpecificInputStream(BufferedInputStream inFile) throws IOException {
         InputStream archiveStream;
         byte[] magicBytes = new byte[4];
         inFile.mark(4);

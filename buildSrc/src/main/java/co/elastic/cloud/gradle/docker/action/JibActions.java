@@ -17,11 +17,12 @@
  *
  */
 
-package co.elastic.cloud.gradle.docker.action.jib;
+package co.elastic.cloud.gradle.docker.action;
 
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
+import co.elastic.cloud.gradle.util.RetryUtils;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.MapperFeature;
@@ -33,11 +34,11 @@ import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.cloud.tools.jib.api.buildplan.Port;
 import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.GradleException;
-import org.gradle.api.Project;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -48,25 +49,57 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
-public class JibBuildAction {
+public class JibActions {
 
-    private final DockerFileExtension extension;
-    private final Project project;
-
-    public JibBuildAction(DockerFileExtension extension, Project project) {
-        this.extension = extension;
-        this.project = project;
+    public void pull(String from, Path into, Consumer<Exception> onRetryError) {
+        RetryUtils.retry(() -> {
+            try {
+                return Jib.from(from)
+                        .containerize(
+                                Containerizer.to(TarImage.at(into).named(from)));
+            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+                throw new GradleException("Error pulling " + from + " through Jib", e);
+            }
+        }).maxAttempt(3)
+                .exponentialBackoff(1000, 30000)
+                .onRetryError(onRetryError)
+                .execute();
     }
 
-    public DockerBuildInfo build(String imageTag) {
-        try {
-            ImageReference imageReference = JibUtil.parse(imageTag);
+    public void push(Path imageArchive, String tag, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
+        ImageReference imageReference = parse(tag);
 
-            Path parentImagePath = getExtension().getFromProject()
+        RetryUtils.retry(() -> {
+            try {
+                return Jib.from(TarImage.at(imageArchive))
+                        .containerize(Containerizer.to(RegistryImage.named(imageReference).addCredentialRetriever(CredentialRetrieverFactory.forImage(imageReference, onCredentialEvent).dockerConfig())));
+            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
+                throw new GradleException("Error pushing image archive in registry (" + imageReference + ").", e);
+            }
+        }).maxAttempt(3)
+                .exponentialBackoff(1000, 30000)
+                .onRetryError(onRetryError)
+                .execute();
+    }
+
+    private ImageReference parse(String tag) {
+        try {
+            return ImageReference.parse(tag);
+        } catch (InvalidImageReferenceException e) {
+            throw new GradleException(tag+ " is not a valid Jib ImageRefence", e);
+        }
+    }
+
+    public DockerBuildInfo build(DockerFileExtension extension, String imageTag) {
+        try {
+            ImageReference imageReference = parse(imageTag);
+
+            Path parentImagePath = extension.getFromProject()
                     .flatMap(project -> Optional.ofNullable(project.getExtensions().findByType(DockerImageExtension.class)))
                     .map(ext -> ext.getContext().projectTarImagePath())
-                    .orElseGet(() -> getExtension().getContext().jibBaseImagePath());
+                    .orElseGet(() -> extension.getContext().jibBaseImagePath());
 
             // Base config is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
@@ -76,14 +109,14 @@ public class JibBuildAction {
             ContainerConfiguration parentConfig = readConfigurationFromTar(parentImagePath);
 
 
-            Optional.ofNullable(getExtension().getMaintainer())
+            Optional.ofNullable(extension.getMaintainer())
                     .ifPresent(maintainer -> jibBuilder.addLabel("maintainer", maintainer));
 
-            getExtension().forEachCopyLayer(
+            extension.forEachCopyLayer(
                     (ordinal, _action) -> {
                         // We can't add directly to / causing a NPE in Jib
                         // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-                        File contextFolder = getExtension().getContext().contextPath().resolve("layer" + ordinal).toFile();
+                        File contextFolder = extension.getContext().contextPath().resolve("layer" + ordinal).toFile();
                         if (contextFolder.exists() && contextFolder.isDirectory() && contextFolder.listFiles().length > 0) {
                             Arrays.stream(contextFolder.listFiles()).forEach(file -> {
                                 try {
@@ -92,7 +125,7 @@ public class JibBuildAction {
                                                     .addEntryRecursive(
                                                             file.toPath(),
                                                             AbsoluteUnixPath.get("/" + file.getName()),
-                                                            JibBuildAction::getJibFilePermission,
+                                                            JibActions::getJibFilePermission,
                                                             FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
                                                             _action.owner.isPresent() ?
                                                                     (sourcePath, destinationPath) -> _action.owner.get() :
@@ -109,36 +142,36 @@ public class JibBuildAction {
             );
 
             or(
-                    Optional.ofNullable(getExtension().getEntryPoint()).filter(it -> !it.isEmpty()),
+                    Optional.ofNullable(extension.getEntryPoint()).filter(it -> !it.isEmpty()),
                     Optional.ofNullable(parentConfig.getEntryPoint())
             ).ifPresent(jibBuilder::setEntrypoint);
 
             or(
-                    Optional.ofNullable(getExtension().getCmd()).filter(it -> !it.isEmpty()),
+                    Optional.ofNullable(extension.getCmd()).filter(it -> !it.isEmpty()),
                     Optional.ofNullable(parentConfig.getCmd())
             ).ifPresent(jibBuilder::setProgramArguments);
 
-            Optional.ofNullable(getExtension().getLabels())
+            Optional.ofNullable(extension.getLabels())
                     .ifPresent(labels -> labels.forEach(jibBuilder::addLabel));
 
-            Optional.ofNullable(getExtension().getEnv())
+            Optional.ofNullable(extension.getEnv())
                     .ifPresent(envs -> envs.forEach(jibBuilder::addEnvironmentVariable));
 
-            Optional.ofNullable(getExtension().getWorkDir()).ifPresent(workingDirectory ->
+            Optional.ofNullable(extension.getWorkDir()).ifPresent(workingDirectory ->
                     jibBuilder.setWorkingDirectory(AbsoluteUnixPath.get(workingDirectory))
             );
 
-            getExtension().getExposeTcp().stream()
+            extension.getExposeTcp().stream()
                     .map(Port::tcp)
                     .forEach(jibBuilder::addExposedPort);
-            getExtension().getExposeUdp().stream()
+            extension.getExposeUdp().stream()
                     .map(Port::udp)
                     .forEach(jibBuilder::addExposedPort);
 
             JibContainer jibContainer = jibBuilder.containerize(
                     Containerizer
-                            .to(TarImage.at(getProjectImageArchive()).named(imageReference))
-                            .setApplicationLayersCache(getApplicationLayerCache()));
+                            .to(TarImage.at(extension.getContext().projectTarImagePath()).named(imageReference))
+                            .setApplicationLayersCache(extension.getContext().jibApplicationLayerCachePath()));
 
             return new DockerBuildInfo()
                     .setTag(imageReference.toString())
@@ -175,22 +208,6 @@ public class JibBuildAction {
         }
     }
 
-    public DockerFileExtension getExtension() {
-        return extension;
-    }
-
-    public Project getProject() {
-        return project;
-    }
-
-    public Path getApplicationLayerCache() {
-        return getExtension().getContext().jibApplicationLayerCachePath();
-    }
-
-    public Path getProjectImageArchive() {
-        return getExtension().getContext().projectTarImagePath();
-    }
-
     // TODO remove when we add Java 11 for standard JDK
     private static <T> Optional<T> or(Optional<T> x, Optional<T> y) {
         if (x.isPresent()) {
@@ -222,7 +239,7 @@ public class JibBuildAction {
     // Jib visibility issue to use com.google.cloud.tools.jib.image.json.ContainerConfigurationTemplate for entrypoint & cmd
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class ContainerConfiguration implements JsonTemplate {
-        private final ConfigurationObject config = new ConfigurationObject();
+        private final ContainerConfiguration.ConfigurationObject config = new ContainerConfiguration.ConfigurationObject();
 
         @JsonIgnoreProperties(ignoreUnknown = true)
         private static class ConfigurationObject implements JsonTemplate {
