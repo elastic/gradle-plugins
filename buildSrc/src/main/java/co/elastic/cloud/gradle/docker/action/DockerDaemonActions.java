@@ -99,6 +99,7 @@ public class DockerDaemonActions {
         }
 
         // Load imageId
+
         ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
         execute(spec -> {
             spec.setStandardOutput(commandOutput);
@@ -190,7 +191,7 @@ public class DockerDaemonActions {
             writer.write("\n");
 
             if (!extension.getEntryPoint().isEmpty()) {
-                writer.write("ENTRYPOINT " + extension.getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "\n\n");
+                writer.write("ENTRYPOINT [" + extension.getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "]\n\n");
             }
             if (!extension.getCmd().isEmpty()) {
                 writer.write("CMD " + extension.getCmd() + "\n\n");
