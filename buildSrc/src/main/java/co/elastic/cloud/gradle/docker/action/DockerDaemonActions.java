@@ -91,7 +91,7 @@ public class DockerDaemonActions {
 
         int imageBuild = execute(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
-            spec.commandLine("docker", "image", "build", "--no-cache", "--tag=" + tag, ".");
+            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--tag=" + tag, ".");
             spec.setIgnoreExitValue(true);
         }).getExitValue();
         if (imageBuild != 0) {
