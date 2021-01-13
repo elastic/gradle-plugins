@@ -68,13 +68,23 @@ public class JibActions {
                 .execute();
     }
 
-    public void push(Path imageArchive, String tag, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
+    public JibContainer push(Path imageArchive, String tag, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
         ImageReference imageReference = parse(tag);
 
-        RetryUtils.retry(() -> {
+        return RetryUtils.retry(() -> {
             try {
                 return Jib.from(TarImage.at(imageArchive))
-                        .containerize(Containerizer.to(RegistryImage.named(imageReference).addCredentialRetriever(CredentialRetrieverFactory.forImage(imageReference, onCredentialEvent).dockerConfig())));
+                        .containerize(
+                                Containerizer.to(
+                                        RegistryImage.named(imageReference)
+                                                .addCredentialRetriever(
+                                                        CredentialRetrieverFactory.forImage(
+                                                                imageReference,
+                                                                onCredentialEvent
+                                                        ).dockerConfig()
+                                                )
+                                )
+                        );
             } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
                 throw new GradleException("Error pushing image archive in registry (" + imageReference + ").", e);
             }
