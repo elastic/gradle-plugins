@@ -197,6 +197,10 @@ public class DockerDaemonActions {
                 writer.write("CMD " + extension.getCmd() + "\n\n");
             }
 
+            if (extension.getHealthcheck() != null) {
+                writer.write("HEALTHCHECK " + healthcheckInstruction(extension.getHealthcheck()) + "\n");
+            }
+
             for (Map.Entry<String, String> entry : extension.getLabels().entrySet()) {
                 writer.write("LABEL " + entry.getKey() + "=" + entry.getValue() + "\n");
             }
@@ -222,6 +226,14 @@ public class DockerDaemonActions {
                 );
             }
         }
+    }
+
+    private String healthcheckInstruction(DockerFileExtension.Healthcheck healthcheck) {
+        return Optional.ofNullable(healthcheck.getInterval()).map(interval -> "--interval=" + interval + " ").orElse("") +
+                Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
+                Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
+                Optional.ofNullable(healthcheck.getRetries()).map(retries -> "--retries=" + retries + " ").orElse("") +
+                "CMD " + healthcheck.getCmd();
     }
 
     public List<String> installCommands(Package.PackageInstaller installer, List<Package> packages) {
