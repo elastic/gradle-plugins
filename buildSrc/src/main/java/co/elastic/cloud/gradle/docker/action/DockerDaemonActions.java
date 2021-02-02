@@ -194,7 +194,7 @@ public class DockerDaemonActions {
                 writer.write("ENTRYPOINT [" + extension.getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "]\n\n");
             }
             if (!extension.getCmd().isEmpty()) {
-                writer.write("CMD " + extension.getCmd() + "\n\n");
+                writer.write("CMD [" + extension.getCmd().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "]\n\n");
             }
 
             if (extension.getHealthcheck() != null) {
