@@ -190,6 +190,10 @@ public class DockerDaemonActions {
             );
             writer.write("\n");
 
+            if (extension.getRunUser() != null && !extension.getRunUser().isEmpty()) {
+                writer.write("USER "+ extension.getRunUser() +"\n");
+            }
+
             if (!extension.getEntryPoint().isEmpty()) {
                 writer.write("ENTRYPOINT [" + extension.getEntryPoint().stream().map(x -> "\"" + x + "\"").collect(Collectors.joining(", ")) + "]\n\n");
             }
