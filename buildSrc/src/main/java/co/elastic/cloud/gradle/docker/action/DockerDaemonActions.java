@@ -34,6 +34,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -111,7 +112,8 @@ public class DockerDaemonActions {
         return new DockerBuildInfo()
                 .setTag(tag)
                 .setBuilder(DockerBuildInfo.Builder.DAEMON)
-                .setImageId(imageId);
+                .setImageId(imageId)
+                .setCreatedAt(Instant.now());
     }
 
     private void generateDockerFile(DockerFileExtension extension, Path targetFile) throws IOException {

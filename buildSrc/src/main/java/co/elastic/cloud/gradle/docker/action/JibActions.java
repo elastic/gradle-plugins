@@ -47,6 +47,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -98,7 +99,7 @@ public class JibActions {
         try {
             return ImageReference.parse(tag);
         } catch (InvalidImageReferenceException e) {
-            throw new GradleException(tag+ " is not a valid Jib ImageRefence", e);
+            throw new GradleException(tag + " is not a valid Jib ImageRefence", e);
         }
     }
 
@@ -114,6 +115,11 @@ public class JibActions {
             // Base config is the tar archive stored by dockerBuild of another project if referenced
             // or the baseImage path stored by the dockerJibPull of this project
             JibContainerBuilder jibBuilder = Jib.from(TarImage.at(parentImagePath));
+
+            Instant createdAt = Optional.ofNullable(extension.getBuildInfo())
+                    .map(DockerBuildInfo::getCreatedAt)
+                    .orElse(Instant.now());
+            jibBuilder.setCreationTime(createdAt);
 
             // Load parent configuration from base image tar or parent project image tar
             ContainerConfiguration parentConfig = readConfigurationFromTar(parentImagePath);
@@ -186,7 +192,8 @@ public class JibActions {
             return new DockerBuildInfo()
                     .setTag(imageReference.toString())
                     .setBuilder(DockerBuildInfo.Builder.JIB)
-                    .setImageId(jibContainer.getImageId().toString());
+                    .setImageId(jibContainer.getImageId().toString())
+                    .setCreatedAt(createdAt);
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
             throw new GradleException("Error running Jib docker config build", e);
         }
