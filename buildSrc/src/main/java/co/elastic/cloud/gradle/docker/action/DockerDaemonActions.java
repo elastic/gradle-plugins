@@ -79,20 +79,20 @@ public class DockerDaemonActions {
     }
 
     public DockerBuildInfo build(DockerFileExtension extension, String tag) throws IOException {
-        File workingDir = extension.getContext().contextPath().toFile();
+        File workingDir = extension.getContext().basePath().toFile();
         if (!workingDir.isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
-        Path dockerfile = workingDir.toPath().getParent().resolve("Dockerfile");
+        Path dockerfile = workingDir.toPath().resolve("Dockerfile");
         generateDockerFile(extension, dockerfile);
 
-        Files.write(workingDir.toPath().getParent().resolve(".dockerignore"), "**\n!context".getBytes());
+        Files.write(workingDir.toPath().resolve(".dockerignore"), "**\n!context\n!dockerEphemeral".getBytes());
 
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
 
         int imageBuild = execute(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
-            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--tag=" + tag, ".");
+            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
             spec.setIgnoreExitValue(true);
         }).getExitValue();
         if (imageBuild != 0) {
@@ -126,6 +126,7 @@ public class DockerDaemonActions {
             writer.write("# Auto generated Dockerfile #\n");
             writer.write("#                           #\n");
             writer.write("#############################\n\n");
+            writer.write("# syntax = docker/dockerfile:experimental\n\n");
 
             writer.write(
                     extension.getFromProject().map(otherProject -> {
@@ -157,9 +158,11 @@ public class DockerDaemonActions {
                 ));
             }
 
+            String mountDependencies = "--mount=type=bind,target=" + extension.getDockerEphemeral() + ",source=dockerEphemeral ";
+
             if (!extension.getPackages().isEmpty()) {
                 writer.write("# Packages installation\n");
-                writer.write("RUN " + extension.getPackages()
+                writer.write("RUN " + mountDependencies + extension.getPackages()
                         .entrySet()
                         .stream()
                         .flatMap(entry -> installCommands(entry.getKey(), entry.getValue()).stream())
@@ -177,7 +180,7 @@ public class DockerDaemonActions {
             extension.forEachCopyAndRunLayer(
                     (ordinal, commands) -> {
                         try {
-                            writer.write("RUN " + String.join(" && \\\n    ", commands) + "\n");
+                            writer.write("RUN " + mountDependencies + String.join(" && \\\n    ", commands) + "\n");
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
@@ -296,9 +299,24 @@ public class DockerDaemonActions {
         // Only pass specific env vars for more reproducible builds
         environment.put("LANG", System.getenv("LANG"));
         environment.put("LC_ALL", System.getenv("LC_ALL"));
+        environment.put("DOCKER_BUILDKIT", "1");
         return execOperations.exec(spec -> {
             action.execute(spec);
             spec.setEnvironment(environment);
         });
+    }
+
+    public void checkVersion() throws IOException {
+        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
+        execute(spec -> {
+            spec.setStandardOutput(commandOutput);
+            spec.setEnvironment(Collections.emptyMap());
+            spec.commandLine("docker", "version", "--format='{{.Server.Version}}'");
+        });
+        String dockerVersion = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");;
+        int dockerMajorVersion = Integer.parseInt(dockerVersion.split("\\.")[0]);
+        if (dockerMajorVersion < 19) {
+            throw new IllegalStateException("Docker daemon version must be 19 and above. Currently " + dockerVersion);
+        }
     }
 }
