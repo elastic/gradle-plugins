@@ -69,12 +69,13 @@ public class JibActions {
                 .execute();
     }
 
-    public JibContainer push(Path imageArchive, String tag, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
+    public JibContainer push(Path imageArchive, String tag, Instant createdAt, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
         ImageReference imageReference = parse(tag);
 
         return RetryUtils.retry(() -> {
             try {
                 return Jib.from(TarImage.at(imageArchive))
+                        .setCreationTime(createdAt)
                         .containerize(
                                 Containerizer.to(
                                         RegistryImage.named(imageReference)
