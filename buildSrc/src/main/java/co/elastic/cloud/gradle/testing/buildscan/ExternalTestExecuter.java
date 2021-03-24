@@ -33,7 +33,11 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
         if (!generatorTask.get().getDidWork()) {
             // The generator task was skipped, possibly because nothing changed so we don't have to re-run the tests.
             // Exception will stop current task without failing the build
-            throw new StopExecutionException();
+            throw new StopExecutionException("Generator task did no work: " + generatorTask.get().getPath());
+        }
+
+        if(fromFiles.isEmpty()) {
+            throw new GradleException("No XML results produced by " + generatorTask.get().getPath());
         }
 
         List<String> missingFiles = fromFiles.stream()
@@ -102,13 +106,6 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
                             );
                         }
                     });
-                    // If no methods was run check that the all class don't have errors or failures
-                    if (testSuite.getTests().size() == 0 && (testSuite.getErrors() > 0 || testSuite.getFailures() > 0)) {
-                        processor.failure(
-                                suiteDescriptor.getId(),
-                                new ExternalTestFailureException("TestSuite being imported has errors")
-                        );
-                    }
                     processor.completed(suiteDescriptor.getId(), new TestCompleteEvent(toEpochMilli(testSuite.endTime(() -> suiteStartTime))));
                 });
     }
