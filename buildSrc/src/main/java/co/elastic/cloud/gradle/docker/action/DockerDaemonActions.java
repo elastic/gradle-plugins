@@ -273,6 +273,7 @@ public class DockerDaemonActions {
                     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
                  */
                 result.addAll(Arrays.asList(
+                        "export DEBIAN_FRONTEND=noninteractive",
                         "apt-get update",
                         "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "apt-get clean",
