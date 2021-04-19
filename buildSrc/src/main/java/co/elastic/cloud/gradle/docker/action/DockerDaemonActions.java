@@ -23,9 +23,12 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
+import co.elastic.cloud.gradle.util.RetryUtils;
+import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
+import org.gradle.api.tasks.TaskExecutionException;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
 import org.gradle.process.ExecSpec;
@@ -36,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -72,10 +76,19 @@ public class DockerDaemonActions {
     }
 
     public void pull(String from) {
-        execute(spec -> {
-            spec.setEnvironment(Collections.emptyMap());
-            spec.commandLine("docker", "--config", System.getProperty("user.home") + File.separator + ".docker", "pull", from);
-        });
+        RetryUtils.retry(() -> {
+            try {
+                return execute(spec -> {
+                    spec.setEnvironment(Collections.emptyMap());
+                    spec.commandLine("docker", "--config", System.getProperty("user.home") + File.separator + ".docker", "pull", from);
+                });
+            } catch (TaskExecutionException e) {
+                throw new GradleException("Error pulling " + from + " through Docker daemon", e);
+            }
+        }).maxAttempt(3)
+                .exponentialBackoff(1000, 30000)
+                .execute();
+
     }
 
     public DockerBuildInfo build(DockerFileExtension extension, String tag) throws IOException {
