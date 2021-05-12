@@ -23,8 +23,8 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
+import co.elastic.cloud.gradle.dockerbase.DockerInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
-import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
@@ -39,7 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -64,7 +64,7 @@ public class DockerDaemonActions {
     }
 
     public String clean(String tag) throws IOException {
-        try(ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             execute(spec -> {
                 spec.setEnvironment(Collections.emptyMap());
                 spec.commandLine("docker", "image", "rm", tag);
@@ -88,45 +88,17 @@ public class DockerDaemonActions {
         }).maxAttempt(3)
                 .exponentialBackoff(1000, 30000)
                 .execute();
-
     }
 
     public DockerBuildInfo build(DockerFileExtension extension, String tag) throws IOException {
-        File workingDir = extension.getContext().basePath().toFile();
-        if (!workingDir.isDirectory()) {
+        Path workingDir = extension.getContext().basePath();
+        if (!workingDir.toFile().isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
-        Path dockerfile = workingDir.toPath().resolve("Dockerfile");
+        Path dockerfile = workingDir.resolve("Dockerfile");
         generateDockerFile(extension, dockerfile);
 
-        Files.write(workingDir.toPath().resolve(".dockerignore"), "**\n!context\n!dockerEphemeral".getBytes());
-
-        // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
-
-        int imageBuild = execute(spec -> {
-            spec.setWorkingDir(dockerfile.getParent());
-            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
-            spec.setIgnoreExitValue(true);
-        }).getExitValue();
-        if (imageBuild != 0) {
-            throw new GradleException("Failed to build docker image, see the docker build log in the task output");
-        }
-
-        // Load imageId
-
-        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
-        execute(spec -> {
-            spec.setStandardOutput(commandOutput);
-            spec.setEnvironment(Collections.emptyMap());
-            spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
-        });
-        String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
-
-        return new DockerBuildInfo()
-                .setTag(tag)
-                .setBuilder(DockerBuildInfo.Builder.DAEMON)
-                .setImageId(imageId)
-                .setCreatedAt(Instant.now());
+        return internalBuild(workingDir, tag, dockerfile);
     }
 
     private void generateDockerFile(DockerFileExtension extension, Path targetFile) throws IOException {
@@ -185,7 +157,7 @@ public class DockerDaemonActions {
 
             writer.write(extension.getEnv().entrySet().stream()
                     .map(entry -> "ENV " + entry.getKey() + "=" + entry.getValue() + "\n")
-                    .reduce("" , String::concat));
+                    .reduce("", String::concat));
 
             writer.write("# FS hierarchy is set up in Gradle, so we just copy it in\n");
             writer.write("# COPY and RUN commands are kept consistent with the DSL\n");
@@ -209,7 +181,7 @@ public class DockerDaemonActions {
             writer.write("\n");
 
             if (extension.getRunUser() != null && !extension.getRunUser().isEmpty()) {
-                writer.write("USER "+ extension.getRunUser() +"\n");
+                writer.write("USER " + extension.getRunUser() + "\n");
             }
 
             if (!extension.getEntryPoint().isEmpty()) {
@@ -230,11 +202,11 @@ public class DockerDaemonActions {
                 writer.write("\n");
             }
 
-            if(extension.getWorkDir() != null) {
+            if (extension.getWorkDir() != null) {
                 writer.write("WORKDIR " + extension.getWorkDir() + "\n");
             }
 
-            if(!extension.getExposeTcp().isEmpty() ||
+            if (!extension.getExposeTcp().isEmpty() ||
                     !extension.getExposeUdp().isEmpty()) {
                 writer.write(
                         "EXPOSE " + Stream.concat(
@@ -263,44 +235,22 @@ public class DockerDaemonActions {
         switch (installer) {
             // temporary workaround (https://github.com/elastic/cloud/issues/70170)
             case CONFIG:
-                result.addAll(packages.stream().map(aPackage -> aPackage.getName()).collect(Collectors.toList()));
+                result.addAll(packages.stream().map(Package::getName).collect(Collectors.toList()));
                 break;
             case YUM:
-                /*
-                    yum update -y &&
-                    yum install -y {package}-{version} {package}-{version} &&
-                    yum clean all &&
-                    rm -rf /var/cache/yum
-                 */
-                result.addAll(Arrays.asList(
-                        "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
-                        "yum clean all",
-                        "rm -rf /var/cache/yum"
-                ));
+                result.addAll(installCommands(
+                        DockerInstruction.Install.PackageInstaller.YUM,
+                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             case APT:
-                /*
-                    apt-get update &&
-                    apt-get install -y {package}={version} {package}={version} &&
-                    apt-get clean &&
-                    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-                 */
-                result.addAll(Arrays.asList(
-                        "export DEBIAN_FRONTEND=noninteractive",
-                        "apt-get update",
-                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
-                        "apt-get clean",
-                        "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"));
+                result.addAll(installCommands(
+                        DockerInstruction.Install.PackageInstaller.APT,
+                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             case APK:
-                /* apk update &&
-                    apk add {package}={version} &&
-                    rm -rf /var/cache/apk/*
-                */
-                result.addAll(Arrays.asList(
-                        "apk update",
-                        "apk add " + packages.stream().map(aPackage -> aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
-                        "rm -rf /var/cache/apk/*"));
+                result.addAll(installCommands(
+                        DockerInstruction.Install.PackageInstaller.APK,
+                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
@@ -309,7 +259,7 @@ public class DockerDaemonActions {
     }
 
     public ExecResult execute(Action<? super ExecSpec> action) {
-        Map<String,String> environment = new HashMap<>();
+        Map<String, String> environment = new HashMap<>();
         // Only pass specific env vars for more reproducible builds
         environment.put("LANG", System.getenv("LANG"));
         environment.put("LC_ALL", System.getenv("LC_ALL"));
@@ -327,10 +277,158 @@ public class DockerDaemonActions {
             spec.setEnvironment(Collections.emptyMap());
             spec.commandLine("docker", "version", "--format='{{.Server.Version}}'");
         });
-        String dockerVersion = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");;
+        String dockerVersion = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
+        ;
         int dockerMajorVersion = Integer.parseInt(dockerVersion.split("\\.")[0]);
         if (dockerMajorVersion < 19) {
             throw new IllegalStateException("Docker daemon version must be 19 and above. Currently " + dockerVersion);
         }
+    }
+
+
+    public String dockerFileFromInstructions(List<DockerInstruction> instructions, Path ephemeralConfiguration) {
+        Function<DockerInstruction, String> partialApply = (DockerInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralConfiguration);
+        return "#############################\n" +
+                "#                           #\n" +
+                "# Auto generated Dockerfile #\n" +
+                "#                           #\n" +
+                "#############################\n\n" +
+                "# syntax = docker/dockerfile:experimental" +
+                instructions.stream()
+                        .map(partialApply)
+                        .reduce("", (acc, value) -> acc + "\n\n" + value);
+    }
+
+    public static String EPHEMERAL_MOUNT = "/mnt/dockerEphemeral";
+
+    public String instructionAsDockerFileInstruction(DockerInstruction instruction, Path ephemeralConfiguration) {
+        String mountDependencies = "";
+        if (ephemeralConfiguration.toFile().exists()) {
+            mountDependencies = "--mount=type=bind,target="+ EPHEMERAL_MOUNT + ",source="+ephemeralConfiguration.getFileName();
+        }
+        if (instruction instanceof DockerInstruction.From) {
+            DockerInstruction.From from = (DockerInstruction.From) instruction;
+            return "FROM " + from.image + ":" + from.version + Optional.ofNullable(from.sha).map(sha -> "@" + sha).orElse("");
+        } else if (instruction instanceof DockerInstruction.FromDockerBuildContext) {
+            return instructionAsDockerFileInstruction(((DockerInstruction.FromDockerBuildContext) instruction).toFrom(), ephemeralConfiguration);
+        } else if (instruction instanceof DockerInstruction.Copy) {
+            DockerInstruction.Copy copySpec = (DockerInstruction.Copy) instruction;
+            return "COPY " + Optional.ofNullable(copySpec.owner).map(s -> "--chown=" + s + " ").orElse("") + copySpec.layer + " /";
+        } else if (instruction instanceof DockerInstruction.Run) {
+            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", ((DockerInstruction.Run) instruction).commands);
+        } else if (instruction instanceof DockerInstruction.CreateUser) {
+            DockerInstruction.CreateUser createUser = (DockerInstruction.CreateUser) instruction;
+            return String.format(
+                    "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
+                            "       groupadd -g %4$s %3$s ; \\ \n" +
+                            "       useradd -r -s /bin/false -g %4$s --uid %2$s %1$s ; \\ \n" +
+                            "   else \\ \n" + // Specific case for Alpine and Busybox
+                            "       addgroup --gid %4$s %3$s ; \\ \n" +
+                            "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" +
+                            "   fi",
+                    createUser.username,
+                    createUser.userId,
+                    createUser.group,
+                    createUser.groupId
+            );
+        } else if (instruction instanceof DockerInstruction.SetUser) {
+            return "USER " + ((DockerInstruction.SetUser) instruction).username;
+        } else if (instruction instanceof DockerInstruction.Install) {
+            DockerInstruction.Install install = ((DockerInstruction.Install) instruction);
+            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", installCommands(install.installer, install.packages));
+        } else if (instruction instanceof DockerInstruction.Env) {
+            return "ENV " + ((DockerInstruction.Env) instruction).key + "=" + ((DockerInstruction.Env) instruction).value;
+        } else if (instruction instanceof DockerInstruction.HealthCheck) {
+            DockerInstruction.HealthCheck healthcheck = ((DockerInstruction.HealthCheck) instruction);
+            return "HEALTHCHECK " + Optional.ofNullable(healthcheck.interval).map(interval -> "--interval=" + interval + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.timeout).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.startPeriod).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.retries).map(retries -> "--retries=" + retries + " ").orElse("") +
+                    "CMD " + healthcheck.cmd;
+        } else {
+            throw new GradleException("Docker instruction " + instruction + "is not supported for Docker daemon build");
+        }
+    }
+
+    public List<String> installCommands(DockerInstruction.Install.PackageInstaller installer, List<DockerInstruction.Install.Package> packages) {
+        switch (installer) {
+            case YUM:
+                /*
+                    yum update -y &&
+                    yum install -y {package}-{version} {package}-{version} &&
+                    yum clean all &&
+                    rm -rf /var/cache/yum
+                 */
+                return Arrays.asList(
+                        "yum install -y " + packages.stream().map(aPackage -> aPackage.name + "-" + aPackage.version).collect(Collectors.joining(" ")),
+                        "yum clean all",
+                        "rm -rf /var/cache/yum"
+                );
+            case APT:
+                /*
+                    apt-get update &&
+                    apt-get install -y {package}={version} {package}={version} &&
+                    apt-get clean &&
+                    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+                 */
+                return Arrays.asList(
+                        "export DEBIAN_FRONTEND=noninteractive",
+                        "apt-get update",
+                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.name + "=" + aPackage.version).collect(Collectors.joining(" ")),
+                        "apt-get clean",
+                        "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*");
+            case APK:
+                /* apk update &&
+                    apk add {package}={version} &&
+                    rm -rf /var/cache/apk/*
+                */
+                return Arrays.asList(
+                        "apk update",
+                        "apk add " + packages.stream().map(aPackage -> aPackage.name + "=" + aPackage.version).collect(Collectors.joining(" ")),
+                        "rm -rf /var/cache/apk/*");
+            default:
+                throw new GradleException("Unexpected value for package installer generating command for " + installer);
+        }
+    }
+
+    public DockerBuildInfo build(List<DockerInstruction> instructions, Path contextPath, String tag, Path ephemeralConfiguration) throws IOException {
+        if (!contextPath.toFile().isDirectory()) {
+            throw new GradleException("Can't build docker image, missing working directory " + contextPath);
+        }
+        Path dockerfile = contextPath.resolve("Dockerfile");
+        Files.write(dockerfile, dockerFileFromInstructions(instructions, ephemeralConfiguration).getBytes());
+
+        return internalBuild(contextPath, tag, dockerfile);
+    }
+
+    private DockerBuildInfo internalBuild(Path basePath, String tag, Path dockerfile) throws IOException {
+        Files.write(basePath.resolve(".dockerignore"), "**\n!context\n!dockerEphemeral".getBytes());
+
+        // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
+
+        int imageBuild = execute(spec -> {
+            spec.setWorkingDir(dockerfile.getParent());
+            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
+            spec.setIgnoreExitValue(true);
+        }).getExitValue();
+        if (imageBuild != 0) {
+            throw new GradleException("Failed to build docker image, see the docker build log in the task output");
+        }
+
+        // Load imageId
+
+        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
+        execute(spec -> {
+            spec.setStandardOutput(commandOutput);
+            spec.setEnvironment(Collections.emptyMap());
+            spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
+        });
+        String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
+
+        return new DockerBuildInfo()
+                .setTag(tag)
+                .setBuilder(DockerBuildInfo.Builder.DAEMON)
+                .setImageId(imageId)
+                .setCreatedAt(Instant.now());
     }
 }
