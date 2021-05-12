@@ -308,14 +308,14 @@ public class DockerDaemonActions {
         }
         if (instruction instanceof DockerInstruction.From) {
             DockerInstruction.From from = (DockerInstruction.From) instruction;
-            return "FROM " + from.image + ":" + from.version + Optional.ofNullable(from.sha).map(sha -> "@" + sha).orElse("");
+            return "FROM " + from.getImage() + ":" + from.getVersion() + Optional.ofNullable(from.getSha()).map(sha -> "@" + sha).orElse("");
         } else if (instruction instanceof DockerInstruction.FromDockerBuildContext) {
             return instructionAsDockerFileInstruction(((DockerInstruction.FromDockerBuildContext) instruction).toFrom(), ephemeralConfiguration);
         } else if (instruction instanceof DockerInstruction.Copy) {
             DockerInstruction.Copy copySpec = (DockerInstruction.Copy) instruction;
-            return "COPY " + Optional.ofNullable(copySpec.owner).map(s -> "--chown=" + s + " ").orElse("") + copySpec.layer + " /";
+            return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") + copySpec.getLayer() + " /";
         } else if (instruction instanceof DockerInstruction.Run) {
-            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", ((DockerInstruction.Run) instruction).commands);
+            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", ((DockerInstruction.Run) instruction).getCommands());
         } else if (instruction instanceof DockerInstruction.CreateUser) {
             DockerInstruction.CreateUser createUser = (DockerInstruction.CreateUser) instruction;
             return String.format(
@@ -326,25 +326,25 @@ public class DockerDaemonActions {
                             "       addgroup --gid %4$s %3$s ; \\ \n" +
                             "       adduser -S -s /bin/false --ingroup %3$s -H -D -u %2$s %1$s ; \\ \n" +
                             "   fi",
-                    createUser.username,
-                    createUser.userId,
-                    createUser.group,
-                    createUser.groupId
+                    createUser.getUsername(),
+                    createUser.getUserId(),
+                    createUser.getGroup(),
+                    createUser.getGroupId()
             );
         } else if (instruction instanceof DockerInstruction.SetUser) {
-            return "USER " + ((DockerInstruction.SetUser) instruction).username;
+            return "USER " + ((DockerInstruction.SetUser) instruction).getUsername();
         } else if (instruction instanceof DockerInstruction.Install) {
             DockerInstruction.Install install = ((DockerInstruction.Install) instruction);
-            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", installCommands(install.installer, install.packages));
+            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", installCommands(install.getInstaller(), install.getPackages()));
         } else if (instruction instanceof DockerInstruction.Env) {
-            return "ENV " + ((DockerInstruction.Env) instruction).key + "=" + ((DockerInstruction.Env) instruction).value;
+            return "ENV " + ((DockerInstruction.Env) instruction).getKey() + "=" + ((DockerInstruction.Env) instruction).getValue();
         } else if (instruction instanceof DockerInstruction.HealthCheck) {
             DockerInstruction.HealthCheck healthcheck = ((DockerInstruction.HealthCheck) instruction);
-            return "HEALTHCHECK " + Optional.ofNullable(healthcheck.interval).map(interval -> "--interval=" + interval + " ").orElse("") +
-                    Optional.ofNullable(healthcheck.timeout).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
-                    Optional.ofNullable(healthcheck.startPeriod).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
-                    Optional.ofNullable(healthcheck.retries).map(retries -> "--retries=" + retries + " ").orElse("") +
-                    "CMD " + healthcheck.cmd;
+            return "HEALTHCHECK " + Optional.ofNullable(healthcheck.getInterval()).map(interval -> "--interval=" + interval + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.getRetries()).map(retries -> "--retries=" + retries + " ").orElse("") +
+                    "CMD " + healthcheck.getCmd();
         } else {
             throw new GradleException("Docker instruction " + instruction + "is not supported for Docker daemon build");
         }
@@ -360,7 +360,7 @@ public class DockerDaemonActions {
                     rm -rf /var/cache/yum
                  */
                 return Arrays.asList(
-                        "yum install -y " + packages.stream().map(aPackage -> aPackage.name + "-" + aPackage.version).collect(Collectors.joining(" ")),
+                        "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "yum clean all",
                         "rm -rf /var/cache/yum"
                 );
@@ -374,7 +374,7 @@ public class DockerDaemonActions {
                 return Arrays.asList(
                         "export DEBIAN_FRONTEND=noninteractive",
                         "apt-get update",
-                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.name + "=" + aPackage.version).collect(Collectors.joining(" ")),
+                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "apt-get clean",
                         "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*");
             case APK:
@@ -384,7 +384,7 @@ public class DockerDaemonActions {
                 */
                 return Arrays.asList(
                         "apk update",
-                        "apk add " + packages.stream().map(aPackage -> aPackage.name + "=" + aPackage.version).collect(Collectors.joining(" ")),
+                        "apk add " + packages.stream().map(aPackage -> aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
                         "rm -rf /var/cache/apk/*");
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
