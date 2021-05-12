@@ -29,6 +29,7 @@ import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.TaskExecutionException;
+import org.gradle.internal.os.OperatingSystem;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
 import org.gradle.process.ExecSpec;
@@ -45,6 +46,7 @@ import java.util.stream.Stream;
 
 public class DockerDaemonActions {
 
+    public static String EPHEMERAL_MOUNT = "/mnt/dockerEphemeral";
     private final ExecOperations execOperations;
 
     public DockerDaemonActions(ExecOperations execOperations) {
@@ -261,6 +263,11 @@ public class DockerDaemonActions {
     public ExecResult execute(Action<? super ExecSpec> action) {
         Map<String, String> environment = new HashMap<>();
         // Only pass specific env vars for more reproducible builds
+        // This PATH var here due to DockerDesktop for MacOS being awful.
+        // See https://github.com/elastic/cloud/issues/79374 for more context but be very careful removing this.
+        if (OperatingSystem.current().isMacOsX()) {
+            environment.put("PATH", "/Applications/Docker.app/Contents/Resources/bin/");
+        }
         environment.put("LANG", System.getenv("LANG"));
         environment.put("LC_ALL", System.getenv("LC_ALL"));
         environment.put("DOCKER_BUILDKIT", "1");
@@ -285,7 +292,6 @@ public class DockerDaemonActions {
         }
     }
 
-
     public String dockerFileFromInstructions(List<DockerInstruction> instructions, Path ephemeralConfiguration) {
         Function<DockerInstruction, String> partialApply = (DockerInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralConfiguration);
         return "#############################\n" +
@@ -299,12 +305,10 @@ public class DockerDaemonActions {
                         .reduce("", (acc, value) -> acc + "\n\n" + value);
     }
 
-    public static String EPHEMERAL_MOUNT = "/mnt/dockerEphemeral";
-
     public String instructionAsDockerFileInstruction(DockerInstruction instruction, Path ephemeralConfiguration) {
         String mountDependencies = "";
         if (ephemeralConfiguration.toFile().exists()) {
-            mountDependencies = "--mount=type=bind,target="+ EPHEMERAL_MOUNT + ",source="+ephemeralConfiguration.getFileName();
+            mountDependencies = "--mount=type=bind,target=" + EPHEMERAL_MOUNT + ",source=" + ephemeralConfiguration.getFileName();
         }
         if (instruction instanceof DockerInstruction.From) {
             DockerInstruction.From from = (DockerInstruction.From) instruction;
