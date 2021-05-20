@@ -4,22 +4,22 @@
         failures="1"
         skipped="1"
         hostname="elastic"
-        name="BasicClusterSpec"
+        name="BasicDeploymentAdminUserSpec"
         tests="4"
         time="285.673"
         timestamp="2020-08-26T18:19:44">
 
-    <testcase classname="co.elastic.cloud.functional.clusters.BasicClusterSpec" name="testMethod1" time="0.006">
+    <testcase classname="co.elastic.cloud.functional.deployments.elasticsearch.BasicDeploymentAdminUserSpec" name="testMethod1" time="0.006">
         <system-out>STDOUT text</system-out>
         <system-err>STDERR text</system-err>
     </testcase>
-    <testcase classname="co.elastic.cloud.functional.clusters.BasicClusterSpec" name="testMethod2" time="0.001">
+    <testcase classname="co.elastic.cloud.functional.deployments.elasticsearch.BasicDeploymentAdminUserSpec" name="testMethod2" time="0.001">
         <error message="error message" type="error message type">error description</error>
     </testcase>
-    <testcase classname="co.elastic.cloud.functional.clusters.BasicClusterSpec" name="testMethod3" time="0.001">
+    <testcase classname="co.elastic.cloud.functional.deployments.elasticsearch.BasicDeploymentAdminUserSpec" name="testMethod3" time="0.001">
         <skipped message="skipped message" />
     </testcase>
-    <testcase classname="co.elastic.cloud.functional.clusters.BasicClusterSpec" name="testMethod4" time="0">
+    <testcase classname="co.elastic.cloud.functional.deployments.elasticsearch.BasicDeploymentAdminUserSpec" name="testMethod4" time="0">
         <failure message="failure message"  type="some failure type">failure description</failure>
     </testcase>
 
