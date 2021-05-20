@@ -53,6 +53,15 @@ public class DockerDaemonActions {
         this.execOperations = execOperations;
     }
 
+    /**
+     * Adds or updates the PATH environment variable to work around a Docker Desktop for Mac issue.
+     * See https://github.com/elastic/cloud/issues/79374 for more context but be very careful removing this.
+     * @param env
+     */
+    public static void dockerForMacWorkaround(Map<String, String> env) {
+        env.merge("PATH", "/Applications/Docker.app/Contents/Resources/bin/", (a, b) -> a + File.pathSeparator + b);
+    }
+
     public void loadArchive(Path archive) {
         try (InputStream archiveInput = TarExtractor.getSpecificInputStream(new BufferedInputStream(Files.newInputStream(archive)))) {
             execute(spec -> {
@@ -263,10 +272,8 @@ public class DockerDaemonActions {
     public ExecResult execute(Action<? super ExecSpec> action) {
         Map<String, String> environment = new HashMap<>();
         // Only pass specific env vars for more reproducible builds
-        // This PATH var here due to DockerDesktop for MacOS being awful.
-        // See https://github.com/elastic/cloud/issues/79374 for more context but be very careful removing this.
         if (OperatingSystem.current().isMacOsX()) {
-            environment.put("PATH", "/Applications/Docker.app/Contents/Resources/bin/");
+            dockerForMacWorkaround(environment);
         }
         environment.put("LANG", System.getenv("LANG"));
         environment.put("LC_ALL", System.getenv("LC_ALL"));
