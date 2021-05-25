@@ -4,8 +4,6 @@ import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 
-import java.util.Collections;
-
 public class DockerBasePlugin implements Plugin<Project> {
 
     public static final String BUILD_TASK_NAME = "dockerBaseImageBuild";
@@ -14,15 +12,16 @@ public class DockerBasePlugin implements Plugin<Project> {
     public void apply(Project project) {
         String projectTag = DockerPluginConventions.imageTagWithQualifier(project, "-base");
 
-        DockerBaseBuildTask buildTask = project.getTasks().create(BUILD_TASK_NAME, DockerBaseBuildTask.class, projectTag);
+        BaseBuildTask buildTask = project.getTasks().create(BUILD_TASK_NAME, BaseBuildTask.class, projectTag);
 
-        DockerContextBuilderTask contextBuilderTask = project.getTasks().create("dockerBaseImageContext", DockerContextBuilderTask.class);
-        contextBuilderTask.from(buildTask);
+        BaseBuildTask.ContextBuilder contextBuilderTask = project.getTasks().create("dockerBaseImageContext", BaseBuildTask.ContextBuilder.class);
+        contextBuilderTask.setFrom(buildTask);
+        buildTask.dependsOn(contextBuilderTask);
 
-        DockerBaseLocalImportTask localImport = project.getTasks().create("dockerBaseImageLocalImport", DockerBaseLocalImportTask.class, buildTask.getBuildContext());
+        BaseLocalImportTask localImport = project.getTasks().create("dockerBaseImageLocalImport", BaseLocalImportTask.class, buildTask.getBuildContext(), DockerPluginConventions.localImportImageTag(project, "-base"));
         localImport.dependsOn(buildTask);
 
-        DockerBasePushTask push = project.getTasks().create("dockerBaseImagePush", DockerBasePushTask.class, buildTask.getBuildContext());
+        BasePushTask push = project.getTasks().create("dockerBaseImagePush", BasePushTask.class, buildTask.getBuildContext(), projectTag);
         push.dependsOn(buildTask);
 
         project.getGradle().getTaskGraph().whenReady(graph -> {

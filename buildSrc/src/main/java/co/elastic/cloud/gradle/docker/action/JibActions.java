@@ -19,9 +19,11 @@
 
 package co.elastic.cloud.gradle.docker.action;
 
+import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
+import co.elastic.cloud.gradle.dockerbase.JibInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -51,6 +53,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class JibActions {
 
@@ -122,7 +125,7 @@ public class JibActions {
                     .orElse(Instant.now());
             jibBuilder.setCreationTime(createdAt);
 
-            // Load parent configuration from base image tar or parent project image tar
+            // Load parent configuration fromInstruction base image tar or parent project image tar
             ContainerConfiguration parentConfig = readConfigurationFromTar(parentImagePath);
 
 
@@ -226,6 +229,119 @@ public class JibActions {
         }
     }
 
+    public DockerBuildInfo buildTo(DockerBuildContext buildContext, List<JibInstruction> instructions, Containerizer target) {
+        try {
+
+            Optional<Path> from = instructions.stream()
+                    .filter(t -> t instanceof JibInstruction.From).findFirst()
+                    .map(t -> {
+                        JibInstruction.From fromInstruction = (JibInstruction.From) t;
+                        pull(
+                                fromInstruction.getImage() + ":" + fromInstruction.getVersion() + "@" + fromInstruction.getSha(),
+                                buildContext.jibBaseImagePath(),
+                                e -> {
+                                    throw new GradleException("Error while pulling base image", e);
+                                }
+                        );
+                        return buildContext.jibBaseImagePath();
+                    });
+
+            Optional<Path> fromDockerContext = instructions.stream()
+                    .filter(t -> t instanceof JibInstruction.FromDockerBuildContext).findFirst()
+                    .map(t -> {
+                        JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t;
+                        return fromInstruction.getBuildContext().projectTarImagePath();
+                    });
+
+            Path parentImagePath = or(from, fromDockerContext)
+                    .orElseThrow(() -> new GradleException("Jib instructions doesn't define a from value"));
+            JibContainerBuilder jibBuilder = Jib.from(TarImage.at(parentImagePath));
+
+            instructions.stream()
+                    .filter(t -> !(t instanceof JibInstruction.From || t instanceof JibInstruction.FromDockerBuildContext))
+                    .forEach(instruction -> applyJibInstruction(jibBuilder, instruction, buildContext));
+
+            Instant createdAt;
+            try {
+                DockerBuildInfo buildInfo = buildContext.loadImageBuildInfo();
+                createdAt = buildInfo.getCreatedAt();
+            } catch (GradleException e) {
+                createdAt = Instant.now();
+            }
+            jibBuilder.setCreationTime(createdAt);
+
+            JibContainer jibContainer = jibBuilder.containerize(target);
+
+            Map<String, String> changingLabels = instructions.stream()
+                    .filter(i -> i instanceof JibInstruction.ChangingLabel)
+                    .map(i -> (JibInstruction.ChangingLabel) i )
+                    .collect(Collectors.toMap(JibInstruction.ChangingLabel::getKey, JibInstruction.ChangingLabel::getValue));
+
+            return new DockerBuildInfo()
+                    .setTag(jibContainer.getTags().stream().findFirst().toString())
+                    .setBuilder(DockerBuildInfo.Builder.JIB)
+                    .setImageId(jibContainer.getImageId().toString())
+                    .setRepoDigest(jibContainer.getDigest().toString())
+                    .setCreatedAt(createdAt)
+                    .setChangingLabels(changingLabels);
+        } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
+            throw new GradleException("Error running Jib docker config build", e);
+        }
+    }
+
+    private void applyJibInstruction(JibContainerBuilder jibBuilder, JibInstruction instruction, DockerBuildContext buildContext) {
+        if (instruction instanceof JibInstruction.Copy) {
+            JibInstruction.Copy copyInstruction = (JibInstruction.Copy) instruction;
+            // We can't add directly to / causing a NPE in Jib
+            // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
+            File contextFolder = buildContext.basePath().resolve(copyInstruction.getLayer()).toFile();
+            Arrays.stream(contextFolder.listFiles()).forEach(file -> {
+                try {
+                    jibBuilder.addFileEntriesLayer(
+                            FileEntriesLayer.builder()
+                                    .addEntryRecursive(
+                                            file.toPath(),
+                                            AbsoluteUnixPath.get("/" + file.getName()),
+                                            JibActions::getJibFilePermission,
+                                            FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
+                                            Optional.ofNullable(copyInstruction.getOwner()).isPresent() ?
+                                                    (sourcePath, destinationPath) -> copyInstruction.getOwner() :
+                                                    FileEntriesLayer.DEFAULT_OWNERSHIP_PROVIDER
+                                    ).build());
+                } catch (IOException e) {
+                    throw new GradleException("Error configuring " + copyInstruction.getLayer() + " for Jib docker config", e);
+                }
+            });
+        } else if (instruction instanceof JibInstruction.Entrypoint) {
+            JibInstruction.Entrypoint entrypoint = (JibInstruction.Entrypoint) instruction;
+            jibBuilder.setEntrypoint(entrypoint.getValue());
+        } else if (instruction instanceof JibInstruction.Cmd) {
+            JibInstruction.Cmd cmd = (JibInstruction.Cmd) instruction;
+            jibBuilder.setProgramArguments(cmd.getValue());
+        } else if (instruction instanceof JibInstruction.Env) {
+            JibInstruction.Env envInstruction = (JibInstruction.Env) instruction;
+            jibBuilder.addEnvironmentVariable(envInstruction.getKey(), envInstruction.getValue());
+        } else if (instruction instanceof JibInstruction.Expose) {
+            JibInstruction.Expose expose = (JibInstruction.Expose) instruction;
+            switch (expose.getType()) {
+                case TCP:
+                    jibBuilder.addExposedPort(Port.tcp(expose.getPort()));
+                    break;
+                case UDP:
+                    jibBuilder.addExposedPort(Port.udp(expose.getPort()));
+                    break;
+            }
+        } else if (instruction instanceof JibInstruction.Label) {
+            JibInstruction.Label label = (JibInstruction.Label) instruction;
+            jibBuilder.addLabel(label.getKey(), label.getValue());
+        } else if (instruction instanceof JibInstruction.ChangingLabel) {
+            JibInstruction.ChangingLabel changingLabel = (JibInstruction.ChangingLabel) instruction;
+            jibBuilder.addLabel(changingLabel.getKey(), changingLabel.getValue());
+        } else {
+            throw new GradleException("Instruction " + instruction + "is not a valid Jib instuction");
+        }
+    }
+
     // TODO remove when we add Java 11 for standard JDK
     private static <T> Optional<T> or(Optional<T> x, Optional<T> y) {
         if (x.isPresent()) {
@@ -250,7 +366,7 @@ public class JibActions {
             Path configPath = destination.resolve(loadManifest.getConfig());
             return JsonTemplateMapper.readJsonFromFile(configPath, ContainerConfiguration.class);
         } catch (IOException e) {
-            throw new GradleException("Error reading config configuration from " + tarPath, e);
+            throw new GradleException("Error reading config configuration fromInstruction " + tarPath, e);
         }
     }
 

@@ -23,7 +23,7 @@ import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
-import co.elastic.cloud.gradle.dockerbase.DockerInstruction;
+import co.elastic.cloud.gradle.dockerbase.DaemonInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.Action;
@@ -250,18 +250,18 @@ public class DockerDaemonActions {
                 break;
             case YUM:
                 result.addAll(installCommands(
-                        DockerInstruction.Install.PackageInstaller.YUM,
-                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        DaemonInstruction.Install.PackageInstaller.YUM,
+                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             case APT:
                 result.addAll(installCommands(
-                        DockerInstruction.Install.PackageInstaller.APT,
-                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        DaemonInstruction.Install.PackageInstaller.APT,
+                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             case APK:
                 result.addAll(installCommands(
-                        DockerInstruction.Install.PackageInstaller.APK,
-                        packages.stream().map(p -> new DockerInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        DaemonInstruction.Install.PackageInstaller.APK,
+                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
                 break;
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
@@ -299,8 +299,8 @@ public class DockerDaemonActions {
         }
     }
 
-    public String dockerFileFromInstructions(List<DockerInstruction> instructions, Path ephemeralConfiguration) {
-        Function<DockerInstruction, String> partialApply = (DockerInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralConfiguration);
+    public String dockerFileFromInstructions(List<DaemonInstruction> instructions, Path ephemeralConfiguration) {
+        Function<DaemonInstruction, String> partialApply = (DaemonInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralConfiguration);
         return "#############################\n" +
                 "#                           #\n" +
                 "# Auto generated Dockerfile #\n" +
@@ -312,23 +312,23 @@ public class DockerDaemonActions {
                         .reduce("", (acc, value) -> acc + "\n\n" + value);
     }
 
-    public String instructionAsDockerFileInstruction(DockerInstruction instruction, Path ephemeralConfiguration) {
+    public String instructionAsDockerFileInstruction(DaemonInstruction instruction, Path ephemeralConfiguration) {
         String mountDependencies = "";
         if (ephemeralConfiguration.toFile().exists()) {
             mountDependencies = "--mount=type=bind,target=" + EPHEMERAL_MOUNT + ",source=" + ephemeralConfiguration.getFileName();
         }
-        if (instruction instanceof DockerInstruction.From) {
-            DockerInstruction.From from = (DockerInstruction.From) instruction;
+        if (instruction instanceof DaemonInstruction.From) {
+            DaemonInstruction.From from = (DaemonInstruction.From) instruction;
             return "FROM " + from.getImage() + ":" + from.getVersion() + Optional.ofNullable(from.getSha()).map(sha -> "@" + sha).orElse("");
-        } else if (instruction instanceof DockerInstruction.FromDockerBuildContext) {
-            return instructionAsDockerFileInstruction(((DockerInstruction.FromDockerBuildContext) instruction).toFrom(), ephemeralConfiguration);
-        } else if (instruction instanceof DockerInstruction.Copy) {
-            DockerInstruction.Copy copySpec = (DockerInstruction.Copy) instruction;
+        } else if (instruction instanceof DaemonInstruction.FromDockerBuildContext) {
+            return instructionAsDockerFileInstruction(((DaemonInstruction.FromDockerBuildContext) instruction).toFrom(), ephemeralConfiguration);
+        } else if (instruction instanceof DaemonInstruction.Copy) {
+            DaemonInstruction.Copy copySpec = (DaemonInstruction.Copy) instruction;
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") + copySpec.getLayer() + " /";
-        } else if (instruction instanceof DockerInstruction.Run) {
-            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", ((DockerInstruction.Run) instruction).getCommands());
-        } else if (instruction instanceof DockerInstruction.CreateUser) {
-            DockerInstruction.CreateUser createUser = (DockerInstruction.CreateUser) instruction;
+        } else if (instruction instanceof DaemonInstruction.Run) {
+            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", ((DaemonInstruction.Run) instruction).getCommands());
+        } else if (instruction instanceof DaemonInstruction.CreateUser) {
+            DaemonInstruction.CreateUser createUser = (DaemonInstruction.CreateUser) instruction;
             return String.format(
                     "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
                             "       groupadd -g %4$s %3$s ; \\ \n" +
@@ -342,15 +342,15 @@ public class DockerDaemonActions {
                     createUser.getGroup(),
                     createUser.getGroupId()
             );
-        } else if (instruction instanceof DockerInstruction.SetUser) {
-            return "USER " + ((DockerInstruction.SetUser) instruction).getUsername();
-        } else if (instruction instanceof DockerInstruction.Install) {
-            DockerInstruction.Install install = ((DockerInstruction.Install) instruction);
+        } else if (instruction instanceof DaemonInstruction.SetUser) {
+            return "USER " + ((DaemonInstruction.SetUser) instruction).getUsername();
+        } else if (instruction instanceof DaemonInstruction.Install) {
+            DaemonInstruction.Install install = ((DaemonInstruction.Install) instruction);
             return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", installCommands(install.getInstaller(), install.getPackages()));
-        } else if (instruction instanceof DockerInstruction.Env) {
-            return "ENV " + ((DockerInstruction.Env) instruction).getKey() + "=" + ((DockerInstruction.Env) instruction).getValue();
-        } else if (instruction instanceof DockerInstruction.HealthCheck) {
-            DockerInstruction.HealthCheck healthcheck = ((DockerInstruction.HealthCheck) instruction);
+        } else if (instruction instanceof DaemonInstruction.Env) {
+            return "ENV " + ((DaemonInstruction.Env) instruction).getKey() + "=" + ((DaemonInstruction.Env) instruction).getValue();
+        } else if (instruction instanceof DaemonInstruction.HealthCheck) {
+            DaemonInstruction.HealthCheck healthcheck = ((DaemonInstruction.HealthCheck) instruction);
             return "HEALTHCHECK " + Optional.ofNullable(healthcheck.getInterval()).map(interval -> "--interval=" + interval + " ").orElse("") +
                     Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
                     Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
@@ -361,7 +361,7 @@ public class DockerDaemonActions {
         }
     }
 
-    public List<String> installCommands(DockerInstruction.Install.PackageInstaller installer, List<DockerInstruction.Install.Package> packages) {
+    public List<String> installCommands(DaemonInstruction.Install.PackageInstaller installer, List<DaemonInstruction.Install.Package> packages) {
         switch (installer) {
             case YUM:
                 /*
@@ -402,7 +402,7 @@ public class DockerDaemonActions {
         }
     }
 
-    public DockerBuildInfo build(List<DockerInstruction> instructions, Path contextPath, String tag, Path ephemeralConfiguration) throws IOException {
+    public DockerBuildInfo build(List<DaemonInstruction> instructions, Path contextPath, String tag, Path ephemeralConfiguration) throws IOException {
         if (!contextPath.toFile().isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + contextPath);
         }
