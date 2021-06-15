@@ -56,6 +56,7 @@ public class DockerDaemonActions {
     /**
      * Adds or updates the PATH environment variable to work around a Docker Desktop for Mac issue.
      * See https://github.com/elastic/cloud/issues/79374 for more context but be very careful removing this.
+     *
      * @param env
      */
     public static void dockerForMacWorkaround(Map<String, String> env) {
@@ -321,7 +322,10 @@ public class DockerDaemonActions {
             DaemonInstruction.From from = (DaemonInstruction.From) instruction;
             return "FROM " + from.getImage() + ":" + from.getVersion() + Optional.ofNullable(from.getSha()).map(sha -> "@" + sha).orElse("");
         } else if (instruction instanceof DaemonInstruction.FromDockerBuildContext) {
-            return instructionAsDockerFileInstruction(((DaemonInstruction.FromDockerBuildContext) instruction).toFrom(), ephemeralConfiguration);
+            final DaemonInstruction.FromDockerBuildContext fromProject = (DaemonInstruction.FromDockerBuildContext) instruction;
+            final DockerBuildInfo dockerBuildInfo = fromProject.getBuildContext().loadImageBuildInfo();
+            return "# " + fromProject.getBuildContext().getProject().getPath() + "\n" +
+                    "FROM " + dockerBuildInfo.getTag();
         } else if (instruction instanceof DaemonInstruction.Copy) {
             DaemonInstruction.Copy copySpec = (DaemonInstruction.Copy) instruction;
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") + copySpec.getLayer() + " /";
@@ -419,7 +423,13 @@ public class DockerDaemonActions {
 
         int imageBuild = execute(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
-            spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
+            if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
+                // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
+                //   e.g. dockerEphemeral content in run commands could lead to incorrect results
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--tag=" + tag, ".");
+            } else {
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
+            }
             spec.setIgnoreExitValue(true);
         }).getExitValue();
         if (imageBuild != 0) {

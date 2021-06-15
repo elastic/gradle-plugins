@@ -46,6 +46,7 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -54,6 +55,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class JibActions {
 
@@ -231,54 +233,49 @@ public class JibActions {
 
     public DockerBuildInfo buildTo(DockerBuildContext buildContext, List<JibInstruction> instructions, Containerizer target) {
         try {
+            JibContainerBuilder jibBuilder = Jib.from(
+                    TarImage.at(
+                            instructions.stream()
+                                    .filter(t1 -> t1 instanceof JibInstruction.FromDockerBuildContext)
+                                    .findFirst()
+                                    .map(t1 -> {
+                                        JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t1;
+                                        return fromInstruction.getBuildContext().projectTarImagePath();
+                                    })
+                                    .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
+                    )
+            );
 
-            Optional<Path> from = instructions.stream()
-                    .filter(t -> t instanceof JibInstruction.From).findFirst()
-                    .map(t -> {
-                        JibInstruction.From fromInstruction = (JibInstruction.From) t;
-                        pull(
-                                fromInstruction.getImage() + ":" + fromInstruction.getVersion() + "@" + fromInstruction.getSha(),
-                                buildContext.jibBaseImagePath(),
-                                e -> {
-                                    throw new GradleException("Error while pulling base image", e);
-                                }
-                        );
-                        return buildContext.jibBaseImagePath();
-                    });
-
-            Optional<Path> fromDockerContext = instructions.stream()
-                    .filter(t -> t instanceof JibInstruction.FromDockerBuildContext).findFirst()
-                    .map(t -> {
-                        JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t;
-                        return fromInstruction.getBuildContext().projectTarImagePath();
-                    });
-
-            Path parentImagePath = or(from, fromDockerContext)
-                    .orElseThrow(() -> new GradleException("Jib instructions doesn't define a from value"));
-            JibContainerBuilder jibBuilder = Jib.from(TarImage.at(parentImagePath));
+            // We don't support  setting labels on base images, don't inherit them, these are component specific
+            // TODO: This doesn't really set it to empty, we do it in the build script for now, but would be worth looking at
+            jibBuilder.setLabels(Collections.emptyMap());
+            jibBuilder.setEntrypoint((List<String>) null);
+            jibBuilder.setProgramArguments((List<String>) null);
+            jibBuilder.setExposedPorts(Collections.emptySet());
 
             instructions.stream()
-                    .filter(t -> !(t instanceof JibInstruction.From || t instanceof JibInstruction.FromDockerBuildContext))
+                    .filter(t -> !(t instanceof JibInstruction.FromDockerBuildContext))
                     .forEach(instruction -> applyJibInstruction(jibBuilder, instruction, buildContext));
 
             Instant createdAt;
-            try {
-                DockerBuildInfo buildInfo = buildContext.loadImageBuildInfo();
-                createdAt = buildInfo.getCreatedAt();
-            } catch (GradleException e) {
+            DockerBuildInfo buildInfo = buildContext.loadImageBuildInfo();
+            if (buildInfo == null) {
                 createdAt = Instant.now();
+            } else {
+                createdAt = buildInfo.getCreatedAt();
             }
+
             jibBuilder.setCreationTime(createdAt);
 
             JibContainer jibContainer = jibBuilder.containerize(target);
 
             Map<String, String> changingLabels = instructions.stream()
                     .filter(i -> i instanceof JibInstruction.ChangingLabel)
-                    .map(i -> (JibInstruction.ChangingLabel) i )
+                    .map(i -> (JibInstruction.ChangingLabel) i)
                     .collect(Collectors.toMap(JibInstruction.ChangingLabel::getKey, JibInstruction.ChangingLabel::getValue));
 
             return new DockerBuildInfo()
-                    .setTag(jibContainer.getTags().stream().findFirst().toString())
+                    .setTag(jibContainer.getTags().stream().findFirst().get().toString())
                     .setBuilder(DockerBuildInfo.Builder.JIB)
                     .setImageId(jibContainer.getImageId().toString())
                     .setRepoDigest(jibContainer.getDigest().toString())
@@ -294,24 +291,35 @@ public class JibActions {
             JibInstruction.Copy copyInstruction = (JibInstruction.Copy) instruction;
             // We can't add directly to / causing a NPE in Jib
             // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-            File contextFolder = buildContext.basePath().resolve(copyInstruction.getLayer()).toFile();
-            Arrays.stream(contextFolder.listFiles()).forEach(file -> {
-                try {
-                    jibBuilder.addFileEntriesLayer(
-                            FileEntriesLayer.builder()
-                                    .addEntryRecursive(
-                                            file.toPath(),
-                                            AbsoluteUnixPath.get("/" + file.getName()),
-                                            JibActions::getJibFilePermission,
-                                            FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
-                                            Optional.ofNullable(copyInstruction.getOwner()).isPresent() ?
-                                                    (sourcePath, destinationPath) -> copyInstruction.getOwner() :
-                                                    FileEntriesLayer.DEFAULT_OWNERSHIP_PROVIDER
-                                    ).build());
-                } catch (IOException e) {
-                    throw new GradleException("Error configuring " + copyInstruction.getLayer() + " for Jib docker config", e);
-                }
-            });
+            Path contextFolder = buildContext.basePath().resolve(copyInstruction.getLayer());
+            if (!Files.exists(contextFolder)) {
+                throw new RuntimeException("Input layer " + contextFolder + " does not exsit.");
+            }
+            if (!Files.isDirectory(contextFolder)) {
+                throw new RuntimeException("Expected " + contextFolder + " to be a directory.");
+            }
+            try (Stream<Path> elements = Files.list(contextFolder)) {
+                elements.forEach(file -> {
+                            try {
+                                jibBuilder.addFileEntriesLayer(
+                                        FileEntriesLayer.builder()
+                                                .addEntryRecursive(
+                                                        file,
+                                                        AbsoluteUnixPath.get("/" + file.getFileName()),
+                                                        JibActions::getJibFilePermission,
+                                                        FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
+                                                        Optional.ofNullable(copyInstruction.getOwner()).isPresent() ?
+                                                                (sourcePath, destinationPath) -> copyInstruction.getOwner() :
+                                                                FileEntriesLayer.DEFAULT_OWNERSHIP_PROVIDER
+                                                ).build());
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(e);
+                            }
+                        }
+                );
+            } catch (IOException e) {
+                throw new UncheckedIOException("Error configuring " + copyInstruction.getLayer() + " for Jib docker config", e);
+            }
         } else if (instruction instanceof JibInstruction.Entrypoint) {
             JibInstruction.Entrypoint entrypoint = (JibInstruction.Entrypoint) instruction;
             jibBuilder.setEntrypoint(entrypoint.getValue());
@@ -337,6 +345,9 @@ public class JibActions {
         } else if (instruction instanceof JibInstruction.ChangingLabel) {
             JibInstruction.ChangingLabel changingLabel = (JibInstruction.ChangingLabel) instruction;
             jibBuilder.addLabel(changingLabel.getKey(), changingLabel.getValue());
+        } else if (instruction instanceof  JibInstruction.Maintainer) {
+            JibInstruction.Maintainer maintainer = (JibInstruction.Maintainer) instruction;
+            jibBuilder.addLabel("maintainer", maintainer.getName() + "<" + maintainer.getEmail() + ">");
         } else {
             throw new GradleException("Instruction " + instruction + "is not a valid Jib instuction");
         }

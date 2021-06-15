@@ -4,6 +4,7 @@ import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.tasks.TaskProvider;
 
 public class DockerComponentPlugin implements Plugin<Project> {
 
@@ -11,18 +12,24 @@ public class DockerComponentPlugin implements Plugin<Project> {
     public void apply(Project project) {
         String projectTag = DockerPluginConventions.imageTag(project);
 
-        Provider<ComponentBuildTask> buildTask = project.getTasks().register("dockerComponentImageBuild", ComponentBuildTask.class, projectTag);
+        Provider<ComponentBuildTask> dockerComponentImageBuild = project.getTasks().register(
+                "dockerComponentImageBuild",
+                ComponentBuildTask.class,
+                projectTag
+        );
 
-        ComponentBuildTask.ContextBuilder contextBuilderTask = project.getTasks().create("dockerComponentImageContext", ComponentBuildTask.ContextBuilder.class);
-        contextBuilderTask.setFrom(buildTask);
+        TaskProvider<ComponentLocalImportTask> dockerComponentImageLocalImport = project.getTasks().register(
+                "dockerComponentImageLocalImport",
+                ComponentLocalImportTask.class,
+                dockerComponentImageBuild,
+                DockerPluginConventions.localImportImageTag(project)
+        );
+        dockerComponentImageLocalImport.configure(task -> task.dependsOn(dockerComponentImageBuild));
 
-        buildTask.get().dependsOn(contextBuilderTask);
+        TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register("dockerComponentImagePush", ComponentPushTask.class, dockerComponentImageBuild, projectTag);
+        dockerComponentImagePush.configure(task -> task.dependsOn(dockerComponentImageBuild));
 
-
-        ComponentLocalImportTask localImport = project.getTasks().create("dockerComponentImageLocalImport", ComponentLocalImportTask.class, buildTask, DockerPluginConventions.localImportImageTag(project));
-        localImport.dependsOn(buildTask);
-
-        ComponentPushTask push = project.getTasks().create("dockerComponentImagePush", ComponentPushTask.class, buildTask, projectTag);
-        push.dependsOn(buildTask);
+        project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
+        project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(dockerComponentImagePush));
     }
 }
