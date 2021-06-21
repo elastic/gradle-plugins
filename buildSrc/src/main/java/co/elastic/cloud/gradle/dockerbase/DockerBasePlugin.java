@@ -66,4 +66,5 @@ public class DockerBasePlugin implements Plugin<Project> {
         project.getTasks().named("publishForPlatform", task -> task.dependsOn(dockerBaseImagePush));
         project.getTasks().named("resolveAllDependencies", task -> task.dependsOn(dockerBasePull));
     }
+
 }
