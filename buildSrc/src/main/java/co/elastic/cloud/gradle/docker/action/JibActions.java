@@ -275,7 +275,7 @@ public class JibActions {
                     .collect(Collectors.toMap(JibInstruction.ChangingLabel::getKey, JibInstruction.ChangingLabel::getValue));
 
             return new DockerBuildInfo()
-                    .setTag(jibContainer.getTags().stream().findFirst().get().toString())
+                    .setTag(jibContainer.getTags().stream().findFirst().get())
                     .setBuilder(DockerBuildInfo.Builder.JIB)
                     .setImageId(jibContainer.getImageId().toString())
                     .setRepoDigest(jibContainer.getDigest().toString())

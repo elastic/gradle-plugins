@@ -10,12 +10,9 @@ public class DockerComponentPlugin implements Plugin<Project> {
 
     @Override
     public void apply(Project project) {
-        String projectTag = DockerPluginConventions.imageTag(project);
-
         Provider<ComponentBuildTask> dockerComponentImageBuild = project.getTasks().register(
                 "dockerComponentImageBuild",
-                ComponentBuildTask.class,
-                projectTag
+                ComponentBuildTask.class
         );
 
         TaskProvider<ComponentLocalImportTask> dockerComponentImageLocalImport = project.getTasks().register(
@@ -26,7 +23,11 @@ public class DockerComponentPlugin implements Plugin<Project> {
         );
         dockerComponentImageLocalImport.configure(task -> task.dependsOn(dockerComponentImageBuild));
 
-        TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register("dockerComponentImagePush", ComponentPushTask.class, dockerComponentImageBuild, projectTag);
+        TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register(
+                "dockerComponentImagePush",
+                ComponentPushTask.class,
+                dockerComponentImageBuild
+        );
         dockerComponentImagePush.configure(task -> task.dependsOn(dockerComponentImageBuild));
 
         project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
