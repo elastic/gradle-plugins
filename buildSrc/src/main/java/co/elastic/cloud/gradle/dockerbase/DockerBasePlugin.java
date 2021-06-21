@@ -2,11 +2,14 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.OS;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.TaskProvider;
 import org.jetbrains.annotations.NotNull;
+
 
 public class DockerBasePlugin implements Plugin<Project> {
 
@@ -17,7 +20,11 @@ public class DockerBasePlugin implements Plugin<Project> {
     public void apply(@NotNull Project project) {
         final Configuration dockerEphemeral = project.getConfigurations().create("dockerEphemeral");
 
-        String projectTag = DockerPluginConventions.imageTagWithQualifier(project, "-base");
+        String projectTag = DockerPluginConventions.imageTagForPlatform(
+                project,
+                OS.dockerCurrent(),
+                Architecture.current()
+        );
 
         final DockerBuildContext dockerBuildContext = new DockerBuildContext(project, BUILD_TASK_NAME);
 
@@ -32,10 +39,12 @@ public class DockerBasePlugin implements Plugin<Project> {
         TaskProvider<BaseLocalImportTask> dockerBaseImageLocalImport = project.getTasks().register(
                 LOCAL_IMPORT_TASK_NAME,
                 BaseLocalImportTask.class,
-                dockerBuildContext,
-                DockerPluginConventions.localImportImageTag(project, "-base")
+                dockerBaseImageBuild,
+                DockerPluginConventions.localImportImageTag(project)
         );
-        dockerBaseImageLocalImport.configure(task -> task.dependsOn(dockerBaseImageBuild));
+        dockerBaseImageLocalImport.configure(task -> {
+            task.dependsOn(dockerBaseImageBuild);
+        });
 
         TaskProvider<BasePullTask> dockerBasePull = project.getTasks().register(
                 "dockerBasePull",
@@ -43,11 +52,18 @@ public class DockerBasePlugin implements Plugin<Project> {
                 dockerBaseImageBuild
         );
 
-        TaskProvider<BasePushTask> dockerBaseImagePush = project.getTasks().register("dockerBaseImagePush", BasePushTask.class, dockerBuildContext, projectTag);
-        dockerBaseImagePush.configure(task -> task.dependsOn(dockerBaseImageBuild));
+        TaskProvider<BasePushTask> dockerBaseImagePush = project.getTasks().register(
+                "dockerBaseImagePush",
+                BasePushTask.class,
+                dockerBaseImageBuild,
+                projectTag
+        );
+        dockerBaseImagePush.configure(task -> {
+            task.dependsOn(dockerBaseImageBuild);
+        });
 
-        project.getTasks().named("assemblePlatformIndependent", task -> task.dependsOn(dockerBaseImageBuild));
-        project.getTasks().named("publishPlatformIndependent", task -> task.dependsOn(dockerBaseImagePush));
+        project.getTasks().named("assembleForPlatform", task -> task.dependsOn(dockerBaseImageBuild));
+        project.getTasks().named("publishForPlatform", task -> task.dependsOn(dockerBaseImagePush));
         project.getTasks().named("resolveAllDependencies", task -> task.dependsOn(dockerBasePull));
     }
 }

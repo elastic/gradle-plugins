@@ -21,6 +21,7 @@ public class BasePullTask extends DefaultTask {
     @TaskAction
     public void pull() {
         DockerDaemonActions daemonActions = new DockerDaemonActions(getExecOperations());
+        buildTask.get().stopIfPlatformNotSupported();
         buildTask.get().getInstructions().stream()
                 .filter(it -> it instanceof DaemonInstruction.From)
                 .map(it -> ((DaemonInstruction.From) it))
