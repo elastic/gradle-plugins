@@ -34,7 +34,7 @@ public abstract class ExtractAndSetExecutableTransform implements TransformActio
         String executableName = inputFile.getName().split("-v")[0];
         File outputFile = outputs.file(executableName);
 
-        if (inputFile.getName().endsWith("tar.xz")) {
+        if (inputFile.getName().contains("tar.xz")) {
             try {
                 try (TarArchiveInputStream archive = new TarArchiveInputStream(
                         new XZCompressorInputStream(
