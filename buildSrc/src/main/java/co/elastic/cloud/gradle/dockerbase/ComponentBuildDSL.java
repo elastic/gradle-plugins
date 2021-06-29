@@ -14,20 +14,14 @@ import java.util.Locale;
 public class ComponentBuildDSL {
     final List<JibInstruction> instructions;
 
-    private final OS os;
     private final Architecture architecture;
     private final ComponentBuildTask task;
 
 
-    public ComponentBuildDSL(ComponentBuildTask task, OS os, Architecture architecture) {
-        this.os = os;
+    public ComponentBuildDSL(ComponentBuildTask task, Architecture architecture) {
         this.architecture = architecture;
         this.task = task;
         instructions = new ArrayList<>();
-    }
-
-    public OS getOs() {
-        return os;
     }
 
     public Architecture getArchitecture() {
@@ -41,8 +35,7 @@ public class ComponentBuildDSL {
     }
 
     public void copySpec(String owner, Action<CopySpec> copySpecAction) {
-        final String layerName = os.name().toLowerCase(Locale.ROOT) + "_" +
-                architecture.name().toLowerCase() +
+        final String layerName = architecture.name().toLowerCase() +
                 "-layer" + instructions.size();
 
         instructions.add(new JibInstruction.Copy(copySpecAction, DockerBuildContext.CONTEXT_FOLDER + "/" + layerName, owner));

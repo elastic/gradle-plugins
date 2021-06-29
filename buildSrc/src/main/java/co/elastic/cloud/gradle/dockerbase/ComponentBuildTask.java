@@ -21,14 +21,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.Callable;
 
 @CacheableTask
 public class ComponentBuildTask extends Sync {
 
     private final DockerBuildContext buildContext;
     private boolean createdLayers = false;
-    private Map<Pair<OS, Architecture>, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
+    private Map<Architecture, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
     private DockerBuildContext fromContext;
 
     @Inject
@@ -43,14 +42,13 @@ public class ComponentBuildTask extends Sync {
      * Input tracking
      *
      */
-
     @OutputDirectory
     public File getGeneratedImage() {
         return getBuildContext().jibApplicationLayerCachePath().toFile();
     }
 
     @Nested
-    public Map<Pair<OS, Architecture>, List<JibInstruction>> getAllInstructions() {
+    public Map<Architecture, List<JibInstruction>> getAllInstructions() {
         return instructionsPerPlatform;
     }
 
@@ -64,17 +62,21 @@ public class ComponentBuildTask extends Sync {
         JibActions actions = new JibActions();
 
         DockerBuildInfo buildInfo = null;
-        for (Map.Entry<Pair<OS, Architecture>, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
-            final OS os = entry.getKey().component1();
-            final Architecture architecture = entry.getKey().component2();
-            String imageTag = DockerPluginConventions.imageTagWithPlatform(
+        for (Map.Entry<Architecture, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
+            final Architecture architecture = entry.getKey();
+            String imageTag = DockerPluginConventions.componentImageTagWithPlatform(
                     getProject(),
-                    os, architecture
+                    architecture
             );
             if (fromContext == null) {
                 throw new GradleException("Missing from context");
             }
-            addFromInstruction(entry.getValue());
+            entry.getValue().add(
+                new JibInstruction.From(DockerPluginConventions.baseImageTag(
+                        fromContext.getProject(),
+                        architecture
+                ))
+            );
             try {
                 buildInfo = actions.buildTo(
                         buildContext,
@@ -82,7 +84,6 @@ public class ComponentBuildTask extends Sync {
                         Containerizer.to(
                                 TarImage.at(
                                         buildContext.projectTarImagePath(
-                                                os,
                                                 architecture
                                         )
                                 ).named(imageTag))
@@ -103,22 +104,18 @@ public class ComponentBuildTask extends Sync {
     }
 
 
-    private void addFromInstruction(List<JibInstruction> instructions) {
-        instructions.add(
-                new JibInstruction.FromDockerBuildContext(fromContext)
-        );
-    }
-
     protected void localImport(String tag) {
         maybeCreateLayerDirectories();
         try {
             ImageReference imageReference = ImageReference.parse(tag);
             JibActions actions = new JibActions();
-            final List<JibInstruction> instructions = instructionsPerPlatform.get(new Pair<>(OS.current(), Architecture.current()));
+            final List<JibInstruction> instructions = instructionsPerPlatform.get(Architecture.current());
             if (instructions == null) {
                 throw new GradleException("Can't import image to local daemon, platform is unsupported");
             }
-            addFromInstruction(instructions);
+            instructions.add(
+                new JibInstruction.FromDockerBuildContext(fromContext)
+            );
             RetryUtils.retry(
                     () -> actions.buildTo(
                             buildContext,
@@ -140,12 +137,11 @@ public class ComponentBuildTask extends Sync {
         maybeCreateLayerDirectories();
         JibActions actions = new JibActions();
         DockerBuildInfo returnBuildInfo = null;
-        for (Map.Entry<Pair<OS, Architecture>, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
-            final OS os = entry.getKey().component1();
-            final Architecture architecture = entry.getKey().component2();
-            String imageTag = DockerPluginConventions.imageTagWithPlatform(
+        for (Map.Entry<Architecture, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
+            final Architecture architecture = entry.getKey();
+            String imageTag = DockerPluginConventions.componentImageTagWithPlatform(
                     getProject(),
-                    os, architecture
+                    architecture
             );
             final ImageReference imageReference;
             try {
@@ -154,7 +150,12 @@ public class ComponentBuildTask extends Sync {
                 throw new GradleException("Failed to push component image", e);
             }
 
-            addFromInstruction(entry.getValue());
+            entry.getValue().add(
+                    new JibInstruction.From(DockerPluginConventions.baseImageTag(
+                            fromContext.getProject(),
+                            architecture
+                    ))
+            );
             final DockerBuildInfo buildInfo = RetryUtils.retry(() -> actions.buildTo(
                     buildContext,
                     entry.getValue(),
@@ -174,7 +175,7 @@ public class ComponentBuildTask extends Sync {
             buildInfo.setTag(imageTag);
             saveDockerBuildInfo(buildInfo);
             getLogger().lifecycle("Pushed {} to registry", imageTag);
-            if (os.equals(OS.LINUX) && architecture.equals(Architecture.X86_64)) {
+            if (architecture.equals(Architecture.X86_64)) {
                 returnBuildInfo = buildInfo;
             }
         }
@@ -218,24 +219,25 @@ public class ComponentBuildTask extends Sync {
         return buildContext;
     }
 
-    public void images(Map<OS, Architecture> platformMap, Action<ComponentBuildDSL> action) {
-        for (Map.Entry<OS, Architecture> entry : platformMap.entrySet()) {
+    public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
+        for (Architecture entry : platformList) {
             final ComponentBuildDSL dsl = new ComponentBuildDSL(
-                    this, entry.getKey(), entry.getValue()
+                    this, entry
             );
             action.execute(dsl);
-            getLogger().lifecycle("{} {} {}", dsl.instructions.size(), entry.getKey(), entry.getValue());
 
-            final Pair<OS, Architecture> platfrom = new Pair<>(entry.getKey(), entry.getValue());
-            final List<JibInstruction> platformInstructions = instructionsPerPlatform.getOrDefault(platfrom, new ArrayList<>());
+            final List<JibInstruction> platformInstructions = instructionsPerPlatform.getOrDefault(entry, new ArrayList<>());
             platformInstructions.addAll(dsl.instructions);
-            instructionsPerPlatform.put(platfrom, platformInstructions);
+            instructionsPerPlatform.put(entry, platformInstructions);
         }
     }
 
     public void from(Project otherProject) {
         fromContext = new DockerBuildContext(otherProject, DockerBasePlugin.BUILD_TASK_NAME);
-        dependsOn((Callable) () -> otherProject.getTasks().named(DockerBasePlugin.BUILD_TASK_NAME));
     }
 
+    @Internal
+    DockerBuildContext getFromContext() {
+        return fromContext;
+    }
 }

@@ -20,9 +20,8 @@ public class DockerBasePlugin implements Plugin<Project> {
     public void apply(@NotNull Project project) {
         final Configuration dockerEphemeral = project.getConfigurations().create("dockerEphemeral");
 
-        String projectTag = DockerPluginConventions.imageTagForPlatform(
+        String projectTag = DockerPluginConventions.baseImageTag(
                 project,
-                OS.dockerCurrent(),
                 Architecture.current()
         );
 

@@ -41,6 +41,8 @@ import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.GradleException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -58,6 +60,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class JibActions {
+
+    private Logger logger = LoggerFactory.getLogger(JibActions.class);
 
     public void pull(String from, Path into, Consumer<Exception> onRetryError) {
         RetryUtils.retry(() -> {
@@ -233,18 +237,46 @@ public class JibActions {
 
     public DockerBuildInfo buildTo(DockerBuildContext buildContext, List<JibInstruction> instructions, Containerizer target) {
         try {
-            JibContainerBuilder jibBuilder = Jib.from(
-                    TarImage.at(
+            final Optional<JibInstruction> fromContext = instructions.stream()
+                    .filter(t1 -> t1 instanceof JibInstruction.FromDockerBuildContext)
+                    .findFirst();
+
+            final JibContainerBuilder jibBuilder;
+            if (fromContext.isPresent()) {
+                jibBuilder = Jib.from(
+                        TarImage.at(
+                                fromContext
+                                        .map(t1 -> {
+                                            JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t1;
+                                            return fromInstruction.getBuildContext().projectTarImagePath();
+                                        })
+                                        .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
+                        )
+                );
+            } else {
+                try {
+                    final ImageReference imageReference = ImageReference.parse(
                             instructions.stream()
-                                    .filter(t1 -> t1 instanceof JibInstruction.FromDockerBuildContext)
+                                    .filter(t1 -> t1 instanceof JibInstruction.From)
                                     .findFirst()
                                     .map(t1 -> {
-                                        JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t1;
-                                        return fromInstruction.getBuildContext().projectTarImagePath();
+                                        JibInstruction.From fromInstruction = (JibInstruction.From) t1;
+                                        return fromInstruction.getReference();
                                     })
                                     .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
-                    )
-            );
+                    );
+                    jibBuilder = Jib.from(
+                            RegistryImage.named(imageReference).addCredentialRetriever(
+                                    CredentialRetrieverFactory.forImage(
+                                            imageReference,
+                                            e -> { logger.info(e.getMessage()); }
+                                    ).dockerConfig()
+                            )
+                    );
+                } catch (InvalidImageReferenceException e) {
+                    throw new GradleException("Invalid from image format", e);
+                }
+            }
 
             // We don't support  setting labels on base images, don't inherit them, these are component specific
             // TODO: This doesn't really set it to empty, we do it in the build script for now, but would be worth looking at
@@ -255,6 +287,7 @@ public class JibActions {
 
             instructions.stream()
                     .filter(t -> !(t instanceof JibInstruction.FromDockerBuildContext))
+                    .filter(t -> !(t instanceof JibInstruction.From))
                     .forEach(instruction -> applyJibInstruction(jibBuilder, instruction, buildContext));
 
             Instant createdAt;
@@ -345,7 +378,7 @@ public class JibActions {
         } else if (instruction instanceof JibInstruction.ChangingLabel) {
             JibInstruction.ChangingLabel changingLabel = (JibInstruction.ChangingLabel) instruction;
             jibBuilder.addLabel(changingLabel.getKey(), changingLabel.getValue());
-        } else if (instruction instanceof  JibInstruction.Maintainer) {
+        } else if (instruction instanceof JibInstruction.Maintainer) {
             JibInstruction.Maintainer maintainer = (JibInstruction.Maintainer) instruction;
             jibBuilder.addLabel("maintainer", maintainer.getName() + "<" + maintainer.getEmail() + ">");
         } else {
