@@ -25,7 +25,6 @@ public class DockerComponentPlugin implements Plugin<Project> {
                 dockerComponentImageBuild,
                 DockerPluginConventions.localImportImageTag(project)
         );
-        dockerComponentImageLocalImport.configure(task -> task.dependsOn(dockerComponentImageBuild));
 
         project.afterEvaluate(evaluatedProject ->
             dockerComponentImageLocalImport.configure(task ->
