@@ -19,7 +19,6 @@
 
 package co.elastic.cloud.gradle.docker.action;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerFileExtension;
 import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
@@ -41,6 +40,7 @@ import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.cloud.tools.jib.tar.TarExtractor;
 import org.gradle.api.GradleException;
+import org.gradle.api.file.RegularFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,6 +49,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -56,7 +57,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class JibActions {
@@ -235,10 +235,36 @@ public class JibActions {
         }
     }
 
-    public DockerBuildInfo buildTo(DockerBuildContext buildContext, List<JibInstruction> instructions, Containerizer target) {
+    public JibContainer pushImage(RegularFile imageArchive, String tag) {
+        final JibContainer container = RetryUtils.retry(() -> {
+            try {
+                ImageReference imageReference = ImageReference.parse(tag);
+                return Jib.from(TarImage.at(imageArchive.getAsFile().toPath()))
+                        .containerize(
+                                Containerizer.to(
+                                        RegistryImage.named(imageReference)
+                                                .addCredentialRetriever(
+                                                        CredentialRetrieverFactory.forImage(
+                                                                imageReference,
+                                                                credentialEvent -> logger.info(credentialEvent.getMessage())
+                                                        ).dockerConfig()
+                                                )
+                                )
+                        );
+            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+                throw new GradleException("Error pushing image archive in registry (" + tag + ").", e);
+            }
+        }).maxAttempt(3)
+                .exponentialBackoff(1000, 30000)
+                .onRetryError(error -> logger.warn("Error while pushing image with Jib. Retrying", error))
+                .execute();
+        return container;
+    }
+
+    public void buildTo(RegularFile imageArchive, RegularFile imageId, List<JibInstruction> instructions) {
         try {
             final Optional<JibInstruction> fromContext = instructions.stream()
-                    .filter(t1 -> t1 instanceof JibInstruction.FromDockerBuildContext)
+                    .filter(instruction -> instruction instanceof JibInstruction.FromLocalImageBuild)
                     .findFirst();
 
             final JibContainerBuilder jibBuilder;
@@ -247,8 +273,8 @@ public class JibActions {
                         TarImage.at(
                                 fromContext
                                         .map(t1 -> {
-                                            JibInstruction.FromDockerBuildContext fromInstruction = (JibInstruction.FromDockerBuildContext) t1;
-                                            return fromInstruction.getBuildContext().projectTarImagePath();
+                                            JibInstruction.FromLocalImageBuild fromInstruction = (JibInstruction.FromLocalImageBuild) t1;
+                                            return fromInstruction.getImageArchive().get().toPath();
                                         })
                                         .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
                         )
@@ -269,7 +295,9 @@ public class JibActions {
                             RegistryImage.named(imageReference).addCredentialRetriever(
                                     CredentialRetrieverFactory.forImage(
                                             imageReference,
-                                            e -> { logger.info(e.getMessage()); }
+                                            e -> {
+                                                logger.info(e.getMessage());
+                                            }
                                     ).dockerConfig()
                             )
                     );
@@ -286,45 +314,35 @@ public class JibActions {
             jibBuilder.setExposedPorts(Collections.emptySet());
 
             instructions.stream()
-                    .filter(t -> !(t instanceof JibInstruction.FromDockerBuildContext))
+                    .filter(t -> !(t instanceof JibInstruction.FromLocalImageBuild))
                     .filter(t -> !(t instanceof JibInstruction.From))
-                    .forEach(instruction -> applyJibInstruction(jibBuilder, instruction, buildContext));
+                    .forEach(instruction -> applyJibInstruction(
+                            jibBuilder,
+                            instruction,
+                            imageArchive.getAsFile().toPath().getParent()
+                    ));
 
-            Instant createdAt;
-            DockerBuildInfo buildInfo = buildContext.loadImageBuildInfo();
-            if (buildInfo == null) {
-                createdAt = Instant.now();
-            } else {
-                createdAt = buildInfo.getCreatedAt();
-            }
-
+            Instant createdAt = Instant.now();
             jibBuilder.setCreationTime(createdAt);
 
-            JibContainer jibContainer = jibBuilder.containerize(target);
-
-            Map<String, String> changingLabels = instructions.stream()
-                    .filter(i -> i instanceof JibInstruction.ChangingLabel)
-                    .map(i -> (JibInstruction.ChangingLabel) i)
-                    .collect(Collectors.toMap(JibInstruction.ChangingLabel::getKey, JibInstruction.ChangingLabel::getValue));
-
-            return new DockerBuildInfo()
-                    .setTag(jibContainer.getTags().stream().findFirst().get())
-                    .setBuilder(DockerBuildInfo.Builder.JIB)
-                    .setImageId(jibContainer.getImageId().toString())
-                    .setRepoDigest(jibContainer.getDigest().toString())
-                    .setCreatedAt(createdAt)
-                    .setChangingLabels(changingLabels);
-        } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
-            throw new GradleException("Error running Jib docker config build", e);
+            final JibContainer container = jibBuilder.containerize(Containerizer.to(
+                    TarImage.at(imageArchive.getAsFile().toPath()).named("detached")
+            ));
+            Files.write(
+                    imageId.getAsFile().toPath(),
+                    container.getImageId().getHash().getBytes(StandardCharsets.UTF_8)
+            );
+        } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+            throw new GradleException("Failed to build component image", e);
         }
     }
 
-    private void applyJibInstruction(JibContainerBuilder jibBuilder, JibInstruction instruction, DockerBuildContext buildContext) {
+    private void applyJibInstruction(JibContainerBuilder jibBuilder, JibInstruction instruction, Path contextPath) {
         if (instruction instanceof JibInstruction.Copy) {
             JibInstruction.Copy copyInstruction = (JibInstruction.Copy) instruction;
             // We can't add directly to / causing a NPE in Jib
             // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-            Path contextFolder = buildContext.basePath().resolve(copyInstruction.getLayer());
+            Path contextFolder = contextPath.resolve(copyInstruction.getLayer());
             if (!Files.exists(contextFolder)) {
                 throw new RuntimeException("Input layer " + contextFolder + " does not exsit.");
             }

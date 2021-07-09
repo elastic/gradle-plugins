@@ -1,15 +1,15 @@
 package co.elastic.cloud.gradle.dockerbase;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
-import co.elastic.cloud.gradle.util.OS;
 import kotlin.Pair;
 import org.gradle.api.Action;
+import org.gradle.api.GradleException;
+import org.gradle.api.Project;
 import org.gradle.api.file.CopySpec;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public class ComponentBuildDSL {
     final List<JibInstruction> instructions;
@@ -28,6 +28,25 @@ public class ComponentBuildDSL {
         return architecture;
     }
 
+    public void from(Project otherProject) {
+        otherProject.getPluginManager().apply(DockerBasePlugin.class);
+
+        if (architecture.equals(Architecture.current())) {
+            instructions.add(
+                    new JibInstruction.FromLocalImageBuild(
+                            otherProject.getTasks().named(DockerBasePlugin.BUILD_TASK_NAME, BaseBuildTask.class)
+                            .flatMap(task -> task.getImageArchive().getAsFile())
+                    )
+            );
+        } else {
+            instructions.add(
+                    new JibInstruction.From(DockerPluginConventions.baseImageTag(
+                            otherProject, architecture
+                    ))
+            );
+        }
+    }
+
     public void maintainer(String name, String email) {
         instructions.add(
                 new JibInstruction.Maintainer(name, email)
@@ -38,7 +57,7 @@ public class ComponentBuildDSL {
         final String layerName = architecture.name().toLowerCase() +
                 "-layer" + instructions.size();
 
-        instructions.add(new JibInstruction.Copy(copySpecAction, DockerBuildContext.CONTEXT_FOLDER + "/" + layerName, owner));
+        instructions.add(new JibInstruction.Copy(copySpecAction, ComponentBuildTask.LAYERS_DIR + "/" + layerName, owner));
         // This is an intersection point between Gradle and Docker so we need to instruct Gradle to create the layers
         // since Docker doesn't understand copySpecs.
         // This links the copy specs from the DSL together and is conceptually like adding an `into("layerX")`

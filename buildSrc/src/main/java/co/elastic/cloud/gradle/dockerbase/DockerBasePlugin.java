@@ -1,9 +1,7 @@
 package co.elastic.cloud.gradle.dockerbase;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
-import co.elastic.cloud.gradle.util.OS;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -19,30 +17,30 @@ public class DockerBasePlugin implements Plugin<Project> {
     @Override
     public void apply(@NotNull Project project) {
         final Configuration dockerEphemeral = project.getConfigurations().create("dockerEphemeral");
-
-        String projectTag = DockerPluginConventions.baseImageTag(
-                project,
-                Architecture.current()
-        );
-
-        final DockerBuildContext dockerBuildContext = new DockerBuildContext(project, BUILD_TASK_NAME);
+        final Architecture currentArchitecture = Architecture.current();
 
         TaskProvider<BaseBuildTask> dockerBaseImageBuild = project.getTasks().register(
                 BUILD_TASK_NAME,
                 BaseBuildTask.class,
-                projectTag,
-                dockerBuildContext,
                 dockerEphemeral
         );
+        dockerBaseImageBuild.configure( task -> {
+            task.onlyIf(unsued -> task.getSupportedPlatforms().contains(currentArchitecture));
+        });
 
-        TaskProvider<BaseLocalImportTask> dockerBaseImageLocalImport = project.getTasks().register(
+        TaskProvider<DockerLocalImportTask> dockerBaseImageLocalImport = project.getTasks().register(
                 LOCAL_IMPORT_TASK_NAME,
-                BaseLocalImportTask.class,
-                dockerBaseImageBuild,
-                DockerPluginConventions.localImportImageTag(project)
+                DockerLocalImportTask.class
         );
         dockerBaseImageLocalImport.configure(task -> {
-            task.dependsOn(dockerBaseImageBuild);
+            task.getTag().set(DockerPluginConventions.localImportImageTag(project));
+            task.getImageArchive().set(
+                    dockerBaseImageBuild.flatMap(BaseBuildTask::getImageArchive)
+            );
+            task.getImageId().set(
+                    dockerBaseImageBuild.flatMap(BaseBuildTask::getImageId)
+            );
+            task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
         });
 
         TaskProvider<BasePullTask> dockerBasePull = project.getTasks().register(
@@ -50,15 +48,20 @@ public class DockerBasePlugin implements Plugin<Project> {
                 BasePullTask.class,
                 dockerBaseImageBuild
         );
+        dockerBasePull.configure(task -> {
+            task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
+        });
 
-        TaskProvider<BasePushTask> dockerBaseImagePush = project.getTasks().register(
+        TaskProvider<DockerPushTask> dockerBaseImagePush = project.getTasks().register(
                 "dockerBaseImagePush",
-                BasePushTask.class,
-                dockerBaseImageBuild,
-                projectTag
+                DockerPushTask.class
         );
         dockerBaseImagePush.configure(task -> {
-            task.dependsOn(dockerBaseImageBuild);
+            task.getImageArchive().set(
+                    dockerBaseImageBuild.flatMap(BaseBuildTask::getImageArchive)
+            );
+            task.getTag().set(DockerPluginConventions.baseImageTag(project, currentArchitecture));
+            task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
         });
 
         project.getTasks().named("assembleForPlatform", task -> task.dependsOn(dockerBaseImageBuild));

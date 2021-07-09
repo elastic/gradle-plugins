@@ -1,55 +1,80 @@
 package co.elastic.cloud.gradle.dockerbase;
 
-import co.elastic.cloud.gradle.docker.DockerBuildContext;
-import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
-import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.util.Architecture;
-import co.elastic.cloud.gradle.util.OS;
-import co.elastic.cloud.gradle.util.RetryUtils;
-import com.google.cloud.tools.jib.api.*;
-import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
-import com.google.gson.Gson;
-import kotlin.Pair;
+import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
-import org.gradle.api.Project;
+import org.gradle.api.file.ProjectLayout;
+import org.gradle.api.file.RegularFile;
+import org.gradle.api.provider.MapProperty;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.*;
 
 import javax.inject.Inject;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @CacheableTask
-public class ComponentBuildTask extends Sync {
+abstract public class ComponentBuildTask extends Sync {
 
-    private final DockerBuildContext buildContext;
-    private boolean createdLayers = false;
+    public static final String LAYERS_DIR = "context";
     private Map<Architecture, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
-    private DockerBuildContext fromContext;
 
     @Inject
     public ComponentBuildTask() {
         super();
-        this.buildContext = new DockerBuildContext(getProject(), getName());
-        setDestinationDir(buildContext.contextPath().toFile());
+
+        // These need to be a convention so they are set even if task actions don't execute (task is cached)
+        getImageArchive().convention(
+                Stream.of(Architecture.values())
+                        .collect(Collectors.toMap(
+                                Function.identity(),
+                                architecture -> getProjectLayout().getBuildDirectory().file(getName() + "/" + "image-" + architecture + ".tar.zstd").get())
+                        )
+        );
+        getImageIdFile().convention(
+                Stream.of(Architecture.values())
+                        .collect(Collectors.toMap(
+                                Function.identity(),
+                                architecture -> getProjectLayout().getBuildDirectory().file(getName() + "/" + "image-" + architecture + ".imageId").get())
+                        )
+        );
+
+        setDestinationDir(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
     }
 
-    /*
-     *
-     * Input tracking
-     *
-     */
-    @OutputDirectory
-    public File getGeneratedImage() {
-        return getBuildContext().jibApplicationLayerCachePath().toFile();
-    }
+    @OutputFiles
+    abstract MapProperty<Architecture, RegularFile> getImageArchive();
+
+    @OutputFiles
+    abstract MapProperty<Architecture, RegularFile> getImageIdFile();
 
     @Nested
     public Map<Architecture, List<JibInstruction>> getAllInstructions() {
         return instructionsPerPlatform;
+    }
+
+    @Inject
+    abstract protected ProjectLayout getProjectLayout();
+
+    @Internal
+    public Provider<Map<Architecture, String>> getImageId() {
+        return getImageIdFile().map(idFiles -> idFiles.entrySet()
+                .stream()
+                // We only build the full set of architectures in CI, so won't have all IDs on every run
+                .filter(entry -> entry.getValue().getAsFile().exists())
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                    try {
+                        return Files.readAllLines(entry.getValue().getAsFile().toPath()).get(0);
+                    } catch (IOException e) {
+                        throw new GradleException("Internal error: Can't read Iamge ID file: " + entry.getValue(), e);
+                    }
+                })));
     }
 
     /*
@@ -61,143 +86,32 @@ public class ComponentBuildTask extends Sync {
     protected void build() {
         JibActions actions = new JibActions();
 
-        DockerBuildInfo buildInfo = null;
         for (Map.Entry<Architecture, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
             final Architecture architecture = entry.getKey();
-            String imageTag = DockerPluginConventions.componentImageTagWithPlatform(
-                    getProject(),
-                    architecture
-            );
-            if (fromContext == null) {
-                throw new GradleException("Missing from context");
+            if (!GradleUtils.isCi() && !architecture.equals(Architecture.current())) {
+                // Skip building other architectures unless we are running in CI as the base images might not have been
+                // pushed
+                return;
             }
-            entry.getValue().add(
-                new JibInstruction.From(DockerPluginConventions.baseImageTag(
-                        fromContext.getProject(),
-                        architecture
-                ))
+            actions.buildTo(
+                    getImageArchive().get().get(architecture),
+                    getImageIdFile().get().get(architecture),
+                    entry.getValue()
             );
-            try {
-                buildInfo = actions.buildTo(
-                        buildContext,
-                        entry.getValue(),
-                        Containerizer.to(
-                                TarImage.at(
-                                        buildContext.projectTarImagePath(
-                                                architecture
-                                        )
-                                ).named(imageTag))
-                );
-            } catch (InvalidImageReferenceException e) {
-                throw new GradleException("Failed to build component image", e);
-            }
         }
-        saveDockerBuildInfo(buildInfo);
-    }
-
-    private void saveDockerBuildInfo(DockerBuildInfo buildInfo) {
-        try (FileWriter writer = new FileWriter(buildContext.imageBuildInfo().toFile())) {
-            writer.write(new Gson().toJson(buildInfo));
-        } catch (IOException e) {
-            throw new GradleException("Error writing image info file", e);
-        }
-    }
-
-
-    protected void localImport(String tag) {
-        maybeCreateLayerDirectories();
-        try {
-            ImageReference imageReference = ImageReference.parse(tag);
-            JibActions actions = new JibActions();
-            final List<JibInstruction> instructions = instructionsPerPlatform.get(Architecture.current());
-            if (instructions == null) {
-                throw new GradleException("Can't import image to local daemon, platform is unsupported");
-            }
-            instructions.add(
-                new JibInstruction.FromDockerBuildContext(fromContext)
-            );
-            RetryUtils.retry(
-                    () -> actions.buildTo(
-                            buildContext,
-                            instructions,
-                            Containerizer.to(DockerDaemonImage.named(imageReference))
-                    )
-            )
-                    .maxAttempt(3)
-                    .exponentialBackoff(1000, 30000)
-                    .onRetryError(e -> getLogger().warn("Error importing jib image", e))
-                    .execute();
-        } catch (InvalidImageReferenceException e) {
-            throw new GradleException("Invalid tag for local daemon import " + tag, e);
-
-        }
-    }
-
-    protected DockerBuildInfo push() {
-        maybeCreateLayerDirectories();
-        JibActions actions = new JibActions();
-        DockerBuildInfo returnBuildInfo = null;
-        for (Map.Entry<Architecture, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
-            final Architecture architecture = entry.getKey();
-            String imageTag = DockerPluginConventions.componentImageTagWithPlatform(
-                    getProject(),
-                    architecture
-            );
-            final ImageReference imageReference;
-            try {
-                imageReference = ImageReference.parse(imageTag);
-            } catch (InvalidImageReferenceException e) {
-                throw new GradleException("Failed to push component image", e);
-            }
-
-            entry.getValue().add(
-                    new JibInstruction.From(DockerPluginConventions.baseImageTag(
-                            fromContext.getProject(),
-                            architecture
-                    ))
-            );
-            final DockerBuildInfo buildInfo = RetryUtils.retry(() -> actions.buildTo(
-                    buildContext,
-                    entry.getValue(),
-                    Containerizer.to(
-                            RegistryImage.named(imageReference)
-                                    .addCredentialRetriever(
-                                            CredentialRetrieverFactory.forImage(
-                                                    imageReference,
-                                                    e -> getLogger().info(e.getMessage())
-                                            ).dockerConfig()
-                                    )
-                    ))
-            ).maxAttempt(3)
-                    .exponentialBackoff(1000, 30000)
-                    .onRetryError(e -> getLogger().warn("Error pushing jib image, will retry", e))
-                    .execute();
-            buildInfo.setTag(imageTag);
-            saveDockerBuildInfo(buildInfo);
-            getLogger().lifecycle("Pushed {} to registry", imageTag);
-            if (architecture.equals(Architecture.X86_64)) {
-                returnBuildInfo = buildInfo;
-            }
-        }
-        return returnBuildInfo;
     }
 
     private void maybeCreateLayerDirectories() {
-        // If the task action ran this will be set to true, and we don't need need to repeat the opeeration
-        // if the task is cached this won't be run and we do need to repeat the process
-        if (!createdLayers) {
-            createdLayers = true;
-            if (hasCopyInstructions()) {
-                super.copy();
-                if (!getDidWork()) {
-                    throw new GradleException(
-                            "The configured copy specs didn't actually add any files to the image." +
-                                    " Check the resulting layers int he build dir."
-                    );
-                }
-            } else {
-                setDidWork(true);
+        if (hasCopyInstructions()) {
+            super.copy();
+            if (!getDidWork()) {
+                throw new GradleException(
+                        "The configured copy specs didn't actually add any files to the image." +
+                                " Check the resulting layers int he build dir."
+                );
             }
+        } else {
+            setDidWork(true);
         }
     }
 
@@ -214,30 +128,20 @@ public class ComponentBuildTask extends Sync {
         build();
     }
 
-    @Internal
-    public DockerBuildContext getBuildContext() {
-        return buildContext;
-    }
-
+    /**
+     * Configures the architectures we consider and the image content for each
+     *
+     * @param platformList
+     * @param action
+     */
     public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
         for (Architecture entry : platformList) {
-            final ComponentBuildDSL dsl = new ComponentBuildDSL(
-                    this, entry
-            );
+            final ComponentBuildDSL dsl = new ComponentBuildDSL(this, entry);
             action.execute(dsl);
 
             final List<JibInstruction> platformInstructions = instructionsPerPlatform.getOrDefault(entry, new ArrayList<>());
             platformInstructions.addAll(dsl.instructions);
             instructionsPerPlatform.put(entry, platformInstructions);
         }
-    }
-
-    public void from(Project otherProject) {
-        fromContext = new DockerBuildContext(otherProject, DockerBasePlugin.BUILD_TASK_NAME);
-    }
-
-    @Internal
-    DockerBuildContext getFromContext() {
-        return fromContext;
     }
 }

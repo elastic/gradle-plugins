@@ -7,7 +7,6 @@ import org.gradle.api.tasks.TaskProvider;
 import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
-import java.util.Optional;
 
 public class BasePullTask extends DefaultTask {
 
@@ -21,7 +20,6 @@ public class BasePullTask extends DefaultTask {
     @TaskAction
     public void pull() {
         DockerDaemonActions daemonActions = new DockerDaemonActions(getExecOperations());
-        buildTask.get().stopIfPlatformNotSupported();
         buildTask.get().getInstructions().stream()
                 .filter(it -> it instanceof DaemonInstruction.From)
                 .map(it -> ((DaemonInstruction.From) it))

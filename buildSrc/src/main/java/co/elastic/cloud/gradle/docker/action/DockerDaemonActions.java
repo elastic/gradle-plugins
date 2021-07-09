@@ -26,6 +26,7 @@ import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
 import co.elastic.cloud.gradle.dockerbase.DaemonInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import com.google.cloud.tools.jib.tar.TarExtractor;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.TaskExecutionException;
@@ -47,6 +48,7 @@ import java.util.stream.Stream;
 public class DockerDaemonActions {
 
     public static String EPHEMERAL_MOUNT = "/mnt/dockerEphemeral";
+    public static final String CONTEXT_FOLDER = "context";
     private final ExecOperations execOperations;
 
     public DockerDaemonActions(ExecOperations execOperations) {
@@ -61,18 +63,6 @@ public class DockerDaemonActions {
      */
     public static void dockerForMacWorkaround(Map<String, String> env) {
         env.merge("PATH", "/Applications/Docker.app/Contents/Resources/bin/", (a, b) -> a + File.pathSeparator + b);
-    }
-
-    public void loadArchive(Path archive) {
-        try (InputStream archiveInput = TarExtractor.getSpecificInputStream(new BufferedInputStream(Files.newInputStream(archive)))) {
-            execute(spec -> {
-                spec.setEnvironment(Collections.emptyMap());
-                spec.setStandardInput(archiveInput);
-                spec.commandLine("docker", "load");
-            });
-        } catch (IOException e) {
-            throw new GradleException("Error importing image in docker daemon", e);
-        }
     }
 
     public String clean(String tag) throws IOException {
@@ -107,11 +97,46 @@ public class DockerDaemonActions {
         if (!workingDir.toFile().isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDir);
         }
-        Path dockerfile = workingDir.resolve("Dockerfile");
-        generateDockerFile(extension, dockerfile);
+        generateDockerFile(extension, workingDir.resolve("Dockerfile"));
 
-        return internalBuild(workingDir, tag, dockerfile);
+        return internalBuild(workingDir, tag, workingDir.resolve("Dockerfile"));
     }
+
+    private DockerBuildInfo internalBuild(Path basePath, String tag, Path dockerfile) throws IOException {
+        Files.write(basePath.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!dockerEphemeral").getBytes());
+
+        // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
+        int imageBuild = execute(spec -> {
+            spec.setWorkingDir(dockerfile.getParent());
+            if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
+                // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
+                //   e.g. dockerEphemeral content in run commands could lead to incorrect results
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--tag=" + tag, ".");
+            } else {
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
+            }
+            spec.setIgnoreExitValue(true);
+        }).getExitValue();
+        if (imageBuild != 0) {
+            throw new GradleException("Failed to build docker image, see the docker build log in the task output");
+        }
+        // Load imageId
+
+        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
+        execute(spec -> {
+            spec.setStandardOutput(commandOutput);
+            spec.setEnvironment(Collections.emptyMap());
+            spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
+        });
+        String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
+
+        return new DockerBuildInfo()
+                .setTag(tag)
+                .setBuilder(DockerBuildInfo.Builder.DAEMON)
+                .setImageId(imageId)
+                .setCreatedAt(Instant.now());
+    }
+
 
     private void generateDockerFile(DockerFileExtension extension, Path targetFile) throws IOException {
         if (Files.exists(targetFile)) {
@@ -321,11 +346,10 @@ public class DockerDaemonActions {
         if (instruction instanceof DaemonInstruction.From) {
             DaemonInstruction.From from = (DaemonInstruction.From) instruction;
             return "FROM " + from.getImage() + ":" + from.getVersion() + Optional.ofNullable(from.getSha()).map(sha -> "@" + sha).orElse("");
-        } else if (instruction instanceof DaemonInstruction.FromDockerBuildContext) {
-            final DaemonInstruction.FromDockerBuildContext fromProject = (DaemonInstruction.FromDockerBuildContext) instruction;
-            final DockerBuildInfo dockerBuildInfo = fromProject.getBuildContext().loadImageBuildInfo();
-            return "# " + fromProject.getBuildContext().getProject().getPath() + "\n" +
-                    "FROM " + dockerBuildInfo.getTag();
+        } else if (instruction instanceof DaemonInstruction.FromLocalImageBuild) {
+            final DaemonInstruction.FromLocalImageBuild fromLocalImageBuild = (DaemonInstruction.FromLocalImageBuild) instruction;
+            return "# " + fromLocalImageBuild.getOtherProjectPath() + "\n" +
+                    "FROM " + fromLocalImageBuild.getTag().get();
         } else if (instruction instanceof DaemonInstruction.Copy) {
             DaemonInstruction.Copy copySpec = (DaemonInstruction.Copy) instruction;
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") + copySpec.getLayer() + " /";
@@ -406,50 +430,55 @@ public class DockerDaemonActions {
         }
     }
 
-    public DockerBuildInfo build(List<DaemonInstruction> instructions, Path contextPath, String tag, Path ephemeralConfiguration) throws IOException {
-        if (!contextPath.toFile().isDirectory()) {
-            throw new GradleException("Can't build docker image, missing working directory " + contextPath);
+    public String build(
+            List<DaemonInstruction> instructions,
+            Path workingDirectory,
+            Path imageArchive,
+            Path idfile
+    ) throws IOException {
+        if (!workingDirectory.toFile().isDirectory()) {
+            throw new GradleException("Can't build docker image, missing working directory " + workingDirectory);
         }
-        Path dockerfile = contextPath.resolve("Dockerfile");
-        Files.write(dockerfile, dockerFileFromInstructions(instructions, ephemeralConfiguration).getBytes());
-
-        return internalBuild(contextPath, tag, dockerfile);
-    }
-
-    private DockerBuildInfo internalBuild(Path basePath, String tag, Path dockerfile) throws IOException {
-        Files.write(basePath.resolve(".dockerignore"), "**\n!context\n!dockerEphemeral".getBytes());
+        Files.write(
+                workingDirectory.resolve("Dockerfile"),
+                dockerFileFromInstructions(instructions, workingDirectory.resolve("dockerEphemeral"))
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+        Path dockerfile = workingDirectory.resolve("Dockerfile");
+        Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER  + "\n!dockerEphemeral").getBytes());
 
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
-
         int imageBuild = execute(spec -> {
             spec.setWorkingDir(dockerfile.getParent());
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
                 //   e.g. dockerEphemeral content in run commands could lead to incorrect results
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--tag=" + tag, ".");
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--iidfile=" + idfile, ".");
             } else {
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--tag=" + tag, ".");
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--iidfile=" + idfile, ".");
             }
             spec.setIgnoreExitValue(true);
         }).getExitValue();
         if (imageBuild != 0) {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
         }
-
-        // Load imageId
-
-        ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
-        execute(spec -> {
-            spec.setStandardOutput(commandOutput);
-            spec.setEnvironment(Collections.emptyMap());
-            spec.commandLine("docker", "inspect", "--format='{{index .Id}}'", tag);
-        });
-        String imageId = new String(commandOutput.toByteArray(), StandardCharsets.UTF_8).trim().replaceAll("'", "");
-
-        return new DockerBuildInfo()
-                .setTag(tag)
-                .setBuilder(DockerBuildInfo.Builder.DAEMON)
-                .setImageId(imageId)
-                .setCreatedAt(Instant.now());
+        String imageId = Files.readAllLines(idfile).get(0);
+        saveCompressedDockerImage(imageId, imageArchive);
+        return imageId;
     }
+
+    private void saveCompressedDockerImage(String imageId, Path imageArchive) throws IOException {
+        try (ZstdCompressorOutputStream compressedOut = new ZstdCompressorOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(imageArchive)))) {
+            ExecResult imageSave = execute(spec -> {
+                spec.setStandardOutput(compressedOut);
+                spec.setCommandLine("docker", "save", imageId);
+                spec.setIgnoreExitValue(true);
+            });
+            if (imageSave.getExitValue() != 0) {
+                throw new GradleException("Failed to save docker image, see the docker build log in the task output");
+            }
+        }
+    }
+
 }
