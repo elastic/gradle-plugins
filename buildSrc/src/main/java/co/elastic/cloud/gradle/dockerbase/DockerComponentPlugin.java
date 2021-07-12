@@ -49,7 +49,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     Stream.of(Architecture.values())
                     .collect(Collectors.toMap(
                             Function.identity(),
-                            architecture -> DockerPluginConventions.componentImageTagWithPlatform(project, architecture)
+                            architecture -> DockerPluginConventions.componentImageTag(project, architecture)
                     ))
             );
         });
