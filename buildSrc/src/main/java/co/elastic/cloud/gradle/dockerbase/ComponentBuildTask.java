@@ -5,6 +5,7 @@ import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
+import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFile;
 import org.gradle.api.provider.MapProperty;
@@ -12,18 +13,18 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.*;
 
 import javax.inject.Inject;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @CacheableTask
 abstract public class ComponentBuildTask extends Sync {
 
     public static final String LAYERS_DIR = "context";
-    private Map<Architecture, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
 
     @Inject
     public ComponentBuildTask() {
@@ -31,21 +32,41 @@ abstract public class ComponentBuildTask extends Sync {
 
         // These need to be a convention so they are set even if task actions don't execute (task is cached)
         getImageArchive().convention(
-                Stream.of(Architecture.values())
-                        .collect(Collectors.toMap(
-                                Function.identity(),
-                                architecture -> getProjectLayout().getBuildDirectory().file(getName() + "/" + "image-" + architecture + ".tar.zstd").get())
-                        )
+                getInstructions().map(map ->
+                        map.keySet().stream()
+                                .collect(Collectors.toMap(
+                                        Function.identity(),
+                                        architecture -> getProjectLayout()
+                                                .getBuildDirectory()
+                                                .file(getName() + "/" + "image-" + architecture + ".tar")
+                                                .get())
+                                )
+                )
         );
+
         getImageIdFile().convention(
-                Stream.of(Architecture.values())
-                        .collect(Collectors.toMap(
-                                Function.identity(),
-                                architecture -> getProjectLayout().getBuildDirectory().file(getName() + "/" + "image-" + architecture + ".imageId").get())
-                        )
+                getInstructions().map(map ->
+                        map.keySet().stream()
+                                .collect(Collectors.toMap(
+                                        Function.identity(),
+                                        architecture -> getProjectLayout()
+                                                .getBuildDirectory()
+                                                .file(getName() + "/" + "image-" + architecture + ".imageId")
+                                                .get())
+                                )
+                )
         );
 
         setDestinationDir(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
+
+        // Without this, the task will be skipped if there's nothing to add to the image
+        final CopySpec spec = this.getRootSpec().addChild();
+        spec.from((Callable<File>) () -> {
+            final File file = new File(getProject().getBuildDir(), ".elastic");
+            Files.createDirectories(file.getParentFile().toPath());
+            Files.write(file.toPath(), "".getBytes());
+            return file;
+        });
     }
 
     @OutputFiles
@@ -55,9 +76,7 @@ abstract public class ComponentBuildTask extends Sync {
     abstract MapProperty<Architecture, RegularFile> getImageIdFile();
 
     @Nested
-    public Map<Architecture, List<JibInstruction>> getAllInstructions() {
-        return instructionsPerPlatform;
-    }
+    abstract MapProperty<Architecture, List<JibInstruction>> getInstructions();
 
     @Inject
     abstract protected ProjectLayout getProjectLayout();
@@ -86,7 +105,7 @@ abstract public class ComponentBuildTask extends Sync {
     protected void build() {
         JibActions actions = new JibActions();
 
-        for (Map.Entry<Architecture, List<JibInstruction>> entry : instructionsPerPlatform.entrySet()) {
+        for (Map.Entry<Architecture, List<JibInstruction>> entry : getInstructions().get().entrySet()) {
             final Architecture architecture = entry.getKey();
             if (!GradleUtils.isCi() && !architecture.equals(Architecture.current())) {
                 // Skip building other architectures unless we are running in CI as the base images might not have been
@@ -116,7 +135,7 @@ abstract public class ComponentBuildTask extends Sync {
     }
 
     private boolean hasCopyInstructions() {
-        return instructionsPerPlatform.entrySet().stream()
+        return getInstructions().get().entrySet().stream()
                 .flatMap(each -> each.getValue().stream())
                 .anyMatch(i -> i instanceof JibInstruction.Copy);
     }
@@ -131,10 +150,11 @@ abstract public class ComponentBuildTask extends Sync {
     /**
      * Configures the architectures we consider and the image content for each
      *
-     * @param platformList
-     * @param action
+     * @param platformList List of platforms to build the image for
+     * @param action Action to configure the images
      */
     public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
+        final Map<Architecture, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
         for (Architecture entry : platformList) {
             final ComponentBuildDSL dsl = new ComponentBuildDSL(this, entry);
             action.execute(dsl);
@@ -143,5 +163,6 @@ abstract public class ComponentBuildTask extends Sync {
             platformInstructions.addAll(dsl.instructions);
             instructionsPerPlatform.put(entry, platformInstructions);
         }
+        getInstructions().convention(instructionsPerPlatform);
     }
 }

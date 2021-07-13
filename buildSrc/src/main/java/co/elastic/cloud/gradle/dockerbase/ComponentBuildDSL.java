@@ -88,6 +88,10 @@ public class ComponentBuildDSL {
         instructions.add(new JibInstruction.Env(value.component1(), value.component2()));
     }
 
+    public void workDir(String dir) {
+        instructions.add(new JibInstruction.Workdir(dir));
+    }
+
     public void exposeTcp(Integer port) {
         instructions.add(new JibInstruction.Expose(JibInstruction.Expose.Type.TCP, port));
     }

@@ -399,8 +399,10 @@ public class JibActions {
         } else if (instruction instanceof JibInstruction.Maintainer) {
             JibInstruction.Maintainer maintainer = (JibInstruction.Maintainer) instruction;
             jibBuilder.addLabel("maintainer", maintainer.getName() + "<" + maintainer.getEmail() + ">");
+        } else if (instruction instanceof JibInstruction.Workdir) {
+            jibBuilder.setWorkingDirectory(AbsoluteUnixPath.get(((JibInstruction.Workdir) instruction).getFolder()));
         } else {
-            throw new GradleException("Instruction " + instruction + "is not a valid Jib instuction");
+            throw new GradleException("Instruction " + instruction + "is not a valid Jib instruction");
         }
     }
 
