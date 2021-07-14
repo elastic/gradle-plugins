@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 abstract public class ComponentBuildTask extends Sync {
 
     public static final String LAYERS_DIR = "context";
+    private Map<Architecture, List<JibInstruction>> instructionsPerPlatform;
+    private List<Action<ComponentBuildDSL>> configForAllArchitectures;
 
     @Inject
     public ComponentBuildTask() {
@@ -59,6 +61,9 @@ abstract public class ComponentBuildTask extends Sync {
 
         setDestinationDir(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
 
+        instructionsPerPlatform = new HashMap<>();
+        getInstructions().convention(instructionsPerPlatform);
+
         // Without this, the task will be skipped if there's nothing to add to the image
         final CopySpec spec = this.getRootSpec().addChild();
         spec.from((Callable<File>) () -> {
@@ -67,6 +72,7 @@ abstract public class ComponentBuildTask extends Sync {
             Files.write(file.toPath(), "".getBytes());
             return file;
         });
+        configForAllArchitectures = new ArrayList<>();
     }
 
     @OutputFiles
@@ -154,15 +160,31 @@ abstract public class ComponentBuildTask extends Sync {
      * @param action Action to configure the images
      */
     public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
-        final Map<Architecture, List<JibInstruction>> instructionsPerPlatform = new HashMap<>();
-        for (Architecture entry : platformList) {
-            final ComponentBuildDSL dsl = new ComponentBuildDSL(this, entry);
-            action.execute(dsl);
-
-            final List<JibInstruction> platformInstructions = instructionsPerPlatform.getOrDefault(entry, new ArrayList<>());
-            platformInstructions.addAll(dsl.instructions);
-            instructionsPerPlatform.put(entry, platformInstructions);
+        for (Architecture architecture : platformList) {
+            // Add configuration that was already registered for this architecture
+            for (Action<ComponentBuildDSL> configForAllArchitecture : configForAllArchitectures) {
+                addInstructionsPerArchitecture(configForAllArchitecture, architecture);
+            }
+            // Add the curretn configuration
+            addInstructionsPerArchitecture(action, architecture);
         }
-        getInstructions().convention(instructionsPerPlatform);
+    }
+
+    public void images(Action<ComponentBuildDSL> action) {
+        // Store this configuration as we'll need it in case we add an architecture lather
+        configForAllArchitectures.add(action);
+        // Add the additional configuration for already configured architectures
+        for (Architecture architecture : instructionsPerPlatform.keySet()) {
+            addInstructionsPerArchitecture(action, architecture);
+        }
+    }
+
+    private void addInstructionsPerArchitecture(Action<ComponentBuildDSL> action, Architecture architecture) {
+        final ComponentBuildDSL dsl = new ComponentBuildDSL(this, architecture);
+        action.execute(dsl);
+
+        final List<JibInstruction> platformInstructions = instructionsPerPlatform.getOrDefault(architecture, new ArrayList<>());
+        platformInstructions.addAll(dsl.instructions);
+        instructionsPerPlatform.put(architecture, platformInstructions);
     }
 }
