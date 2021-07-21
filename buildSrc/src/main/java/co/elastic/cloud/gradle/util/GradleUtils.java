@@ -1,8 +1,11 @@
 package co.elastic.cloud.gradle.util;
 
+import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter;
 import org.gradle.api.specs.Spec;
+import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.testing.Test;
 
 import java.io.File;
@@ -42,5 +45,13 @@ public class GradleUtils {
                 .map(path -> projectPath.relativize(path))
                 .map(Path::toString)
                 .collect(Collectors.joining("\n    ,"));
+    }
+
+    public static TaskProvider<Task> registerOrGet(Project project, String taskName) {
+        try {
+            return project.getTasks().register(taskName);
+        } catch (InvalidUserDataException e) {
+            return project.getTasks().named(taskName);
+        }
     }
 }

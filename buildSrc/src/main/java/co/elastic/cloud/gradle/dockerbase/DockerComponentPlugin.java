@@ -2,6 +2,7 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.provider.Provider;
@@ -53,6 +54,13 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     ))
             );
         });
+
+        GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
+                task.dependsOn(dockerComponentImageBuild)
+        );
+        GradleUtils.registerOrGet(project, "dockerLocalImport").configure(task ->
+                task.dependsOn(localImport)
+        );
 
         project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
         project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(dockerComponentImagePush));

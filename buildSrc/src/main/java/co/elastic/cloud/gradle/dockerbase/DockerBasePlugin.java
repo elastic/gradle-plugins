@@ -2,6 +2,7 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -63,6 +64,13 @@ public class DockerBasePlugin implements Plugin<Project> {
             task.getTag().set(DockerPluginConventions.baseImageTag(project, currentArchitecture));
             task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
         });
+
+        GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
+            task.dependsOn(dockerBaseImageBuild)
+        );
+        GradleUtils.registerOrGet(project, "dockerLocalImport").configure(task ->
+                task.dependsOn(dockerBaseImageLocalImport)
+        );
 
         project.getTasks().named("assembleForPlatform", task -> task.dependsOn(dockerBaseImageBuild));
         project.getTasks().named("publishForPlatform", task -> task.dependsOn(dockerBaseImagePush));
