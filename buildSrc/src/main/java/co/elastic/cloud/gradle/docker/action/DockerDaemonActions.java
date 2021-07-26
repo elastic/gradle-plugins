@@ -463,6 +463,8 @@ public class DockerDaemonActions {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
         }
         String imageId = Files.readAllLines(idfile).get(0);
+        // We build in daemon only to export, we could use docker buildx  to create a tar directly, but unfrotunetly this
+        // prooved buggy, e.g. the --iidfile was different from the ID the image would have when imported into the daemon
         saveCompressedDockerImage(imageId, imageArchive);
         return imageId;
     }

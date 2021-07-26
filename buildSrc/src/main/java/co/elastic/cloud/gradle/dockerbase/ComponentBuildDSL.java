@@ -3,10 +3,13 @@ package co.elastic.cloud.gradle.dockerbase;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
 import kotlin.Pair;
+import org.apache.tools.ant.RuntimeConfigurable;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.file.CopySpec;
+import org.gradle.api.internal.file.copy.CopySpecInternal;
+import org.gradle.api.internal.file.copy.DefaultCopySpec;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,22 +57,19 @@ public class ComponentBuildDSL {
     }
 
     public void copySpec(String owner, Action<CopySpec> copySpecAction) {
+        if (task.getState().getExecuting()) {
+            throw new GradleException("You cannot add child specs at execution time. Consider configuring this task during configuration time or using a separate task to do the configuration.");
+        }
+
         final String layerName = architecture.name().toLowerCase() +
                 "-layer" + instructions.size();
 
         instructions.add(new JibInstruction.Copy(copySpecAction, ComponentBuildTask.LAYERS_DIR + "/" + layerName, owner));
-        // This is an intersection point between Gradle and Docker so we need to instruct Gradle to create the layers
-        // since Docker doesn't understand copySpecs.
-        // This links the copy specs from the DSL together and is conceptually like adding an `into("layerX")`
-        // to the original copy spec
-        task.with(
-                task.getProject().copySpec(child -> {
-                    child.into(layerName);
-                    CopySpec dslSpec = task.getProject().copySpec();
-                    copySpecAction.execute(dslSpec);
-                    child.with(dslSpec);
-                })
-        );
+
+        final CopySpecInternal childCopySpec = task.rootCopySpec.addChild();
+        childCopySpec.into(layerName);
+        // We need another copy spec here, so the `into` from the builds script is to be interpreted as a sub-path of the above
+        copySpecAction.execute(childCopySpec.addChild());
     }
 
     public void copySpec(Action<CopySpec> copySpecAction) {

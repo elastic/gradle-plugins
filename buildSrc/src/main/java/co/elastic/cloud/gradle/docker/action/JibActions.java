@@ -33,25 +33,29 @@ import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.cloud.tools.jib.api.buildplan.Port;
+import com.google.cloud.tools.jib.configuration.ContainerConfiguration;
 import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
 import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.cloud.tools.jib.tar.TarExtractor;
+import com.google.common.jimfs.Configuration;
+import com.google.common.jimfs.Jimfs;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
+import org.apache.commons.io.IOUtils;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.RegularFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.util.*;
@@ -325,9 +329,20 @@ public class JibActions {
             Instant createdAt = Instant.now();
             jibBuilder.setCreationTime(createdAt);
 
-            final JibContainer container = jibBuilder.containerize(Containerizer.to(
-                    TarImage.at(imageArchive.getAsFile().toPath()).named("detached")
-            ));
+            final JibContainer container;
+            try (FileSystem memFS = Jimfs.newFileSystem(Configuration.unix())) {
+                final Path imagePath = memFS.getPath("/foo");
+                final Path cacheDir = Paths.get(System.getProperty("java.io.tmpdir")).resolve(".jib");
+                container = jibBuilder.containerize(
+                        Containerizer.to(TarImage.at(imagePath).named("detached"))
+                                .setApplicationLayersCache(cacheDir)
+                                .setBaseImageLayersCache(cacheDir)
+                );
+                try (InputStream image = Files.newInputStream(imagePath); ZstdCompressorOutputStream compressedOut = new ZstdCompressorOutputStream(
+                        new BufferedOutputStream(Files.newOutputStream(imageArchive.getAsFile().toPath())))) {
+                    IOUtils.copy(image, compressedOut);
+                }
+            }
             Files.write(
                     imageId.getAsFile().toPath(),
                     container.getImageId().getHash().getBytes(StandardCharsets.UTF_8)

@@ -1,32 +1,37 @@
 package co.elastic.cloud.gradle.dockerbase;
 
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Action;
+import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.file.CopySpec;
+import org.gradle.api.file.DuplicatesStrategy;
+import org.gradle.api.file.FileTree;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFile;
+import org.gradle.api.internal.file.copy.*;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.*;
 
 import javax.inject.Inject;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @CacheableTask
-abstract public class ComponentBuildTask extends Sync {
+abstract public class ComponentBuildTask extends DefaultTask {
 
     public static final String LAYERS_DIR = "context";
-    private Map<Architecture, List<JibInstruction>> instructionsPerPlatform;
-    private List<Action<ComponentBuildDSL>> configForAllArchitectures;
+    private final Map<Architecture, List<JibInstruction>> instructionsPerPlatform;
+    private final List<Action<ComponentBuildDSL>> configForAllArchitectures;
+    final DefaultCopySpec rootCopySpec;
 
     @Inject
     public ComponentBuildTask() {
@@ -40,9 +45,9 @@ abstract public class ComponentBuildTask extends Sync {
                                         Function.identity(),
                                         architecture -> getProjectLayout()
                                                 .getBuildDirectory()
-                                                .file(getName() + "/" + "image-" + architecture + ".tar")
-                                                .get())
-                                )
+                                                .file(getName() + "/" + "image-" + architecture + ".tar.zstd")
+                                                .get()
+                                ))
                 )
         );
 
@@ -59,20 +64,13 @@ abstract public class ComponentBuildTask extends Sync {
                 )
         );
 
-        setDestinationDir(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
-
         instructionsPerPlatform = new HashMap<>();
         getInstructions().convention(instructionsPerPlatform);
 
-        // Without this, the task will be skipped if there's nothing to add to the image
-        final CopySpec spec = this.getRootSpec().addChild();
-        spec.from((Callable<File>) () -> {
-            final File file = new File(getProject().getBuildDir(), ".elastic");
-            Files.createDirectories(file.getParentFile().toPath());
-            Files.write(file.toPath(), "".getBytes());
-            return file;
-        });
         configForAllArchitectures = new ArrayList<>();
+
+        rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
+        rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
 
     @OutputFiles
@@ -108,7 +106,13 @@ abstract public class ComponentBuildTask extends Sync {
      *
      */
 
-    protected void build() {
+    @TaskAction
+    protected void buildComponentImages() {
+        getProject().sync(spec -> {
+                    spec.into(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
+                    spec.with(rootCopySpec);
+                }
+        );
         JibActions actions = new JibActions();
 
         for (Map.Entry<Architecture, List<JibInstruction>> entry : getInstructions().get().entrySet()) {
@@ -124,33 +128,6 @@ abstract public class ComponentBuildTask extends Sync {
                     entry.getValue()
             );
         }
-    }
-
-    private void maybeCreateLayerDirectories() {
-        if (hasCopyInstructions()) {
-            super.copy();
-            if (!getDidWork()) {
-                throw new GradleException(
-                        "The configured copy specs didn't actually add any files to the image." +
-                                " Check the resulting layers int he build dir."
-                );
-            }
-        } else {
-            setDidWork(true);
-        }
-    }
-
-    private boolean hasCopyInstructions() {
-        return getInstructions().get().entrySet().stream()
-                .flatMap(each -> each.getValue().stream())
-                .anyMatch(i -> i instanceof JibInstruction.Copy);
-    }
-
-    @Override
-    @TaskAction
-    protected void copy() {
-        maybeCreateLayerDirectories();
-        build();
     }
 
     /**
