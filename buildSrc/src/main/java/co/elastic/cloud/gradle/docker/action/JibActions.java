@@ -267,47 +267,40 @@ public class JibActions {
 
     public void buildTo(RegularFile imageArchive, RegularFile imageId, List<JibInstruction> instructions) {
         try {
-            final Optional<JibInstruction> fromContext = instructions.stream()
+            final Optional<JibInstruction.FromLocalImageBuild> fromLocalImageBuild = instructions.stream()
                     .filter(instruction -> instruction instanceof JibInstruction.FromLocalImageBuild)
+                    .map(it -> (JibInstruction.FromLocalImageBuild) it)
+                    .findFirst();
+
+            final Optional<JibInstruction.From> fromImageRef = instructions.stream()
+                    .filter(instruction -> instruction instanceof JibInstruction.From)
+                    .map(it -> (JibInstruction.From) it)
                     .findFirst();
 
             final JibContainerBuilder jibBuilder;
-            if (fromContext.isPresent()) {
+            if (fromLocalImageBuild.isPresent()) {
                 jibBuilder = Jib.from(
-                        TarImage.at(
-                                fromContext
-                                        .map(t1 -> {
-                                            JibInstruction.FromLocalImageBuild fromInstruction = (JibInstruction.FromLocalImageBuild) t1;
-                                            return fromInstruction.getImageArchive().get().toPath();
-                                        })
-                                        .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
-                        )
+                        TarImage.at(fromLocalImageBuild.get().getImageArchive().get().toPath())
                 );
-            } else {
+            } else if (fromImageRef.isPresent()) {
                 try {
-                    final ImageReference imageReference = ImageReference.parse(
-                            instructions.stream()
-                                    .filter(t1 -> t1 instanceof JibInstruction.From)
-                                    .findFirst()
-                                    .map(t1 -> {
-                                        JibInstruction.From fromInstruction = (JibInstruction.From) t1;
-                                        return fromInstruction.getReference();
-                                    })
-                                    .orElseThrow(() -> new GradleException("No base image defined. Use from() in the task to define one."))
-                    );
+                    final ImageReference imageReference = ImageReference.parse(fromImageRef.get().getReference());
                     jibBuilder = Jib.from(
-                            RegistryImage.named(imageReference).addCredentialRetriever(
-                                    CredentialRetrieverFactory.forImage(
-                                            imageReference,
-                                            e -> {
-                                                logger.info(e.getMessage());
-                                            }
-                                    ).dockerConfig()
-                            )
+                            RegistryImage.named(imageReference)
+                                    .addCredentialRetriever(
+                                            CredentialRetrieverFactory.forImage(
+                                                    imageReference,
+                                                    e -> {
+                                                        logger.info(e.getMessage());
+                                                    }
+                                            ).dockerConfig()
+                                    )
                     );
                 } catch (InvalidImageReferenceException e) {
                     throw new GradleException("Invalid from image format", e);
                 }
+            } else {
+                jibBuilder = Jib.fromScratch();
             }
 
             // We don't support  setting labels on base images, don't inherit them, these are component specific
