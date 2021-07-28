@@ -1,6 +1,7 @@
 package co.elastic.cloud.gradle.dockerbase;
 
 
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
 import co.elastic.cloud.gradle.util.Architecture;
 import com.google.cloud.tools.jib.api.JibContainer;
@@ -19,7 +20,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 abstract public class ComponentPushTask extends DefaultTask {
 
@@ -31,24 +34,29 @@ abstract public class ComponentPushTask extends DefaultTask {
                                    entry -> getProjectLayout().getBuildDirectory().file(entry.getValue().getAsFile().getName() + ".repoDigest")
                            )))
         );
+
+        getTags().convention(
+                getImageArchive().map(map -> map.keySet().stream()
+                        .collect(Collectors.toMap(
+                                Function.identity(),
+                                architecture -> DockerPluginConventions.componentImageTag(getProject(), architecture)
+                        ))
+                )
+        );
     }
-
-    @Internal
-    abstract public MapProperty<Architecture, Provider<RegularFile>> getDigestFiles();
-
-    @Internal
-    abstract public MapProperty<Architecture, RegularFile> getImageArchive();
 
     @InputFiles
     public Collection<RegularFile> getAllImageArchives() {
         return getImageArchive().get().values();
     }
 
+    @Input
+    abstract public MapProperty<Architecture, String> getTags();
+
     @OutputFiles
     public Collection<Provider<RegularFile>> getAllDigestFiles() {
         return getDigestFiles().get().values();
     }
-
 
     @Internal
     public Provider<Map<Architecture, String>> getDigests() {
@@ -63,11 +71,14 @@ abstract public class ComponentPushTask extends DefaultTask {
                 })));
     }
 
+    @Internal
+    abstract public MapProperty<Architecture, Provider<RegularFile>> getDigestFiles();
+
+    @Internal
+    abstract public MapProperty<Architecture, RegularFile> getImageArchive();
+
     @Inject
     abstract protected ProjectLayout getProjectLayout();
-
-    @Input
-    abstract public MapProperty<Architecture, String> getTags();
 
     @TaskAction
     public void pushImage() {

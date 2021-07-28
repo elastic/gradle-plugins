@@ -1,6 +1,7 @@
 package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
+import co.elastic.cloud.gradle.docker.manifest_tool.ManifestToolPlugin;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
 import org.gradle.api.Plugin;
@@ -18,6 +19,8 @@ public class DockerComponentPlugin implements Plugin<Project> {
 
     @Override
     public void apply(Project project) {
+        project.getPluginManager().apply(ManifestToolPlugin.class);
+
         final Architecture currentArch = Architecture.current();
 
         Provider<ComponentBuildTask> dockerComponentImageBuild = project.getTasks().register(
@@ -46,13 +49,18 @@ public class DockerComponentPlugin implements Plugin<Project> {
             task.getImageArchive().set(
                     dockerComponentImageBuild.flatMap(ComponentBuildTask::getImageArchive)
             );
-            task.getTags().set(
-                    Stream.of(Architecture.values())
-                    .collect(Collectors.toMap(
-                            Function.identity(),
-                            architecture -> DockerPluginConventions.componentImageTag(project, architecture)
-                    ))
+        });
+
+        TaskProvider<PushManifestListTask> pushManifestList = project.getTasks().register(
+                "pushManifestList",
+                PushManifestListTask.class
+        );
+        pushManifestList.configure( task -> {
+            task.dependsOn(dockerComponentImagePush);
+            task.getArchitectureTags().set(
+                    dockerComponentImagePush.flatMap(ComponentPushTask::getTags)
             );
+            task.getTag().set(DockerPluginConventions.manifestListTag(project));
         });
 
         GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
@@ -63,6 +71,6 @@ public class DockerComponentPlugin implements Plugin<Project> {
         );
 
         project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
-        project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(dockerComponentImagePush));
+        project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(pushManifestList));
     }
 }
