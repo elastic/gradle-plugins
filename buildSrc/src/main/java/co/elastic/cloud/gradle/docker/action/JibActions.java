@@ -33,13 +33,11 @@ import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.cloud.tools.jib.api.buildplan.Port;
-import com.google.cloud.tools.jib.configuration.ContainerConfiguration;
 import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
 import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import com.google.cloud.tools.jib.json.JsonTemplate;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
-import com.google.cloud.tools.jib.tar.TarExtractor;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
@@ -69,14 +67,14 @@ public class JibActions {
 
     public void pull(String from, Path into, Consumer<Exception> onRetryError) {
         RetryUtils.retry(() -> {
-            try {
-                return Jib.from(from)
-                        .containerize(
-                                Containerizer.to(TarImage.at(into).named(from)));
-            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
-                throw new GradleException("Error pulling " + from + " through Jib", e);
-            }
-        }).maxAttempt(3)
+                    try {
+                        return Jib.from(from)
+                                .containerize(
+                                        Containerizer.to(TarImage.at(into).named(from)));
+                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+                        throw new GradleException("Error pulling " + from + " through Jib", e);
+                    }
+                }).maxAttempt(3)
                 .exponentialBackoff(1000, 30000)
                 .onRetryError(onRetryError)
                 .execute();
@@ -86,24 +84,24 @@ public class JibActions {
         ImageReference imageReference = parse(tag);
 
         return RetryUtils.retry(() -> {
-            try {
-                return Jib.from(TarImage.at(imageArchive))
-                        .setCreationTime(createdAt)
-                        .containerize(
-                                Containerizer.to(
-                                        RegistryImage.named(imageReference)
-                                                .addCredentialRetriever(
-                                                        CredentialRetrieverFactory.forImage(
-                                                                imageReference,
-                                                                onCredentialEvent
-                                                        ).dockerConfig()
-                                                )
-                                )
-                        );
-            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
-                throw new GradleException("Error pushing image archive in registry (" + imageReference + ").", e);
-            }
-        }).maxAttempt(3)
+                    try {
+                        return Jib.from(TarImage.at(imageArchive))
+                                .setCreationTime(createdAt)
+                                .containerize(
+                                        Containerizer.to(
+                                                RegistryImage.named(imageReference)
+                                                        .addCredentialRetriever(
+                                                                CredentialRetrieverFactory.forImage(
+                                                                        imageReference,
+                                                                        onCredentialEvent
+                                                                ).dockerConfig()
+                                                        )
+                                        )
+                                );
+                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
+                        throw new GradleException("Error pushing image archive in registry (" + imageReference + ").", e);
+                    }
+                }).maxAttempt(3)
                 .exponentialBackoff(1000, 30000)
                 .onRetryError(onRetryError)
                 .execute();
@@ -241,24 +239,24 @@ public class JibActions {
 
     public JibContainer pushImage(RegularFile imageArchive, String tag) {
         final JibContainer container = RetryUtils.retry(() -> {
-            try {
-                ImageReference imageReference = ImageReference.parse(tag);
-                return Jib.from(TarImage.at(imageArchive.getAsFile().toPath()))
-                        .containerize(
-                                Containerizer.to(
-                                        RegistryImage.named(imageReference)
-                                                .addCredentialRetriever(
-                                                        CredentialRetrieverFactory.forImage(
-                                                                imageReference,
-                                                                credentialEvent -> logger.info(credentialEvent.getMessage())
-                                                        ).dockerConfig()
-                                                )
-                                )
-                        );
-            } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
-                throw new GradleException("Error pushing image archive in registry (" + tag + ").", e);
-            }
-        }).maxAttempt(3)
+                    try {
+                        ImageReference imageReference = ImageReference.parse(tag);
+                        return Jib.from(TarImage.at(imageArchive.getAsFile().toPath()))
+                                .containerize(
+                                        Containerizer.to(
+                                                RegistryImage.named(imageReference)
+                                                        .addCredentialRetriever(
+                                                                CredentialRetrieverFactory.forImage(
+                                                                        imageReference,
+                                                                        credentialEvent -> logger.info(credentialEvent.getMessage())
+                                                                ).dockerConfig()
+                                                        )
+                                        )
+                                );
+                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+                        throw new GradleException("Error pushing image archive in registry (" + tag + ").", e);
+                    }
+                }).maxAttempt(3)
                 .exponentialBackoff(1000, 30000)
                 .onRetryError(error -> logger.warn("Error while pushing image with Jib. Retrying", error))
                 .execute();
@@ -426,19 +424,24 @@ public class JibActions {
     private ContainerConfiguration readConfigurationFromTar(Path tarPath) {
         try (TempDirectoryProvider tempDirProvider = new TempDirectoryProvider()) {
             Path destination = tempDirProvider.newDirectory();
-            TarExtractor.extract(tarPath, destination);
+            Path manifestPath = destination.resolve("manifest.json");
+            // extract the manifest
+            DockerDaemonActions.extractDockerImage(tarPath, destination,
+                    entry -> destination.resolve(entry.getName()).equals(manifestPath));
 
-            InputStream manifestStream = Files.newInputStream(destination.resolve("manifest.json"));
-            DockerManifestEntryTemplate loadManifest =
-                    new ObjectMapper()
-                            .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
-                            .readValue(manifestStream, DockerManifestEntryTemplate[].class)[0];
-            manifestStream.close();
-
-            Path configPath = destination.resolve(loadManifest.getConfig());
-            return JsonTemplateMapper.readJsonFromFile(configPath, ContainerConfiguration.class);
+            try (InputStream manifestStream = Files.newInputStream(manifestPath)) {
+                // load the manifest and then only extract the config
+                DockerManifestEntryTemplate loadManifest =
+                        new ObjectMapper()
+                                .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
+                                .readValue(manifestStream, DockerManifestEntryTemplate[].class)[0];
+                Path configPath = destination.resolve(loadManifest.getConfig());
+                DockerDaemonActions.extractDockerImage(tarPath, destination,
+                        entry -> destination.resolve(entry.getName()).equals(configPath));
+                return JsonTemplateMapper.readJsonFromFile(configPath, ContainerConfiguration.class);
+            }
         } catch (IOException e) {
-            throw new GradleException("Error reading config configuration fromInstruction " + tarPath, e);
+            throw new GradleException(String.format("Error reading container configuration from %s", tarPath), e);
         }
     }
 

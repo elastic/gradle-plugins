@@ -25,8 +25,11 @@ import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
 import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
 import co.elastic.cloud.gradle.dockerbase.DaemonInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
-import com.google.cloud.tools.jib.tar.TarExtractor;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
+import org.apache.commons.io.IOUtils;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.TaskExecutionException;
@@ -36,12 +39,16 @@ import org.gradle.process.ExecResult;
 import org.gradle.process.ExecSpec;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,6 +72,66 @@ public class DockerDaemonActions {
         env.merge("PATH", "/Applications/Docker.app/Contents/Resources/bin/", (a, b) -> a + File.pathSeparator + b);
     }
 
+    /**
+     * Reads a Zstandard compressed or plain TAR docker image into an InputStream
+     *
+     * @param imageArchive The path to the image TAR
+     */
+    public static InputStream readDockerImage(Path imageArchive) throws IOException {
+        InputStream imageStream = new BufferedInputStream(Files.newInputStream(imageArchive, StandardOpenOption.READ));
+        byte[] magicBytes = new byte[4];
+        imageStream.mark(4);
+        imageStream.read(magicBytes);
+        imageStream.reset();
+        int magicNumber = ByteBuffer.wrap(magicBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        // https://tools.ietf.org/html/rfc8478
+        if (magicNumber == 0xFD2FB528) {
+            return new ZstdCompressorInputStream(imageStream);
+        } else {
+            return imageStream;
+        }
+    }
+
+    /**
+     * Extracts a Zstandard compressed or plain TAR docker image into the destination directory
+     *
+     * @param tarPath The path of the image TAR
+     * @param destination The destination directory
+     * @param filter A predicate to limit extraction of entries that are present in the TAR
+     */
+    public static void extractDockerImage(Path tarPath, Path destination, Predicate<TarArchiveEntry> filter) throws IOException {
+        try (InputStream imageStream = readDockerImage(tarPath)) {
+            extractDockerImage(imageStream, destination, filter);
+        }
+    }
+
+    /**
+     * Extracts a TAR docker image stream into the destination directory
+     *
+     * @param imageStream The docker image stream
+     * @param destination The destination directory
+     * @param filter A predicate to limit extraction of entries that are present in the TAR
+     */
+    public static void extractDockerImage(InputStream imageStream, Path destination, Predicate<TarArchiveEntry> filter) throws IOException {
+        TarArchiveInputStream tarStream = new TarArchiveInputStream(imageStream);
+        TarArchiveEntry entry;
+        while ((entry = tarStream.getNextTarEntry()) != null) {
+            Path entryPath = destination.resolve(entry.getName());
+            if (filter.test(entry)) {
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    if (entryPath.getParent() != null) {
+                        Files.createDirectories(entryPath.getParent());
+                    }
+                    try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(entryPath))) {
+                        IOUtils.copy(tarStream, out);
+                    }
+                }
+            }
+        }
+    }
+
     public String clean(String tag) throws IOException {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             execute(spec -> {
@@ -79,15 +146,15 @@ public class DockerDaemonActions {
 
     public void pull(String from) {
         RetryUtils.retry(() -> {
-            try {
-                return execute(spec -> {
-                    spec.setEnvironment(Collections.emptyMap());
-                    spec.commandLine("docker", "--config", System.getProperty("user.home") + File.separator + ".docker", "pull", from);
-                });
-            } catch (TaskExecutionException e) {
-                throw new GradleException("Error pulling " + from + " through Docker daemon", e);
-            }
-        }).maxAttempt(3)
+                    try {
+                        return execute(spec -> {
+                            spec.setEnvironment(Collections.emptyMap());
+                            spec.commandLine("docker", "--config", System.getProperty("user.home") + File.separator + ".docker", "pull", from);
+                        });
+                    } catch (TaskExecutionException e) {
+                        throw new GradleException("Error pulling " + from + " through Docker daemon", e);
+                    }
+                }).maxAttempt(3)
                 .exponentialBackoff(1000, 30000)
                 .execute();
     }
@@ -247,11 +314,11 @@ public class DockerDaemonActions {
                     !extension.getExposeUdp().isEmpty()) {
                 writer.write(
                         "EXPOSE " + Stream.concat(
-                                extension.getExposeTcp().stream()
-                                        .map(each -> each + "/tcp"),
-                                extension.getExposeUdp().stream()
-                                        .map(each -> each + "/udp")
-                        )
+                                        extension.getExposeTcp().stream()
+                                                .map(each -> each + "/tcp"),
+                                        extension.getExposeUdp().stream()
+                                                .map(each -> each + "/udp")
+                                )
                                 .collect(Collectors.joining(" ")) +
                                 "\n"
                 );
@@ -445,7 +512,7 @@ public class DockerDaemonActions {
                         .getBytes(StandardCharsets.UTF_8)
         );
         Path dockerfile = workingDirectory.resolve("Dockerfile");
-        Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER  + "\n!dockerEphemeral").getBytes());
+        Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!dockerEphemeral").getBytes());
 
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
         int imageBuild = execute(spec -> {
@@ -482,5 +549,4 @@ public class DockerDaemonActions {
             }
         }
     }
-
 }
