@@ -2,6 +2,7 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.github.GithubDownloadPlugin;
 import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.RetryUtils;
 import com.google.common.collect.ImmutableMap;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -16,6 +17,7 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
+import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.ByteArrayOutputStream;
@@ -80,32 +82,13 @@ abstract public class PushManifestListTask extends DefaultTask {
         if (templates.size() > 1) {
             throw new GradleException("Can't derive template from manifest list: " + templates);
         }
-        final ExecResult result;
-        final String output;
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            result = getExecOperations().exec(spec -> {
-                spec.setEnvironment(Collections.emptyMap());
-                spec.setExecutable(GithubDownloadPlugin.getExecutable(getProject(), "manifest-tool"));
-                spec.setArgs(Arrays.asList(
-                        "push", "from-args",
-                        "--platforms",
-                        getArchitectureTags().get().keySet().stream()
-                                .map(each -> "linux/" + each.map(ImmutableMap.of(
-                                        Architecture.AARCH64, "arm64",
-                                        Architecture.X86_64, "amd64"
-                                )))
-                                .collect(Collectors.joining(",")),
-                        "--template", templates.iterator().next(),
-                        "--target", getTag().get()
-                ));
-                spec.setStandardOutput(out);
-                spec.setIgnoreExitValue(true);
-            });
-            output = new String(out.toByteArray(), StandardCharsets.UTF_8).trim();
-        }
-        if (result.getExitValue() != 0) {
-            throw new GradleException("Creating the manifest list failed: " + output);
-        }
+
+        final String output = RetryUtils.retry(() -> pushManifestList(templates))
+                .maxAttempt(6)
+                .exponentialBackoff(1000, 30000)
+                .onRetryError(error -> getLogger().warn("Error while pushing manifest. Retrying", error))
+                .execute();
+
         if (output.startsWith("Digest: sha256:")) {
             Files.write(
                     getDigestFile().get().getAsFile().toPath(),
@@ -118,6 +101,41 @@ abstract public class PushManifestListTask extends DefaultTask {
                 throw new GradleException("manifest-tool succeeded but generated unexpected output: `" + output +
                         "`. Check the task output for additional details.");
             }
+        }
+    }
+
+    @NotNull
+    private String pushManifestList(Set<String> templates) {
+        try {
+            final ExecResult result;
+            final String output;
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                result = getExecOperations().exec(spec -> {
+                    spec.setEnvironment(Collections.emptyMap());
+                    spec.setExecutable(GithubDownloadPlugin.getExecutable(getProject(), "manifest-tool"));
+                    spec.setArgs(Arrays.asList(
+                            "push", "from-args",
+                            "--platforms",
+                            getArchitectureTags().get().keySet().stream()
+                                    .map(each -> "linux/" + each.map(ImmutableMap.of(
+                                            Architecture.AARCH64, "arm64",
+                                            Architecture.X86_64, "amd64"
+                                    )))
+                                    .collect(Collectors.joining(",")),
+                            "--template", templates.iterator().next(),
+                            "--target", getTag().get()
+                    ));
+                    spec.setStandardOutput(out);
+                    spec.setIgnoreExitValue(true);
+                });
+                output = new String(out.toByteArray(), StandardCharsets.UTF_8).trim();
+            }
+            if (result.getExitValue() != 0) {
+                throw new GradleException("Creating the manifest list failed: " + output);
+            }
+            return output;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
