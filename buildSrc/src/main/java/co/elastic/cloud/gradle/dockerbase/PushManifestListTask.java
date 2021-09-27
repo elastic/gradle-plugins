@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -83,9 +84,10 @@ abstract public class PushManifestListTask extends DefaultTask {
             throw new GradleException("Can't derive template from manifest list: " + templates);
         }
 
+        final Random random = new Random();
         final String output = RetryUtils.retry(() -> pushManifestList(templates))
-                .maxAttempt(6)
-                .exponentialBackoff(1000, 30000)
+                .maxAttempt(12)
+                .exponentialBackoff(random.nextInt(5) * 1000, 300000)
                 .onRetryError(error -> getLogger().warn("Error while pushing manifest. Retrying", error))
                 .execute();
 
