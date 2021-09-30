@@ -107,7 +107,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
      */
 
     @TaskAction
-    protected void buildComponentImages() {
+    protected void buildComponentImages() throws IOException {
         getProject().sync(spec -> {
                     spec.into(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
                     spec.with(rootCopySpec);
@@ -126,6 +126,10 @@ abstract public class ComponentBuildTask extends DefaultTask {
                     getImageArchive().get().get(architecture),
                     getImageIdFile().get().get(architecture),
                     entry.getValue()
+            );
+            GradleCacheUtilities.assertOutputSize(
+                    getPath(),
+                    Files.size(getImageArchive().get().get(architecture).getAsFile().toPath())
             );
         }
     }
