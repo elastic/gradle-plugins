@@ -49,6 +49,9 @@ public class DockerComponentPlugin implements Plugin<Project> {
             task.getImageArchive().set(
                     dockerComponentImageBuild.flatMap(ComponentBuildTask::getImageArchive)
             );
+            task.getCreatedAtFiles().set(
+                    dockerComponentImageBuild.flatMap(ComponentBuildTask::getCreatedAtFile)
+            );
         });
 
         TaskProvider<PushManifestListTask> pushManifestList = project.getTasks().register(

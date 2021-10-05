@@ -4,6 +4,7 @@ import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
+import co.elastic.cloud.gradle.util.FileUtils;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -24,7 +25,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
+import java.time.Instant;
 @CacheableTask
 abstract public class ComponentBuildTask extends DefaultTask {
 
@@ -64,6 +65,19 @@ abstract public class ComponentBuildTask extends DefaultTask {
                 )
         );
 
+        getCreatedAtFile().convention(
+                getInstructions().map(map ->
+                        map.keySet().stream()
+                                .collect(Collectors.toMap(
+                                        Function.identity(),
+                                        architecture -> getProjectLayout()
+                                                .getBuildDirectory()
+                                                .file(getName() + "/" + "image-" + architecture + ".createdAt")
+                                                .get())
+                                )
+                )
+        );
+
         instructionsPerPlatform = new HashMap<>();
         getInstructions().convention(instructionsPerPlatform);
 
@@ -79,6 +93,10 @@ abstract public class ComponentBuildTask extends DefaultTask {
     @OutputFiles
     abstract MapProperty<Architecture, RegularFile> getImageIdFile();
 
+    @OutputFiles
+    abstract MapProperty<Architecture, RegularFile> getCreatedAtFile();
+
+
     @Nested
     abstract MapProperty<Architecture, List<JibInstruction>> getInstructions();
 
@@ -92,11 +110,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
                 // We only build the full set of architectures in CI, so won't have all IDs on every run
                 .filter(entry -> entry.getValue().getAsFile().exists())
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
-                    try {
-                        return Files.readAllLines(entry.getValue().getAsFile().toPath()).get(0);
-                    } catch (IOException e) {
-                        throw new GradleException("Internal error: Can't read Iamge ID file: " + entry.getValue(), e);
-                    }
+                    return FileUtils.readFromRegularFile(entry.getValue());
                 })));
     }
 
@@ -125,6 +139,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
             actions.buildTo(
                     getImageArchive().get().get(architecture),
                     getImageIdFile().get().get(architecture),
+                    getCreatedAtFile().get().get(architecture),
                     entry.getValue()
             );
             GradleCacheUtilities.assertOutputSize(

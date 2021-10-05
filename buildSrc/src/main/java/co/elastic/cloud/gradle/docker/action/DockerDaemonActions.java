@@ -501,7 +501,8 @@ public class DockerDaemonActions {
             List<DaemonInstruction> instructions,
             Path workingDirectory,
             Path imageArchive,
-            Path idfile
+            Path idfile,
+            Path createdAtFile
     ) throws IOException {
         if (!workingDirectory.toFile().isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDirectory);
@@ -530,6 +531,20 @@ public class DockerDaemonActions {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output");
         }
         String imageId = Files.readAllLines(idfile).get(0);
+
+        
+        try(BufferedOutputStream createAtFileOut = new BufferedOutputStream(Files.newOutputStream(createdAtFile))) {
+            int imageInspect = execute(spec -> {
+                spec.setWorkingDir(dockerfile.getParent());
+                spec.setStandardOutput(createAtFileOut);
+                spec.commandLine("docker", "image", "inspect", "--format", "{{.Created}}", imageId);
+                spec.setIgnoreExitValue(true);
+            }).getExitValue();
+            if (imageInspect != 0) {
+                throw new GradleException("Failed to inspect docker image, see the docker build log in the task output");
+            }
+        }
+
         // We build in daemon only to export, we could use docker buildx  to create a tar directly, but unfrotunetly this
         // prooved buggy, e.g. the --iidfile was different from the ID the image would have when imported into the daemon
         saveCompressedDockerImage(imageId, imageArchive);

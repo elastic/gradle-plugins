@@ -1,28 +1,31 @@
 package co.elastic.cloud.gradle.dockerbase;
 
 
-import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
+import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.FileUtils;
 import com.google.cloud.tools.jib.api.JibContainer;
 import org.gradle.api.DefaultTask;
-import org.gradle.api.GradleException;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFile;
+import org.gradle.api.GradleException;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.*;
 
-import javax.inject.Inject;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collection;
-import java.util.Map;
 import java.util.function.Function;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.inject.Inject;
+import java.time.Instant;
 
 abstract public class ComponentPushTask extends DefaultTask {
 
@@ -63,11 +66,7 @@ abstract public class ComponentPushTask extends DefaultTask {
         return getDigestFiles().map(idFiles -> idFiles.entrySet()
                 .stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
-                    try {
-                        return Files.readAllLines(entry.getValue().get().getAsFile().toPath()).get(0);
-                    } catch (IOException e) {
-                        throw new GradleException("Internal error: Can't read Iamge ID file: " + entry.getValue(), e);
-                    }
+                    return FileUtils.readFromRegularFile(entry.getValue().get());
                 })));
     }
 
@@ -77,6 +76,9 @@ abstract public class ComponentPushTask extends DefaultTask {
     @Internal
     abstract public MapProperty<Architecture, RegularFile> getImageArchive();
 
+    @Internal
+    abstract public MapProperty<Architecture, RegularFile> getCreatedAtFiles();
+
     @Inject
     abstract protected ProjectLayout getProjectLayout();
 
@@ -85,7 +87,13 @@ abstract public class ComponentPushTask extends DefaultTask {
         final JibActions jibActions = new JibActions();
         getImageArchive().get().forEach((architecture, imageArchive) -> {
             final String tag = getTags().get().get(architecture);
-            final JibContainer container = jibActions.pushImage(imageArchive, tag);
+            final RegularFile createdAtFile = getCreatedAtFiles().get().get(architecture);
+            final Instant createdAt = Instant.parse(FileUtils.readFromRegularFile(createdAtFile));
+            final JibContainer container = jibActions.pushImage(
+                imageArchive.getAsFile().toPath(), 
+                tag,
+                createdAt
+            );
             final String repoDigest = container.getDigest().toString();
             try {
                 Files.write(

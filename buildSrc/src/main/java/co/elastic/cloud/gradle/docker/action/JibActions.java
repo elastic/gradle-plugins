@@ -80,33 +80,6 @@ public class JibActions {
                 .execute();
     }
 
-    public JibContainer push(Path imageArchive, String tag, Instant createdAt, Consumer<LogEvent> onCredentialEvent, Consumer<Exception> onRetryError) {
-        ImageReference imageReference = parse(tag);
-
-        return RetryUtils.retry(() -> {
-                    try {
-                        return Jib.from(TarImage.at(imageArchive))
-                                .setCreationTime(createdAt)
-                                .containerize(
-                                        Containerizer.to(
-                                                RegistryImage.named(imageReference)
-                                                        .addCredentialRetriever(
-                                                                CredentialRetrieverFactory.forImage(
-                                                                        imageReference,
-                                                                        onCredentialEvent
-                                                                ).dockerConfig()
-                                                        )
-                                        )
-                                );
-                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
-                        throw new GradleException("Error pushing image archive in registry (" + imageReference + ").", e);
-                    }
-                }).maxAttempt(3)
-                .exponentialBackoff(1000, 30000)
-                .onRetryError(onRetryError)
-                .execute();
-    }
-
     private ImageReference parse(String tag) {
         try {
             return ImageReference.parse(tag);
@@ -237,11 +210,12 @@ public class JibActions {
         }
     }
 
-    public JibContainer pushImage(RegularFile imageArchive, String tag) {
+    public JibContainer pushImage(Path imageArchive, String tag, Instant createdAt) {
         final JibContainer container = RetryUtils.retry(() -> {
                     try {
                         ImageReference imageReference = ImageReference.parse(tag);
-                        return Jib.from(TarImage.at(imageArchive.getAsFile().toPath()))
+                        return Jib.from(TarImage.at(imageArchive))
+                                .setCreationTime(createdAt)
                                 .containerize(
                                         Containerizer.to(
                                                 RegistryImage.named(imageReference)
@@ -263,7 +237,7 @@ public class JibActions {
         return container;
     }
 
-    public void buildTo(RegularFile imageArchive, RegularFile imageId, List<JibInstruction> instructions) {
+    public void buildTo(RegularFile imageArchive, RegularFile imageId, RegularFile createdAtFile, List<JibInstruction> instructions) {
         try {
             final Optional<JibInstruction.FromLocalImageBuild> fromLocalImageBuild = instructions.stream()
                     .filter(instruction -> instruction instanceof JibInstruction.FromLocalImageBuild)
@@ -337,6 +311,11 @@ public class JibActions {
             Files.write(
                     imageId.getAsFile().toPath(),
                     container.getImageId().getHash().getBytes(StandardCharsets.UTF_8)
+            );
+
+            Files.write(
+                    createdAtFile.getAsFile().toPath(),
+                    createdAt.toString().getBytes(StandardCharsets.UTF_8)
             );
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
             throw new GradleException("Failed to build component image", e);

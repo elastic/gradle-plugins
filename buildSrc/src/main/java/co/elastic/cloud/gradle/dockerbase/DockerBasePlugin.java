@@ -62,6 +62,7 @@ public class DockerBasePlugin implements Plugin<Project> {
                     dockerBaseImageBuild.flatMap(BaseBuildTask::getImageArchive)
             );
             task.getTag().set(DockerPluginConventions.baseImageTag(project, currentArchitecture));
+            task.getCreatedAt().set(dockerBaseImageBuild.flatMap(BaseBuildTask::getCreatedAt));
             task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
         });
 

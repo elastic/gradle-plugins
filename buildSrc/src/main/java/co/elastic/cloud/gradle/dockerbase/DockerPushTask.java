@@ -13,6 +13,7 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.Instant;
 
 abstract public class DockerPushTask extends DefaultTask {
 
@@ -33,13 +34,21 @@ abstract public class DockerPushTask extends DefaultTask {
     @Input
     abstract protected Property<String> getTag();
 
+    @Input
+    abstract protected Property<Instant> getCreatedAt();
+
     @InputFile
     abstract protected RegularFileProperty getImageArchive();
 
     @TaskAction
     public void pushImage() throws InvalidImageReferenceException, IOException {
         final String tag = getTag().get();
-        final JibContainer container = new JibActions().pushImage(getImageArchive().get(), tag);
+        final Instant createdAt = getCreatedAt().get();
+        final JibContainer container = new JibActions().pushImage(
+            getImageArchive().get().getAsFile().toPath(), 
+            tag, 
+            createdAt
+        );
 
         final String repoDigest = container.getDigest().toString();
         Files.write(
@@ -48,5 +57,4 @@ abstract public class DockerPushTask extends DefaultTask {
         );
         getLogger().lifecycle("Pushed image {}@{}", tag, repoDigest);
     }
-
 }

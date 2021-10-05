@@ -2,6 +2,7 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.github.GithubDownloadPlugin;
 import co.elastic.cloud.gradle.util.Architecture;
+import co.elastic.cloud.gradle.util.FileUtils;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import com.google.common.collect.ImmutableMap;
 import org.gradle.api.DefaultTask;
@@ -55,11 +56,7 @@ abstract public class PushManifestListTask extends DefaultTask {
     @Internal
     public Provider<String> getDigest() {
         return getDigestFile().map(regularFile -> {
-            try {
-                return Files.readAllLines(regularFile.getAsFile().toPath()).get(0);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            return FileUtils.readFromRegularFile(regularFile);
         });
     }
 
