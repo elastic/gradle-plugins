@@ -16,6 +16,7 @@ public class RetryUtils {
         private Optional<RetryScheduler> scheduler = Optional.empty();
         private Optional<Consumer<Exception>> retryErrorConsumer = Optional.empty();
         private Optional<Integer> maxAttempt = Optional.empty();
+        private Optional<Long> initialDelay = Optional.empty();
 
         private RetryBuilder(Supplier<T> action) {
             this.action = action;
@@ -31,6 +32,11 @@ public class RetryUtils {
             return this;
         }
 
+        public RetryBuilder<T> initialDelay(long initialDelay) {
+            this.initialDelay = Optional.of(initialDelay);
+            return this;
+        }
+
         public RetryBuilder<T> onRetryError(Consumer<Exception> onError) {
             this.retryErrorConsumer = Optional.ofNullable(onError);
             return this;
@@ -42,6 +48,17 @@ public class RetryUtils {
         }
 
         private T execute(int attempts) {
+            if (attempts == 0) {
+                this.initialDelay.ifPresent(delay -> {
+                    try {
+                        Thread.sleep(delay);
+                    }
+                    catch (InterruptedException e) {
+                        //may be trying to shut-down. End early.
+                    }
+                });
+            }
+
             try {
                 return action.get();
             } catch (Exception e) {
