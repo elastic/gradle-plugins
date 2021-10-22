@@ -19,9 +19,6 @@
 
 package co.elastic.cloud.gradle.docker.action;
 
-import co.elastic.cloud.gradle.docker.DockerFileExtension;
-import co.elastic.cloud.gradle.docker.build.DockerBuildInfo;
-import co.elastic.cloud.gradle.docker.build.DockerImageExtension;
 import co.elastic.cloud.gradle.dockerbase.JibInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -78,110 +75,6 @@ public class JibActions {
                 .exponentialBackoff(1000, 30000)
                 .onRetryError(onRetryError)
                 .execute();
-    }
-
-    private ImageReference parse(String tag) {
-        try {
-            return ImageReference.parse(tag);
-        } catch (InvalidImageReferenceException e) {
-            throw new GradleException(tag + " is not a valid Jib ImageRefence", e);
-        }
-    }
-
-    public DockerBuildInfo build(DockerFileExtension extension, String imageTag) {
-        try {
-            ImageReference imageReference = parse(imageTag);
-
-            Path parentImagePath = extension.getFromProject()
-                    .flatMap(project -> Optional.ofNullable(project.getExtensions().findByType(DockerImageExtension.class)))
-                    .map(ext -> ext.getContext().projectTarImagePath())
-                    .orElseGet(() -> extension.getContext().jibBaseImagePath());
-
-            // Base config is the tar archive stored by dockerBuild of another project if referenced
-            // or the baseImage path stored by the dockerJibPull of this project
-            JibContainerBuilder jibBuilder = Jib.from(TarImage.at(parentImagePath));
-
-            Instant createdAt = Optional.ofNullable(extension.getBuildInfo())
-                    .map(DockerBuildInfo::getCreatedAt)
-                    .orElse(Instant.now());
-            jibBuilder.setCreationTime(createdAt);
-
-            // Load parent configuration fromInstruction base image tar or parent project image tar
-            ContainerConfiguration parentConfig = readConfigurationFromTar(parentImagePath);
-
-
-            Optional.ofNullable(extension.getMaintainer())
-                    .ifPresent(maintainer -> jibBuilder.addLabel("maintainer", maintainer));
-
-            extension.forEachCopyLayer(
-                    (ordinal, _action) -> {
-                        // We can't add directly to / causing a NPE in Jib
-                        // We need to walk through the contexts to add them separately => https://github.com/GoogleContainerTools/jib/issues/2195
-                        File contextFolder = extension.getContext().contextPath().resolve("layer" + ordinal).toFile();
-                        if (contextFolder.exists() && contextFolder.isDirectory() && contextFolder.listFiles().length > 0) {
-                            Arrays.stream(contextFolder.listFiles()).forEach(file -> {
-                                try {
-                                    jibBuilder.addFileEntriesLayer(
-                                            FileEntriesLayer.builder()
-                                                    .addEntryRecursive(
-                                                            file.toPath(),
-                                                            AbsoluteUnixPath.get("/" + file.getName()),
-                                                            JibActions::getJibFilePermission,
-                                                            FileEntriesLayer.DEFAULT_MODIFICATION_TIME_PROVIDER,
-                                                            _action.owner.isPresent() ?
-                                                                    (sourcePath, destinationPath) -> _action.owner.get() :
-                                                                    FileEntriesLayer.DEFAULT_OWNERSHIP_PROVIDER
-                                                    ).build());
-                                } catch (IOException e) {
-                                    throw new GradleException("Error configuring layer" + ordinal + " for Jib docker config", e);
-                                }
-                            });
-                        } else {
-                            throw new GradleException("Error in copy configuration : layer" + ordinal + " is not an existing folder.");
-                        }
-                    }
-            );
-
-            or(
-                    Optional.ofNullable(extension.getEntryPoint()).filter(it -> !it.isEmpty()),
-                    Optional.ofNullable(parentConfig.getEntryPoint())
-            ).ifPresent(jibBuilder::setEntrypoint);
-
-            or(
-                    Optional.ofNullable(extension.getCmd()).filter(it -> !it.isEmpty()),
-                    Optional.ofNullable(parentConfig.getCmd())
-            ).ifPresent(jibBuilder::setProgramArguments);
-
-            Optional.ofNullable(extension.getLabels())
-                    .ifPresent(labels -> labels.forEach(jibBuilder::addLabel));
-
-            Optional.ofNullable(extension.getEnv())
-                    .ifPresent(envs -> envs.forEach(jibBuilder::addEnvironmentVariable));
-
-            Optional.ofNullable(extension.getWorkDir()).ifPresent(workingDirectory ->
-                    jibBuilder.setWorkingDirectory(AbsoluteUnixPath.get(workingDirectory))
-            );
-
-            extension.getExposeTcp().stream()
-                    .map(Port::tcp)
-                    .forEach(jibBuilder::addExposedPort);
-            extension.getExposeUdp().stream()
-                    .map(Port::udp)
-                    .forEach(jibBuilder::addExposedPort);
-
-            JibContainer jibContainer = jibBuilder.containerize(
-                    Containerizer
-                            .to(TarImage.at(extension.getContext().projectTarImagePath()).named(imageReference))
-                            .setApplicationLayersCache(extension.getContext().jibApplicationLayerCachePath()));
-
-            return new DockerBuildInfo()
-                    .setTag(imageReference.toString())
-                    .setBuilder(DockerBuildInfo.Builder.JIB)
-                    .setImageId(jibContainer.getImageId().toString())
-                    .setCreatedAt(createdAt);
-        } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
-            throw new GradleException("Error running Jib docker config build", e);
-        }
     }
 
     private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
@@ -389,14 +282,6 @@ public class JibActions {
         } else {
             throw new GradleException("Instruction " + instruction + "is not a valid Jib instruction");
         }
-    }
-
-    // TODO remove when we add Java 11 for standard JDK
-    private static <T> Optional<T> or(Optional<T> x, Optional<T> y) {
-        if (x.isPresent()) {
-            return x;
-        }
-        return y;
     }
 
     // Jib doesn't add visibility for these utils so recode it
