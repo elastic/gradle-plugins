@@ -18,7 +18,10 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.*;
 
 import javax.inject.Inject;
+import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.Exception;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -142,11 +145,23 @@ abstract public class ComponentBuildTask extends DefaultTask {
                     getCreatedAtFile().get().get(architecture),
                     entry.getValue()
             );
-            GradleCacheUtilities.assertOutputSize(
-                    getPath(),
-                    Files.size(getImageArchive().get().get(architecture).getAsFile().toPath())
-            );
         }
+
+        GradleCacheUtilities.assertOutputSize(
+                getPath(),
+                getImageArchive().get().values().stream()
+                        .map(RegularFile::getAsFile)
+                        .map(File::toPath)
+                        .map(path -> {
+                            try {
+                                return Files.size(path);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(e);
+                            }
+                        })
+                        .reduce(0l, Long::sum)
+
+        );
     }
 
     /**
