@@ -22,13 +22,15 @@ import java.util.stream.Stream;
 
 public class CloudBuildLifecyclePlugin implements Plugin<Project> {
 
+    public static final String RESOLVE_ALL_DEPENDENCIES_TASK_NAME = "resolveAllDependencies";
+
     @Override
     public void apply(Project target) {
         final TaskContainer tasks = target.getTasks();
 
         target.apply(Collections.singletonMap("plugin", "base"));
 
-        tasks.register("resolveAllDependencies", task -> {
+        tasks.register(RESOLVE_ALL_DEPENDENCIES_TASK_NAME, task -> {
             task.setDescription("Lifecycle task to resolves all external dependencies. " +
                     "This task can be used to cache everything locally so these are not  downloaded while building." +
                     " e.g. to download everything while on a better connection. In CI this is used to \"bake\" depdencies " +
