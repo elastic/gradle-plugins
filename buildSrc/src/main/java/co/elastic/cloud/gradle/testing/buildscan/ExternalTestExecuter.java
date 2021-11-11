@@ -3,6 +3,8 @@ package co.elastic.cloud.gradle.testing.buildscan;
 import org.gradle.api.GradleException;
 import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.testing.*;
+import org.gradle.api.logging.Logger;
+import org.gradle.api.logging.Logging;
 import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.testing.TestOutputEvent;
@@ -22,6 +24,7 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
     private final Set<File> fromFiles;
     private final TaskProvider<? extends Task> generatorTask;
+    private static final Logger logger = Logging.getLogger(ExternalTestExecuter.class);
 
     public ExternalTestExecuter(Set<File> fromFile, TaskProvider<? extends Task> generatorTask) {
         this.fromFiles = fromFile;
@@ -51,6 +54,7 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
         IdGenerator<?> idGenerator = new LongIdGenerator();
 
         fromFiles.stream()
+                .peek(file -> logger.lifecycle("Loading results from {}", file))
                 .flatMap(resultFile -> XUnitXmlParser.parse(resultFile).stream())
                 .forEach(testSuite -> {
                     DefaultTestClassDescriptor suiteDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testSuite.getName());
