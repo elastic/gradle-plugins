@@ -41,11 +41,17 @@ import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStr
 import org.apache.commons.io.IOUtils;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.RegularFile;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.lang.Exception;
+import java.lang.String;
+import java.lang.System;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -62,63 +68,46 @@ public class JibActions {
 
     private Logger logger = LoggerFactory.getLogger(JibActions.class);
 
-    public void pull(String from, Path into, Consumer<Exception> onRetryError) {
-        RetryUtils.retry(() -> {
+    public String getImageId(String reference) {
+        return RetryUtils.retry(() -> {
                     try {
-                        return Jib.from(from)
-                                .containerize(
-                                        Containerizer.to(TarImage.at(into).named(from)));
-                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
-                        throw new GradleException("Error pulling " + from + " through Jib", e);
+                        return Jib.from(getAuthenticatedRegistryImage(reference))
+                                .containerize(getContainerizer(
+                                        TarImage.at(new File("/dev/null").toPath()).named("dev/null")
+                                ))
+                                .getImageId()
+                                .toString();
+                    } catch (InterruptedException | InvalidImageReferenceException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException e) {
+                        throw new GradleException("Failed to get Image IDs of remote images", e);
                     }
-                }).maxAttempt(3)
+                }).maxAttempt(6)
                 .exponentialBackoff(1000, 30000)
-                .onRetryError(onRetryError)
+                .onRetryError(error -> logger.warn("Error while pushing image with Jib. Retrying", error))
                 .execute();
     }
 
-    private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
-        try {
-            return FilePermissions.fromPosixFilePermissions(Files.getPosixFilePermissions(sourcePath));
-        } catch (UnsupportedOperationException e) {
-            Set<PosixFilePermission> permissions = new HashSet<>();
-            File sourceFile = sourcePath.toFile();
-            if (sourceFile.canRead()) {
-                permissions.add(PosixFilePermission.OWNER_READ);
-                permissions.add(PosixFilePermission.GROUP_READ);
-                permissions.add(PosixFilePermission.OTHERS_READ);
-            }
-            if (sourceFile.canWrite()) {
-                permissions.add(PosixFilePermission.OWNER_WRITE);
-                permissions.add(PosixFilePermission.GROUP_WRITE);
-            }
-            if (sourceFile.canExecute() || sourceFile.isDirectory()) {
-                permissions.add(PosixFilePermission.OWNER_EXECUTE);
-                permissions.add(PosixFilePermission.GROUP_EXECUTE);
-                permissions.add(PosixFilePermission.OTHERS_EXECUTE);
-            }
-            return FilePermissions.fromPosixFilePermissions(permissions);
-        } catch (IOException | SecurityException e) {
-            throw new GradleException("Error while detecting permissions for " + sourcePath.toString(), e);
-        }
+    private RegistryImage getAuthenticatedRegistryImage(String reference) throws InvalidImageReferenceException {
+        final ImageReference imageRef = ImageReference.parse(reference);
+        return RegistryImage.named(imageRef)
+                .addCredentialRetriever(
+                        getCredentialRetriever(imageRef)
+                );
+    }
+
+    private CredentialRetriever getCredentialRetriever(ImageReference parse) {
+        return CredentialRetrieverFactory.forImage(
+                parse,
+                credentialEvent -> logger.info(credentialEvent.getMessage())
+        ).dockerConfig();
     }
 
     public JibContainer pushImage(Path imageArchive, String tag, Instant createdAt) {
         final JibContainer container = RetryUtils.retry(() -> {
                     try {
-                        ImageReference imageReference = ImageReference.parse(tag);
                         return Jib.from(TarImage.at(imageArchive))
                                 .setCreationTime(createdAt)
                                 .containerize(
-                                        Containerizer.to(
-                                                RegistryImage.named(imageReference)
-                                                        .addCredentialRetriever(
-                                                                CredentialRetrieverFactory.forImage(
-                                                                        imageReference,
-                                                                        credentialEvent -> logger.info(credentialEvent.getMessage())
-                                                                ).dockerConfig()
-                                                        )
-                                        )
+                                        Containerizer.to(getAuthenticatedRegistryImage(tag))
                                 );
                     } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
                         throw new GradleException("Error pushing image archive in registry (" + tag + ").", e);
@@ -149,17 +138,8 @@ public class JibActions {
                 );
             } else if (fromImageRef.isPresent()) {
                 try {
-                    final ImageReference imageReference = ImageReference.parse(fromImageRef.get().getReference());
                     jibBuilder = Jib.from(
-                            RegistryImage.named(imageReference)
-                                    .addCredentialRetriever(
-                                            CredentialRetrieverFactory.forImage(
-                                                    imageReference,
-                                                    e -> {
-                                                        logger.info(e.getMessage());
-                                                    }
-                                            ).dockerConfig()
-                                    )
+                            getAuthenticatedRegistryImage(fromImageRef.get().getReference())
                     );
                 } catch (InvalidImageReferenceException e) {
                     throw new GradleException("Invalid from image format", e);
@@ -190,11 +170,8 @@ public class JibActions {
             final JibContainer container;
             try (FileSystem memFS = Jimfs.newFileSystem(Configuration.unix())) {
                 final Path imagePath = memFS.getPath("/foo");
-                final Path cacheDir = Paths.get(System.getProperty("java.io.tmpdir")).resolve(".jib");
                 container = jibBuilder.containerize(
-                        Containerizer.to(TarImage.at(imagePath).named("detached"))
-                                .setApplicationLayersCache(cacheDir)
-                                .setBaseImageLayersCache(cacheDir)
+                        getContainerizer(TarImage.at(imagePath).named("detached"))
                 );
                 try (InputStream image = Files.newInputStream(imagePath); ZstdCompressorOutputStream compressedOut = new ZstdCompressorOutputStream(
                         new BufferedOutputStream(Files.newOutputStream(imageArchive.getAsFile().toPath())))) {
@@ -213,6 +190,17 @@ public class JibActions {
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
             throw new GradleException("Failed to build component image", e);
         }
+    }
+
+    private Containerizer getContainerizer(TarImage at) {
+        return Containerizer.to(at)
+                .setApplicationLayersCache(getJibCacheDir())
+                .setBaseImageLayersCache(getJibCacheDir());
+    }
+
+    @NotNull
+    private Path getJibCacheDir() {
+        return Paths.get(System.getProperty("java.io.tmpdir")).resolve(".jib");
     }
 
     private void applyJibInstruction(JibContainerBuilder jibBuilder, JibInstruction instruction, Path contextPath) {
@@ -284,54 +272,30 @@ public class JibActions {
         }
     }
 
-    // Jib doesn't add visibility for these utils so recode it
-    private ContainerConfiguration readConfigurationFromTar(Path tarPath) {
-        try (TempDirectoryProvider tempDirProvider = new TempDirectoryProvider()) {
-            Path destination = tempDirProvider.newDirectory();
-            Path manifestPath = destination.resolve("manifest.json");
-            // extract the manifest
-            DockerDaemonActions.extractDockerImage(tarPath, destination,
-                    entry -> destination.resolve(entry.getName()).equals(manifestPath));
-
-            try (InputStream manifestStream = Files.newInputStream(manifestPath)) {
-                // load the manifest and then only extract the config
-                DockerManifestEntryTemplate loadManifest =
-                        new ObjectMapper()
-                                .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
-                                .readValue(manifestStream, DockerManifestEntryTemplate[].class)[0];
-                Path configPath = destination.resolve(loadManifest.getConfig());
-                DockerDaemonActions.extractDockerImage(tarPath, destination,
-                        entry -> destination.resolve(entry.getName()).equals(configPath));
-                return JsonTemplateMapper.readJsonFromFile(configPath, ContainerConfiguration.class);
+    private static FilePermissions getJibFilePermission(Path sourcePath, AbsoluteUnixPath target) {
+        try {
+            return FilePermissions.fromPosixFilePermissions(Files.getPosixFilePermissions(sourcePath));
+        } catch (UnsupportedOperationException e) {
+            Set<PosixFilePermission> permissions = new HashSet<>();
+            File sourceFile = sourcePath.toFile();
+            if (sourceFile.canRead()) {
+                permissions.add(PosixFilePermission.OWNER_READ);
+                permissions.add(PosixFilePermission.GROUP_READ);
+                permissions.add(PosixFilePermission.OTHERS_READ);
             }
-        } catch (IOException e) {
-            throw new GradleException(String.format("Error reading container configuration from %s", tarPath), e);
+            if (sourceFile.canWrite()) {
+                permissions.add(PosixFilePermission.OWNER_WRITE);
+                permissions.add(PosixFilePermission.GROUP_WRITE);
+            }
+            if (sourceFile.canExecute() || sourceFile.isDirectory()) {
+                permissions.add(PosixFilePermission.OWNER_EXECUTE);
+                permissions.add(PosixFilePermission.GROUP_EXECUTE);
+                permissions.add(PosixFilePermission.OTHERS_EXECUTE);
+            }
+            return FilePermissions.fromPosixFilePermissions(permissions);
+        } catch (IOException | SecurityException e) {
+            throw new GradleException("Error while detecting permissions for " + sourcePath.toString(), e);
         }
     }
 
-    // Jib visibility issue to use com.google.cloud.tools.jib.image.json.ContainerConfigurationTemplate for entrypoint & cmd
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private static class ContainerConfiguration implements JsonTemplate {
-        private final ContainerConfiguration.ConfigurationObject config = new ContainerConfiguration.ConfigurationObject();
-
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        private static class ConfigurationObject implements JsonTemplate {
-
-            @Nullable
-            @JsonProperty("Entrypoint")
-            private List<String> entrypoint;
-
-            @Nullable
-            @JsonProperty("Cmd")
-            private List<String> cmd;
-        }
-
-        public List<String> getEntryPoint() {
-            return config.entrypoint;
-        }
-
-        public List<String> getCmd() {
-            return config.cmd;
-        }
-    }
 }

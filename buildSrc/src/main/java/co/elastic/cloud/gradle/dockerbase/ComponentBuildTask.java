@@ -5,6 +5,8 @@ import co.elastic.cloud.gradle.docker.action.JibActions;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
 import co.elastic.cloud.gradle.util.FileUtils;
+import com.google.cloud.tools.jib.api.*;
+import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -24,11 +26,14 @@ import java.io.UncheckedIOException;
 import java.lang.Exception;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.Collection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.time.Instant;
+
 @CacheableTask
 abstract public class ComponentBuildTask extends DefaultTask {
 
@@ -103,6 +108,20 @@ abstract public class ComponentBuildTask extends DefaultTask {
     @Nested
     abstract MapProperty<Architecture, List<JibInstruction>> getInstructions();
 
+    @Input
+    public List<String> getBaseImageIds() {
+        final JibActions jibActions = new JibActions();
+        return getInstructions().get().entrySet().stream()
+                .filter(entry -> GradleUtils.isCi() || entry.getKey().equals(Architecture.current()))
+                .map(Map.Entry::getValue)
+                .flatMap(Collection::stream)
+                .filter((instruction) -> instruction instanceof JibInstruction.From)
+                .map((it) -> (JibInstruction.From) it)
+                .map(from -> jibActions.getImageId(from.getReference()))
+                .sorted() // Make sure the order doesn't invalidate the cache
+                .collect(Collectors.toList());
+    }
+
     @Inject
     abstract protected ProjectLayout getProjectLayout();
 
@@ -168,7 +187,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
      * Configures the architectures we consider and the image content for each
      *
      * @param platformList List of platforms to build the image for
-     * @param action Action to configure the images
+     * @param action       Action to configure the images
      */
     public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
         for (Architecture architecture : platformList) {
