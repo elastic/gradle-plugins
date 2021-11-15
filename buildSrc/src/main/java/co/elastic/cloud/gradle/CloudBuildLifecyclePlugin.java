@@ -7,14 +7,11 @@ import org.gradle.api.*;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.plugins.ApplicationPlugin;
 import org.gradle.api.plugins.JavaPlugin;
-import org.gradle.api.plugins.scala.ScalaPlugin;
-import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskDependency;
 import org.gradle.api.tasks.TaskProvider;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -221,7 +218,10 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
                 return ((TaskDependency) dep).getDependencies(taskTocheck).stream()
                         .map(Task::getName);
             }
-            throw new GradleException("Invalid dependency '" + dep + "' for " + taskTocheck + "(" + dep.getClass().getName() + ")");
+            if (dep instanceof NamedDomainObjectProvider) {
+                return Stream.of(((NamedDomainObjectProvider) dep).getName());
+            }
+            throw new GradleException("Invalid dependency '" + dep + "' for " + taskTocheck + "(" + dep.getClass() + ")");
         }
         return Stream.of(depTaskName);
     }
