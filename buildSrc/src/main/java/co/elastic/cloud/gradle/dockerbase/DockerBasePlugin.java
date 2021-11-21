@@ -18,12 +18,14 @@ public class DockerBasePlugin implements Plugin<Project> {
     @Override
     public void apply(@NotNull Project project) {
         final Configuration dockerEphemeral = project.getConfigurations().create("dockerEphemeral");
+        final Configuration repositoryEphemeral = project.getConfigurations().create("repositoryEphemeral");
         final Architecture currentArchitecture = Architecture.current();
 
         TaskProvider<BaseBuildTask> dockerBaseImageBuild = project.getTasks().register(
                 BUILD_TASK_NAME,
                 BaseBuildTask.class,
-                dockerEphemeral
+                dockerEphemeral,
+                repositoryEphemeral
         );
         dockerBaseImageBuild.configure( task -> {
             task.onlyIf(unsued -> task.getSupportedPlatforms().contains(currentArchitecture));

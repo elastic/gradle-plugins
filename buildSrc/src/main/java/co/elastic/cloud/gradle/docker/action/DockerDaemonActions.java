@@ -42,7 +42,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -51,7 +50,7 @@ import java.util.stream.Stream;
 
 public class DockerDaemonActions {
 
-    public static String EPHEMERAL_MOUNT = "/mnt/dockerEphemeral";
+    public static String EPHEMERAL_MOUNT = "/mnt/ephemeral";
     public static final String CONTEXT_FOLDER = "context";
     private final ExecOperations execOperations;
 
@@ -92,9 +91,9 @@ public class DockerDaemonActions {
     /**
      * Extracts a Zstandard compressed or plain TAR docker image into the destination directory
      *
-     * @param tarPath The path of the image TAR
+     * @param tarPath     The path of the image TAR
      * @param destination The destination directory
-     * @param filter A predicate to limit extraction of entries that are present in the TAR
+     * @param filter      A predicate to limit extraction of entries that are present in the TAR
      */
     public static void extractDockerImage(Path tarPath, Path destination, Predicate<TarArchiveEntry> filter) throws IOException {
         try (InputStream imageStream = readDockerImage(tarPath)) {
@@ -107,7 +106,7 @@ public class DockerDaemonActions {
      *
      * @param imageStream The docker image stream
      * @param destination The destination directory
-     * @param filter A predicate to limit extraction of entries that are present in the TAR
+     * @param filter      A predicate to limit extraction of entries that are present in the TAR
      */
     public static void extractDockerImage(InputStream imageStream, Path destination, Predicate<TarArchiveEntry> filter) throws IOException {
         TarArchiveInputStream tarStream = new TarArchiveInputStream(imageStream);
@@ -166,18 +165,25 @@ public class DockerDaemonActions {
                 break;
             case YUM:
                 result.addAll(installCommands(
-                        DaemonInstruction.Install.PackageInstaller.YUM,
-                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        new DaemonInstruction.Install(
+                                DaemonInstruction.Install.PackageInstaller.YUM,
+                                new ArrayList<>(),
+                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))
+                ));
                 break;
             case APT:
                 result.addAll(installCommands(
-                        DaemonInstruction.Install.PackageInstaller.APT,
-                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        new DaemonInstruction.Install(
+                                DaemonInstruction.Install.PackageInstaller.APT,
+                                new ArrayList<>(),
+                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
                 break;
             case APK:
                 result.addAll(installCommands(
-                        DaemonInstruction.Install.PackageInstaller.APK,
-                        packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList())));
+                        new DaemonInstruction.Install(
+                                DaemonInstruction.Install.PackageInstaller.APK,
+                                new ArrayList<>(),
+                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
                 break;
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
@@ -215,23 +221,49 @@ public class DockerDaemonActions {
         }
     }
 
-    public String dockerFileFromInstructions(List<DaemonInstruction> instructions, Path ephemeralConfiguration) {
-        Function<DaemonInstruction, String> partialApply = (DaemonInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralConfiguration);
+    public String dockerFileFromInstructions(List<DaemonInstruction> instructions, Path ephemeralPath) {
+        Function<DaemonInstruction, String> partialApply = (DaemonInstruction i) -> instructionAsDockerFileInstruction(i, ephemeralPath);
         return "#############################\n" +
                 "#                           #\n" +
                 "# Auto generated Dockerfile #\n" +
                 "#                           #\n" +
                 "#############################\n\n" +
                 "# syntax = docker/dockerfile:experimental" +
-                instructions.stream()
+                instructions.stream().flatMap(i -> {
+                            if (i instanceof DaemonInstruction.From || i instanceof DaemonInstruction.FromLocalImageBuild) {
+                                // There's an unfortunate Catch-22 where we need ca-certificates to use artifactory,
+                                // but can't get the package from artifactory because we need ca-certificates first.
+
+                                // This *hack* will determine if the image will use APT and if so install any defined
+                                // `ca-certificates` package before anything else, and without custom repositories.
+                                List<DaemonInstruction.Install.Package> aptPackages = instructions.stream()
+                                        .filter(install -> (install instanceof DaemonInstruction.Install) &&
+                                                DaemonInstruction.Install.PackageInstaller.APT.equals(((DaemonInstruction.Install) install).getInstaller()))
+                                        .flatMap(install -> ((DaemonInstruction.Install)install).getPackages().stream())
+                                        .collect(Collectors.toList());
+
+                                // The install-instruction is injected just after the FROM-instruction
+                                return Stream.concat(Stream.of(i),
+                                        aptPackages.stream()
+                                                .filter(p -> "ca-certificates".equals(p.getName()))
+                                                .findFirst()
+                                                .stream()
+                                                .map(p -> new DaemonInstruction.Install(
+                                                        DaemonInstruction.Install.PackageInstaller.APT,
+                                                        new ArrayList<>(),
+                                                        Collections.singletonList(p))));
+                            } else {
+                                return Stream.of(i);
+                            }
+                        })
                         .map(partialApply)
                         .reduce("", (acc, value) -> acc + "\n\n" + value);
     }
 
-    public String instructionAsDockerFileInstruction(DaemonInstruction instruction, Path ephemeralConfiguration) {
+    public String instructionAsDockerFileInstruction(DaemonInstruction instruction, Path ephemeralPath) {
         String mountDependencies = "";
-        if (ephemeralConfiguration.toFile().exists()) {
-            mountDependencies = "--mount=type=bind,target=" + EPHEMERAL_MOUNT + ",source=" + ephemeralConfiguration.getFileName();
+        if (ephemeralPath.toFile().exists()) {
+            mountDependencies = "--mount=type=bind,target=" + EPHEMERAL_MOUNT + ",source=" + ephemeralPath.getFileName();
         }
         if (instruction instanceof DaemonInstruction.From) {
             DaemonInstruction.From from = (DaemonInstruction.From) instruction;
@@ -264,7 +296,8 @@ public class DockerDaemonActions {
             return "USER " + ((DaemonInstruction.SetUser) instruction).getUsername();
         } else if (instruction instanceof DaemonInstruction.Install) {
             DaemonInstruction.Install install = ((DaemonInstruction.Install) instruction);
-            return "RUN " + mountDependencies + " " + String.join(" && \\ \n\t", installCommands(install.getInstaller(), install.getPackages()));
+            return instructionAsDockerFileInstruction(
+                    new DaemonInstruction.Run(installCommands(install)), ephemeralPath);
         } else if (instruction instanceof DaemonInstruction.Env) {
             return "ENV " + ((DaemonInstruction.Env) instruction).getKey() + "=" + ((DaemonInstruction.Env) instruction).getValue();
         } else if (instruction instanceof DaemonInstruction.HealthCheck) {
@@ -279,33 +312,111 @@ public class DockerDaemonActions {
         }
     }
 
-    public List<String> installCommands(DaemonInstruction.Install.PackageInstaller installer, List<DaemonInstruction.Install.Package> packages) {
+    public List<String> repositoryFormat(DaemonInstruction.Install.PackageInstaller installer, DaemonInstruction.Install.Repository repository) {
+        switch (installer) {
+            case YUM:
+                return Arrays.asList(
+                        "[" + repository.getName() + "]",
+                        "name=" + repository.getName(),
+                        "baseurl=" + repository.getSecretUrl(),
+                        "enabled=1",
+                        "gpgcheck=0"
+                );
+            case APT:
+                return Arrays.asList(
+                        "deb " + repository.getSecretUrl()
+                );
+            default:
+                throw new GradleException("Unexpected value for package installer generating command for " + installer);
+        }
+    }
+
+    public List<String> installCommands(DaemonInstruction.Install instruction) {
+        DaemonInstruction.Install.PackageInstaller installer = instruction.getInstaller();
+        List<DaemonInstruction.Install.Package> packages = instruction.getPackages();
+        List<DaemonInstruction.Install.Repository> repositories = instruction.getRepositories();
+
         switch (installer) {
             case YUM:
                 /*
-                    yum update -y &&
-                    yum install -y {package}-{version} {package}-{version} &&
+                    cp /mnt/dockerEphemeral/{repository}.repo /etc/yum.repos.d/{repository}.repo &&
+                    yum install -y --disablerepo=* --enablerepo={repository} {package}-{version} {package}-{version} &&
                     yum clean all &&
-                    rm -rf /var/cache/yum
+                    rm -rf /var/cache/yum &&
+                    rm -f /etc/yum.repos.d/{repository}.repo
                  */
-                return Arrays.asList(
-                        "yum install -y " + packages.stream().map(aPackage -> aPackage.getName() + "-" + aPackage.getVersion()).collect(Collectors.joining(" ")),
-                        "yum clean all",
-                        "rm -rf /var/cache/yum"
-                );
+                Map<String, String> repoPaths = repositories.stream()
+                        .collect(Collectors.toMap(
+                                r -> String.format("%s/repository/%s.repo", EPHEMERAL_MOUNT, r.getName()),
+                                r -> String.format("/etc/yum.repos.d/%s.repo", r.getName())));
+                String enabledRepos = repositories.stream()
+                        .map(DaemonInstruction.Install.Repository::getName).collect(Collectors.joining(","));
+                if (enabledRepos.isEmpty()) {
+                    enabledRepos = "*";
+                }
+                String joinedRpmPackages = packages.stream()
+                        .map(aPackage -> aPackage.getName() +
+                                Optional.ofNullable(aPackage.getVersion()).map(v -> "-" + v).orElse(""))
+                        .collect(Collectors.joining(" "));
+                return Stream.concat(
+                        Stream.concat(
+                                repoPaths.entrySet().stream().map(e -> String.format("cp %s %s", e.getKey(), e.getValue())),
+                                Stream.of(
+                                        "yum install -y --disablerepo=* --enablerepo=" + enabledRepos + " " + joinedRpmPackages,
+                                        "yum clean all",
+                                        "rm -rf /var/cache/yum"
+                                )),
+                        repoPaths.values().stream().map(s -> String.format("rm -f %s", s))
+                ).collect(Collectors.toList());
             case APT:
                 /*
+                    cp /mnt/dockerEphemeral/{repository}.repo /etc/apt/sources.list.d/{repository}.list &&
+                    mv /etc/apt/sources.list /etc/apt/sources.list.bak &&
                     apt-get update &&
                     apt-get install -y {package}={version} {package}={version} &&
                     apt-get clean &&
-                    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+                    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* &&
+                    rm -f /etc/apt/sources.list.d/{repository}.list &&
+                    mv /etc/apt/sources.list.bak /etc/apt/sources.list
                  */
-                return Arrays.asList(
-                        "export DEBIAN_FRONTEND=noninteractive",
-                        "apt-get update",
-                        "apt-get install -y " + packages.stream().map(aPackage -> "" + aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
-                        "apt-get clean",
-                        "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*");
+                Map<String, String> listPaths = repositories.stream()
+                        .collect(Collectors.toMap(
+                                r -> String.format("%s/repository/%s.repo", EPHEMERAL_MOUNT, r.getName()),
+                                r -> String.format("/etc/apt/sources.list.d/%s.list", r.getName())));
+                String joinedAptPackages = packages.stream()
+                        .map(aPackage -> "" + aPackage.getName() +
+                                Optional.ofNullable(aPackage.getVersion()).map(v -> "=" + v).orElse(""))
+                        .collect(Collectors.joining(" "));
+
+                return Stream.concat(
+                        Stream.concat(
+                                Stream.concat(
+                                        Stream.of(
+                                                ". /etc/os-release",
+                                                "mv /etc/apt/sources.list /etc/apt/sources.list.bak"
+                                        ),
+                                        listPaths.entrySet().stream().flatMap(e ->
+                                                Stream.of(
+                                                        String.format("cp %s %s", e.getKey(), e.getValue()),
+                                                        // replace $releasever with the release codename in /etc/os-release
+                                                        // since apt doesn't support variable substitution in source lists
+                                                        String.format("sed -i -e 's=\\$releasever='\"$VERSION_CODENAME\"'=' %s", e.getValue())
+                                                )
+                                        )
+                                ).filter(f -> !listPaths.isEmpty()),
+                                Stream.of(
+                                        "export DEBIAN_FRONTEND=noninteractive",
+                                        "apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update",
+                                        "apt-get install -y --allow-unauthenticated " + joinedAptPackages,
+                                        "apt-get clean",
+                                        "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
+                                )
+                        ),
+                        Stream.concat(
+                                Stream.of("mv /etc/apt/sources.list.bak /etc/apt/sources.list"),
+                                listPaths.entrySet().stream().map(s -> String.format("rm -f %s", s.getValue()))
+                        ).filter(f -> !listPaths.isEmpty())
+                ).collect(Collectors.toList());
             case APK:
                 /* apk update &&
                     apk add {package}={version} &&
@@ -313,7 +424,9 @@ public class DockerDaemonActions {
                 */
                 return Arrays.asList(
                         "apk update",
-                        "apk add " + packages.stream().map(aPackage -> aPackage.getName() + "=" + aPackage.getVersion()).collect(Collectors.joining(" ")),
+                        "apk add " + packages.stream().map(aPackage -> aPackage.getName() +
+                                Optional.ofNullable(aPackage.getVersion()).map(v -> "=" + v).orElse(""))
+                                .collect(Collectors.joining(" ")),
                         "rm -rf /var/cache/apk/*");
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
@@ -330,17 +443,19 @@ public class DockerDaemonActions {
         if (!workingDirectory.toFile().isDirectory()) {
             throw new GradleException("Can't build docker image, missing working directory " + workingDirectory);
         }
+        Path dockerFile = workingDirectory.resolve("Dockerfile");
         Files.write(
-                workingDirectory.resolve("Dockerfile"),
-                dockerFileFromInstructions(instructions, workingDirectory.resolve("dockerEphemeral"))
-                        .getBytes(StandardCharsets.UTF_8)
+                dockerFile,
+                dockerFileFromInstructions(
+                        instructions,
+                        workingDirectory.resolve("ephemeral")
+                ).getBytes(StandardCharsets.UTF_8)
         );
-        Path dockerfile = workingDirectory.resolve("Dockerfile");
-        Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!dockerEphemeral").getBytes());
+        Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!ephemeral").getBytes());
 
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
         int imageBuild = execute(spec -> {
-            spec.setWorkingDir(dockerfile.getParent());
+            spec.setWorkingDir(dockerFile.getParent());
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
                 //   e.g. dockerEphemeral content in run commands could lead to incorrect results
@@ -351,14 +466,14 @@ public class DockerDaemonActions {
             spec.setIgnoreExitValue(true);
         }).getExitValue();
         if (imageBuild != 0) {
-            throw new GradleException("Failed to build docker image, see the docker build log in the task output");
+            throw new GradleException("Failed to build docker image, see the docker build log in the task output. " +
+                    "If a package can't be found, reach out to #cloud-delivery as it might have to be mirrored in Artifactory.");
         }
         String imageId = Files.readAllLines(idfile).get(0);
 
-        
-        try(BufferedOutputStream createAtFileOut = new BufferedOutputStream(Files.newOutputStream(createdAtFile))) {
+        try (BufferedOutputStream createAtFileOut = new BufferedOutputStream(Files.newOutputStream(createdAtFile))) {
             int imageInspect = execute(spec -> {
-                spec.setWorkingDir(dockerfile.getParent());
+                spec.setWorkingDir(dockerFile.getParent());
                 spec.setStandardOutput(createAtFileOut);
                 spec.commandLine("docker", "image", "inspect", "--format", "{{.Created}}", imageId);
                 spec.setIgnoreExitValue(true);
