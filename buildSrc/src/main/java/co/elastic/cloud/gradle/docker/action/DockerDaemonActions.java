@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -125,18 +126,6 @@ public class DockerDaemonActions {
                     }
                 }
             }
-        }
-    }
-
-    public String clean(String tag) throws IOException {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            execute(spec -> {
-                spec.setEnvironment(Collections.emptyMap());
-                spec.commandLine("docker", "image", "rm", tag);
-                spec.setIgnoreExitValue(true);
-                spec.setErrorOutput(out);
-            });
-            return out.toString(StandardCharsets.UTF_8.name());
         }
     }
 
@@ -433,7 +422,7 @@ public class DockerDaemonActions {
         }
     }
 
-    public String build(
+    public UUID build(
             List<DaemonInstruction> instructions,
             Path workingDirectory,
             Path imageArchive,
@@ -453,15 +442,17 @@ public class DockerDaemonActions {
         );
         Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!ephemeral").getBytes());
 
+        final UUID uuid = UUID.randomUUID();
+
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
         int imageBuild = execute(spec -> {
             spec.setWorkingDir(dockerFile.getParent());
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
                 //   e.g. dockerEphemeral content in run commands could lead to incorrect results
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--iidfile=" + idfile, ".");
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
             } else {
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--iidfile=" + idfile, ".");
+                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
             }
             spec.setIgnoreExitValue(true);
         }).getExitValue();
@@ -469,13 +460,12 @@ public class DockerDaemonActions {
             throw new GradleException("Failed to build docker image, see the docker build log in the task output. " +
                     "If a package can't be found, reach out to #cloud-delivery as it might have to be mirrored in Artifactory.");
         }
-        String imageId = Files.readAllLines(idfile).get(0);
 
         try (BufferedOutputStream createAtFileOut = new BufferedOutputStream(Files.newOutputStream(createdAtFile))) {
             int imageInspect = execute(spec -> {
                 spec.setWorkingDir(dockerFile.getParent());
                 spec.setStandardOutput(createAtFileOut);
-                spec.commandLine("docker", "image", "inspect", "--format", "{{.Created}}", imageId);
+                spec.commandLine("docker", "image", "inspect", "--format", "{{.Created}}", uuid);
                 spec.setIgnoreExitValue(true);
             }).getExitValue();
             if (imageInspect != 0) {
@@ -485,8 +475,8 @@ public class DockerDaemonActions {
 
         // We build in daemon only to export, we could use docker buildx  to create a tar directly, but unfrotunetly this
         // prooved buggy, e.g. the --iidfile was different from the ID the image would have when imported into the daemon
-        saveCompressedDockerImage(imageId, imageArchive);
-        return imageId;
+        saveCompressedDockerImage(uuid.toString(), imageArchive);
+        return uuid;
     }
 
     private void saveCompressedDockerImage(String imageId, Path imageArchive) throws IOException {

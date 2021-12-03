@@ -9,6 +9,8 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.tasks.TaskProvider;
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.String;
+
 
 public class DockerBasePlugin implements Plugin<Project> {
 
@@ -35,8 +37,9 @@ public class DockerBasePlugin implements Plugin<Project> {
                 LOCAL_IMPORT_TASK_NAME,
                 DockerLocalImportTask.class
         );
+        final String localImportTag = DockerPluginConventions.localImportImageTag(project, "base");
         dockerBaseImageLocalImport.configure(task -> {
-            task.getTag().set(DockerPluginConventions.localImportImageTag(project));
+            task.getTag().set(localImportTag);
             task.getImageArchive().set(
                     dockerBaseImageBuild.flatMap(BaseBuildTask::getImageArchive)
             );
@@ -45,6 +48,11 @@ public class DockerBasePlugin implements Plugin<Project> {
             );
             task.onlyIf(unsued -> dockerBaseImageBuild.get().getSupportedPlatforms().contains(currentArchitecture));
         });
+
+        project.getTasks().register("dockerBaseImageClean", DockerLocalCleanTask.class, task -> {
+            task.getImageTag().set(localImportTag);
+        });
+        project.getTasks().named("clean", clean->clean.dependsOn("dockerBaseImageClean"));
 
         TaskProvider<BasePullTask> dockerBasePull = project.getTasks().register(
                 "dockerBasePull",

@@ -9,6 +9,7 @@ import org.gradle.api.Project;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskProvider;
 
+import java.lang.String;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -28,23 +29,27 @@ public class DockerComponentPlugin implements Plugin<Project> {
                 ComponentBuildTask.class
         );
 
+        final String localImportTag = DockerPluginConventions.localImportImageTag(project);
         final TaskProvider<DockerLocalImportTask> localImport = project.getTasks().register(LOCAL_IMPORT_TASK_NAME, DockerLocalImportTask.class);
-        localImport.configure( task -> {
+        localImport.configure(task -> {
             task.dependsOn(dockerComponentImageBuild);
-            task.getTag().set(
-                    DockerPluginConventions.localImportImageTag(project)
-            );
+            task.getTag().set(localImportTag);
             task.getImageArchive().set(dockerComponentImageBuild.flatMap(build -> build.getImageArchive().getting(currentArch)));
             task.getImageId().set(
                     dockerComponentImageBuild.flatMap(build -> build.getImageId().map(map -> map.get(currentArch)))
             );
         });
 
+        project.getTasks().register("dockerComponentImageClean", DockerLocalCleanTask.class, task -> {
+            task.getImageTag().set(localImportTag);
+        });
+        project.getTasks().named("clean", clean->clean.dependsOn("dockerBaseImageClean"));
+
         TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register(
                 "dockerComponentImagePush",
                 ComponentPushTask.class
         );
-        dockerComponentImagePush.configure(task-> {
+        dockerComponentImagePush.configure(task -> {
             task.dependsOn(dockerComponentImageBuild);
             task.getImageArchive().set(
                     dockerComponentImageBuild.flatMap(ComponentBuildTask::getImageArchive)
@@ -58,7 +63,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
                 "pushManifestList",
                 PushManifestListTask.class
         );
-        pushManifestList.configure( task -> {
+        pushManifestList.configure(task -> {
             task.dependsOn(dockerComponentImagePush);
             task.getArchitectureTags().set(
                     dockerComponentImagePush.flatMap(ComponentPushTask::getTags)
