@@ -1,5 +1,6 @@
 package co.elastic.cloud.gradle;
 
+import co.elastic.cloud.gradle.util.RetryUtils;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -209,8 +210,14 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
             } else if (dep instanceof String) {
                 depTaskName = (String) dep;
             } else {
-                final Object provided = ((TaskProvider) dep).get();
-                depTaskName = ((Task) provided).getName();
+                // This call can lead to tasks being created which can race with similar calls elsewhere, so we protect
+                // against ConcurrentModificationException by retrying
+                depTaskName = RetryUtils.retry(() -> {
+                            final Object provided = ((TaskProvider) dep).get();
+                            return ((Task) provided).getName();
+                        })
+                        .maxAttempt(3)
+                        .execute();
             }
         } else {
             if (dep instanceof TaskDependency) {
