@@ -8,6 +8,7 @@ import org.gradle.api.*;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.plugins.ApplicationPlugin;
 import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.publish.maven.plugins.MavenPublishPlugin;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskDependency;
 import org.gradle.api.tasks.TaskProvider;
@@ -28,6 +29,9 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
 
         target.apply(Collections.singletonMap("plugin", "base"));
 
+        // Apply the maven-publish plugin for the "publish" task
+        target.apply(t -> t.plugin(MavenPublishPlugin.class));
+
         tasks.register(RESOLVE_ALL_DEPENDENCIES_TASK_NAME, task -> {
             task.setDescription("Lifecycle task to resolves all external dependencies. " +
                     "This task can be used to cache everything locally so these are not  downloaded while building." +
@@ -42,7 +46,7 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
             });
         });
 
-        tasks.register("publish", task -> {
+        tasks.named("publish", task -> {
             task.setGroup("publishing");
             task.setDescription("Lifecycle task to publish build artefacts to external repos (e.g. Docker images)");
             task.dependsOn(tasks.named("build"));
@@ -77,36 +81,40 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
     private void createMultiPlatformBuildLifecycle(TaskContainer tasks) {
         final ImmutableMap<String, ImmutableMap<String, String>> taskMap = ImmutableMap.of(
                 "check", ImmutableMap.of(
-                        "ForPlatform", "Intended to run all platform specific verifications for the current platform only.",
-                        "PlatformIndependent", "Verify everuthing that is platform independent " +
-                                "(and doesn't depend on platform dependent tasks)",
-                        "CombinePlatform", "Run all checks, for all platforms that can be ran in a platform independent way. " +
+                        "ForPlatform", "Run all platform specific verifications for the current platform only.",
+                        "PlatformIndependent", "Run all platform independent verifications " +
+                                "(that don't depend on platform dependent tasks)",
+                        "CombinePlatform", "Run all verifications for all platforms that can be ran in a platform independent way. " +
                                 "Assumes that platform specific artefacts for this version are already published.",
-                        "", "Run all verification tasks, for the current platform only"
+                        "", "Run verification for the current platform and that are platform independent." +
+                                " Useful for local testing."
                 ),
                 "assemble", ImmutableMap.of(
-                        "ForPlatform", "Intended to create build artefacts, without running any tests for the current platfrom",
-                        "PlatformIndependent", "Build everything that is platform independent (and doesn't depend on platform dependent tasks)",
-                        "CombinePlatform", "Intended to build everything, including running all tests, " +
-                                "producing the production artifacts and generating documentation for all supported platforms." +
+                        "ForPlatform", "Intended to create build artefacts, without running any tests for the current platform",
+                        "PlatformIndependent", "Create platform independent build artefacts",
+                        "CombinePlatform", "Create multi platform build artefacts, without running any tests.  " +
+                                "This includes the production artifacts and generating documentation for all supported platforms." +
                                 "Assumes that the platform specific artefacts were already published for this version.",
-                        "", "Create all artefacts for the current platform only."
+                        "", "Create platform specific artefacts for the current platform and emulate multi platform artefacts based on them." +
+                                " Useful for local testing."
                 ),
                 "build", ImmutableMap.of(
-                        "ForPlatform", "Intended to create build artefacts, and run all the tests for the current platfrom",
-                        "PlatformIndependent", "Build and test everything that is platform independent (and doesn't depend on platform dependent tasks)",
-                        "CombinePlatform", "Intended to build everything, including running all tests, " +
-                                "producing the production artifacts and generating documentation for all supported platforms." +
-                                "Assumes that the platform specific artefacts were already published for this version.",
-                        "", "Build and test everything For the current platfrom only."
+                        "ForPlatform", "Create artefacts and run all platform specific verifications for the current platform only.",
+                        "PlatformIndependent", "Create artefacts and run all platform independent verifications " +
+                                "(that don't depend on platform dependent tasks)",
+                        "CombinePlatform", "Create artefacts and  run all verifications for all platforms that can be ran in a platform independent way. " +
+                                "Assumes that platform specific artefacts for this version are already published.",
+                        "", "Create artefacts and  run verification for the current platform and that are platform independent." +
+                                " Useful for local testing."
                 ),
                 "publish", ImmutableMap.of(
-                        "ForPlatform", "Intended to create build artefacts, without running any tests for the current platfrom",
-                        "PlatformIndependent", "Build everything that is platform independent (and doesn't depend on platform dependent tasks)",
-                        "CombinePlatform", "Intended to build everything, including running all tests, " +
-                                "producing the production artifacts and generating documentation for all supported platforms." +
-                                "Assumes that the platform specific artefacts were already published for this version.",
-                        "", "Build everything that is platform independent (and doesn't depend on platform dependent tasks)"
+                        "ForPlatform", "Create, verify and publish all platform specific artefacts for the current platform only.",
+                        "PlatformIndependent", "Create, verify and publish platform independent artefacts " +
+                                "(that don't depend on platform dependent tasks)",
+                        "CombinePlatform", "Create, verify and publish artefacts multi platform artefacts. " +
+                                "Assumes that platform specific artefacts for this version are already published.",
+                        "", "Create, verify  and run verification for the current platform and that are platform independent." +
+                                " Useful for local testing."
                 )
         );
 
@@ -118,7 +126,11 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
         taskMap.forEach((kind, descriptions) -> {
             descriptions.forEach((name, description) -> {
                 final Action<Task> taskConfig = task -> {
-                    task.setGroup(groupLookup.getOrDefault(kind, kind));
+                    if (kind != "publish") {
+                        task.setGroup(groupLookup.getOrDefault(kind, kind));
+                    } else {
+                        task.setGroup("publishing");
+                    }
                     task.setDescription(description);
                 };
                 if (name.isEmpty()) {
