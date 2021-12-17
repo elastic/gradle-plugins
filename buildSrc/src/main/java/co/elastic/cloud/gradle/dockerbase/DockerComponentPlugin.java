@@ -43,7 +43,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
         project.getTasks().register("dockerComponentImageClean", DockerLocalCleanTask.class, task -> {
             task.getImageTag().set(localImportTag);
         });
-        project.getTasks().named("clean", clean->clean.dependsOn("dockerBaseImageClean"));
+        project.getTasks().named("clean", clean->clean.dependsOn("dockerComponentImageClean"));
 
         TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register(
                 "dockerComponentImagePush",
