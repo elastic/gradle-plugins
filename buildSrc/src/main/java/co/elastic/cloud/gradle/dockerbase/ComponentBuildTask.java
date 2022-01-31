@@ -3,15 +3,9 @@ package co.elastic.cloud.gradle.dockerbase;
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.action.JibActions;
 import co.elastic.cloud.gradle.util.Architecture;
-import co.elastic.cloud.gradle.util.GradleUtils;
 import co.elastic.cloud.gradle.util.FileUtils;
-import com.google.cloud.tools.jib.api.*;
-import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
-import org.gradle.api.GradleException;
-import org.gradle.api.file.DuplicatesStrategy;
-import org.gradle.api.file.FileTree;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFile;
 import org.gradle.api.internal.file.copy.*;
@@ -23,16 +17,11 @@ import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.Exception;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.Collection;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.time.Instant;
 
 @CacheableTask
 abstract public class ComponentBuildTask extends DefaultTask {
@@ -43,7 +32,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
     final DefaultCopySpec rootCopySpec;
 
     @Inject
-    public ComponentBuildTask() {
+    public ComponentBuildTask(CopySpecInternal.CopySpecListener importListener) {
         super();
 
         // These need to be a convention so they are set even if task actions don't execute (task is cached)
@@ -93,6 +82,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
 
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
+        rootCopySpec.addChildSpecListener(importListener);
     }
 
     @OutputFiles
@@ -112,7 +102,6 @@ abstract public class ComponentBuildTask extends DefaultTask {
     public List<String> getBaseImageIds() {
         final JibActions jibActions = new JibActions();
         return getInstructions().get().entrySet().stream()
-                .filter(entry -> GradleUtils.isCi() || entry.getKey().equals(Architecture.current()))
                 .map(Map.Entry::getValue)
                 .flatMap(Collection::stream)
                 .filter((instruction) -> instruction instanceof JibInstruction.From)
@@ -144,20 +133,11 @@ abstract public class ComponentBuildTask extends DefaultTask {
 
     @TaskAction
     protected void buildComponentImages() throws IOException {
-        getProject().sync(spec -> {
-                    spec.into(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
-                    spec.with(rootCopySpec);
-                }
-        );
+        createLayersDir();
         JibActions actions = new JibActions();
 
         for (Map.Entry<Architecture, List<JibInstruction>> entry : getInstructions().get().entrySet()) {
             final Architecture architecture = entry.getKey();
-            if (!GradleUtils.isCi() && !architecture.equals(Architecture.current())) {
-                // Skip building other architectures unless we are running in CI as the base images might not have been
-                // pushed
-                return;
-            }
             actions.buildTo(
                     getImageArchive().get().get(architecture),
                     getImageIdFile().get().get(architecture),
@@ -171,6 +151,7 @@ abstract public class ComponentBuildTask extends DefaultTask {
                 getImageArchive().get().values().stream()
                         .map(RegularFile::getAsFile)
                         .map(File::toPath)
+                        .filter(Files::exists) // Not all of them will exist locally
                         .map(path -> {
                             try {
                                 return Files.size(path);
@@ -183,30 +164,41 @@ abstract public class ComponentBuildTask extends DefaultTask {
         );
     }
 
-    /**
-     * Configures the architectures we consider and the image content for each
-     *
-     * @param platformList List of platforms to build the image for
-     * @param action       Action to configure the images
-     */
-    public void images(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
+    public void createLayersDir() {
+        getProject().sync(spec -> {
+                    spec.into(getProjectLayout().getBuildDirectory().file(getName() + "/" + LAYERS_DIR).get().getAsFile());
+                    spec.with(rootCopySpec);
+                }
+        );
+    }
+
+    @Internal
+    public DefaultCopySpec getRootCopySpec() {
+        return rootCopySpec;
+    }
+
+    public void buildOnly(List<Architecture> platformList, Action<ComponentBuildDSL> action) {
         for (Architecture architecture : platformList) {
             // Add configuration that was already registered for this architecture
             for (Action<ComponentBuildDSL> configForAllArchitecture : configForAllArchitectures) {
                 addInstructionsPerArchitecture(configForAllArchitecture, architecture);
             }
-            // Add the curretn configuration
+            // Add the current configuration
             addInstructionsPerArchitecture(action, architecture);
         }
     }
 
-    public void images(Action<ComponentBuildDSL> action) {
+    public void configure(Action<ComponentBuildDSL> action) {
         // Store this configuration as we'll need it in case we add an architecture lather
         configForAllArchitectures.add(action);
         // Add the additional configuration for already configured architectures
         for (Architecture architecture : instructionsPerPlatform.keySet()) {
             addInstructionsPerArchitecture(action, architecture);
         }
+    }
+
+    public void buildAll(Action<ComponentBuildDSL> action) {
+        buildOnly(Arrays.asList(Architecture.values()), action);
     }
 
     private void addInstructionsPerArchitecture(Action<ComponentBuildDSL> action, Architecture architecture) {

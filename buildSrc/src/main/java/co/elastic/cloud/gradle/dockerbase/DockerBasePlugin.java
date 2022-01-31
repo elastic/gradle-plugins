@@ -33,9 +33,9 @@ public class DockerBasePlugin implements Plugin<Project> {
             task.onlyIf(unsued -> task.getSupportedPlatforms().contains(currentArchitecture));
         });
 
-        TaskProvider<DockerLocalImportTask> dockerBaseImageLocalImport = project.getTasks().register(
+        TaskProvider<DockerLocalImportArchiveTask> dockerBaseImageLocalImport = project.getTasks().register(
                 LOCAL_IMPORT_TASK_NAME,
-                DockerLocalImportTask.class
+                DockerLocalImportArchiveTask.class
         );
         final String localImportTag = DockerPluginConventions.localImportImageTag(project, "base");
         dockerBaseImageLocalImport.configure(task -> {

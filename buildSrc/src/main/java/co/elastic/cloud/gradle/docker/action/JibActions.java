@@ -21,20 +21,12 @@ package co.elastic.cloud.gradle.docker.action;
 
 import co.elastic.cloud.gradle.dockerbase.JibInstruction;
 import co.elastic.cloud.gradle.util.RetryUtils;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.tools.jib.api.*;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.cloud.tools.jib.api.buildplan.Port;
-import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
-import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
 import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
-import com.google.cloud.tools.jib.json.JsonTemplate;
-import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
@@ -45,11 +37,9 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.io.*;
 import java.io.File;
 import java.io.IOException;
-import java.lang.Exception;
 import java.lang.String;
 import java.lang.System;
 import java.nio.charset.StandardCharsets;
@@ -60,8 +50,8 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class JibActions {
@@ -119,24 +109,54 @@ public class JibActions {
         return container;
     }
 
+    public void buildTo(String localDockerDaemonTag, RegularFile imageId, List<JibInstruction> instructions, Path contextRoot) {
+        final Optional<JibInstruction.FromLocalImageBuild> fromLocalImageBuild = instructions.stream()
+                .filter(instruction -> instruction instanceof JibInstruction.FromLocalImageBuild)
+                .map(it -> (JibInstruction.FromLocalImageBuild) it)
+                .findFirst();
+        final JibContainerBuilder jibBuilder;
+        if (fromLocalImageBuild.isPresent()) {
+            jibBuilder = Jib.from(
+                    TarImage.at(fromLocalImageBuild.get().getImageArchive().get().toPath())
+            );
+        } else {
+            jibBuilder = Jib.fromScratch();
+        }
+
+        processInstructions(
+                jibBuilder,
+                contextRoot,
+                instructions
+        );
+
+        jibBuilder.setCreationTime(Instant.now());
+        try {
+            final JibContainer container;
+
+            container = jibBuilder.containerize(
+                    Containerizer.to(DockerDaemonImage.named(localDockerDaemonTag))
+                            .setApplicationLayersCache(getJibCacheDir())
+                            .setBaseImageLayersCache(getJibCacheDir())
+            );
+
+            Files.write(
+                    imageId.getAsFile().toPath(),
+                    container.getImageId().getHash().getBytes(StandardCharsets.UTF_8)
+            );
+        } catch (IOException | InvalidImageReferenceException | InterruptedException | RegistryException | CacheDirectoryCreationException | ExecutionException e) {
+            throw new GradleException("Failed to import component image", e);
+        }
+    }
+
     public void buildTo(RegularFile imageArchive, RegularFile imageId, RegularFile createdAtFile, List<JibInstruction> instructions) {
         try {
-            final Optional<JibInstruction.FromLocalImageBuild> fromLocalImageBuild = instructions.stream()
-                    .filter(instruction -> instruction instanceof JibInstruction.FromLocalImageBuild)
-                    .map(it -> (JibInstruction.FromLocalImageBuild) it)
-                    .findFirst();
-
             final Optional<JibInstruction.From> fromImageRef = instructions.stream()
                     .filter(instruction -> instruction instanceof JibInstruction.From)
                     .map(it -> (JibInstruction.From) it)
                     .findFirst();
 
             final JibContainerBuilder jibBuilder;
-            if (fromLocalImageBuild.isPresent()) {
-                jibBuilder = Jib.from(
-                        TarImage.at(fromLocalImageBuild.get().getImageArchive().get().toPath())
-                );
-            } else if (fromImageRef.isPresent()) {
+            if (fromImageRef.isPresent()) {
                 try {
                     jibBuilder = Jib.from(
                             getAuthenticatedRegistryImage(fromImageRef.get().getReference())
@@ -147,22 +167,11 @@ public class JibActions {
             } else {
                 jibBuilder = Jib.fromScratch();
             }
-
-            // We don't support  setting labels on base images, don't inherit them, these are component specific
-            // TODO: This doesn't really set it to empty, we do it in the build script for now, but would be worth looking at
-            jibBuilder.setLabels(Collections.emptyMap());
-            jibBuilder.setEntrypoint((List<String>) null);
-            jibBuilder.setProgramArguments((List<String>) null);
-            jibBuilder.setExposedPorts(Collections.emptySet());
-
-            instructions.stream()
-                    .filter(t -> !(t instanceof JibInstruction.FromLocalImageBuild))
-                    .filter(t -> !(t instanceof JibInstruction.From))
-                    .forEach(instruction -> applyJibInstruction(
-                            jibBuilder,
-                            instruction,
-                            imageArchive.getAsFile().toPath().getParent()
-                    ));
+            processInstructions(
+                    jibBuilder,
+                    imageArchive.getAsFile().toPath().getParent(),
+                    instructions
+            );
 
             Instant createdAt = Instant.now();
             jibBuilder.setCreationTime(createdAt);
@@ -190,6 +199,24 @@ public class JibActions {
         } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
             throw new GradleException("Failed to build component image", e);
         }
+    }
+
+    private void processInstructions(JibContainerBuilder jibBuilder, Path contextRoot, List<JibInstruction> instructions) {
+        // We don't support  setting labels on base images, don't inherit them, these are component specific
+        // TODO: This doesn't really set it to empty, we do it in the build script for now, but would be worth looking at
+        jibBuilder.setLabels(Collections.emptyMap());
+        jibBuilder.setEntrypoint((List<String>) null);
+        jibBuilder.setProgramArguments((List<String>) null);
+        jibBuilder.setExposedPorts(Collections.emptySet());
+
+        instructions.stream()
+                .filter(t -> !(t instanceof JibInstruction.FromLocalImageBuild))
+                .filter(t -> !(t instanceof JibInstruction.From))
+                .forEach(instruction -> applyJibInstruction(
+                        jibBuilder,
+                        instruction,
+                        contextRoot
+                ));
     }
 
     private Containerizer getContainerizer(TarImage at) {

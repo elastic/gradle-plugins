@@ -21,6 +21,7 @@ package co.elastic.cloud.gradle.docker.action;
 
 import co.elastic.cloud.gradle.docker.Package;
 import co.elastic.cloud.gradle.dockerbase.DaemonInstruction;
+import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.RetryUtils;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -455,9 +456,9 @@ public class DockerDaemonActions {
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
                 //   e.g. dockerEphemeral content in run commands could lead to incorrect results
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
+                spec.commandLine("docker", "image", "build", "--platform", "linux/" + Architecture.current().dockerName(), "--quiet=false", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
             } else {
-                spec.commandLine("docker", "image", "build", "--quiet=false", "--no-cache", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
+                spec.commandLine("docker", "image", "build",  "--platform", "linux/" + Architecture.current().dockerName(), "--quiet=false", "--no-cache", "--progress=plain", "--iidfile=" + idfile, ".", "-t", uuid);
             }
             spec.setIgnoreExitValue(true);
         }).getExitValue();

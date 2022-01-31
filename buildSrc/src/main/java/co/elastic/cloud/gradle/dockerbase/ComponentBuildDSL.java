@@ -33,21 +33,21 @@ public class ComponentBuildDSL {
 
     public void from(Project otherProject) {
         otherProject.getPluginManager().apply(DockerBasePlugin.class);
-
-        if (architecture.equals(Architecture.current())) {
-            instructions.add(
-                    new JibInstruction.FromLocalImageBuild(
-                            otherProject.getTasks().named(DockerBasePlugin.BUILD_TASK_NAME, BaseBuildTask.class)
-                            .flatMap(task -> task.getImageArchive().getAsFile())
-                    )
-            );
-        } else {
-            instructions.add(
-                    new JibInstruction.From(DockerPluginConventions.baseImageTag(
-                            otherProject, architecture
-                    ))
-            );
-        }
+        // We add both local and remote instructions and select the right one when building
+        // This does have the undesired side-effect that we will build local images for the current platform, without
+        // actually using them but it's not something that we could easily precent without moving the DSL into a project
+        // extension.
+        instructions.add(
+                new JibInstruction.FromLocalImageBuild(
+                        otherProject.getTasks().named(DockerBasePlugin.BUILD_TASK_NAME, BaseBuildTask.class)
+                                .flatMap(task -> task.getImageArchive().getAsFile())
+                )
+        );
+        instructions.add(
+                new JibInstruction.From(DockerPluginConventions.baseImageTag(
+                        otherProject, architecture
+                ))
+        );
     }
 
     public void maintainer(String name, String email) {
