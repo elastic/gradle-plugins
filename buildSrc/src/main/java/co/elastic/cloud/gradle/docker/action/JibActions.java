@@ -129,7 +129,16 @@ public class JibActions {
                 instructions
         );
 
-        jibBuilder.setCreationTime(Instant.now());
+        // We need the image ID to stay constant when the inputs don't change so that we can use it for build avoidance,
+        // but the creation time poses some challenges in this regard since it causes it to be always different.
+        // Jib builds directly to the local daemon, so we don't really have anything to cache here. While we could
+        // build a tar that can be cached and then import it using the cli that will have a very high overhead, require
+        // more storage in the cache node and will be slower to run. The process of building the image is deterministic
+        // the timestamp is the only reason it changes. The simplest solution is to set the creation time to a fixed
+        // value. It can be aby value as long as it's fixed. Setting it to the unix epoch is the most likely to signal
+        // that this is not set. Note that images pushed to the registry don't take this code path and will have a correct
+        // creation time.
+        jibBuilder.setCreationTime(Instant.ofEpochMilli(0));
         try {
             final JibContainer container;
 
