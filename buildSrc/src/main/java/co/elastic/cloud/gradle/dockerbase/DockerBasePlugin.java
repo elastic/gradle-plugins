@@ -23,14 +23,20 @@ public class DockerBasePlugin implements Plugin<Project> {
         final Configuration repositoryEphemeral = project.getConfigurations().create("repositoryEphemeral");
         final Architecture currentArchitecture = Architecture.current();
 
+        TaskProvider<DockerLockfileTaintTask> dockerBaseImageTaintLockfile = project.getTasks().register(
+                "dockerBaseImageTaintLockfile",
+                DockerLockfileTaintTask.class
+        );
+
         TaskProvider<BaseBuildTask> dockerBaseImageBuild = project.getTasks().register(
                 BUILD_TASK_NAME,
                 BaseBuildTask.class,
                 dockerEphemeral,
                 repositoryEphemeral
         );
-        dockerBaseImageBuild.configure( task -> {
+        dockerBaseImageBuild.configure(task -> {
             task.onlyIf(unsued -> task.getSupportedPlatforms().contains(currentArchitecture));
+            task.mustRunAfter(dockerBaseImageTaintLockfile);
         });
 
         TaskProvider<DockerLocalImportArchiveTask> dockerBaseImageLocalImport = project.getTasks().register(
@@ -52,7 +58,7 @@ public class DockerBasePlugin implements Plugin<Project> {
         project.getTasks().register("dockerBaseImageClean", DockerLocalCleanTask.class, task -> {
             task.getImageTag().set(localImportTag);
         });
-        project.getTasks().named("clean", clean->clean.dependsOn("dockerBaseImageClean"));
+        project.getTasks().named("clean", clean -> clean.dependsOn("dockerBaseImageClean"));
 
         TaskProvider<BasePullTask> dockerBasePull = project.getTasks().register(
                 "dockerBasePull",
@@ -77,10 +83,25 @@ public class DockerBasePlugin implements Plugin<Project> {
         });
 
         GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
-            task.dependsOn(dockerBaseImageBuild)
+                task.dependsOn(dockerBaseImageBuild)
         );
         GradleUtils.registerOrGet(project, "dockerLocalImport").configure(task ->
                 task.dependsOn(dockerBaseImageLocalImport)
+        );
+
+        TaskProvider<DockerLockfileTask> dockerBaseImageLockfile = project.getTasks().register(
+                "dockerBaseImageLockfile",
+                DockerLockfileTask.class
+        );
+        dockerBaseImageLockfile.configure(task -> {
+            task.getTag().set(localImportTag);
+            task.getLockfileImage().set(dockerBaseImageBuild.flatMap(BaseBuildTask::getLockfileImage));
+            task.dependsOn(dockerBaseImageTaintLockfile, dockerBaseImageLocalImport);
+        });
+
+        TaskProvider<DockerLockfileCheckTask> dockerBaseImageCheckLockfile = project.getTasks().register(
+                "dockerBaseImageLockfileCheck",
+                DockerLockfileCheckTask.class
         );
 
         project.getTasks().named("assembleForPlatform", task -> task.dependsOn(dockerBaseImageBuild));

@@ -235,7 +235,7 @@ public class DockerDaemonActions {
                                 // The install-instruction is injected just after the FROM-instruction
                                 return Stream.concat(Stream.of(i),
                                         aptPackages.stream()
-                                                .filter(p -> "ca-certificates".equals(p.getName()))
+                                                .filter(p -> List.of("ca-certificates", "ca-certificates:all").contains(p.getName()))
                                                 .findFirst()
                                                 .stream()
                                                 .map(p -> new DaemonInstruction.Install(
