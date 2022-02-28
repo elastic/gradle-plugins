@@ -42,7 +42,10 @@ abstract public class DockerComponentLocalImport extends DefaultTask implements 
                 getProject().getBuildDir().toPath().resolve("dockerComponentImageBuild")
         );
         Files.write(getMarker().toPath(), getTag().get().getBytes(StandardCharsets.UTF_8));
-        getLogger().lifecycle("Image tagged as {}", getTag().get());
+        getLogger().lifecycle("Image with Id {} tagged as {}",
+                getImageIdFile().get(),
+                getTag().get()
+        );
     }
 
     @Nested
