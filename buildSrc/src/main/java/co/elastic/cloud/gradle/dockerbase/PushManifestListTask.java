@@ -1,9 +1,11 @@
 package co.elastic.cloud.gradle.dockerbase;
 
+import co.elastic.cloud.gradle.docker.manifest_tool.ManifestToolPlugin;
 import co.elastic.cloud.gradle.github.GithubDownloadPlugin;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.FileUtils;
 import co.elastic.cloud.gradle.util.RetryUtils;
+import co.elastic.cloud.gradle.util.StaticCliProvisionPlugin;
 import com.google.common.collect.ImmutableMap;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -22,6 +24,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -35,10 +38,16 @@ import java.util.stream.Collectors;
 
 abstract public class PushManifestListTask extends DefaultTask {
 
+    private File manifestTool;
+
     public PushManifestListTask() {
         getDigestFile().convention(
                 getProjectLayout().getBuildDirectory().file(getName() + ".digest")
         );
+    }
+
+    public void setManifestTool(File manifestTool) {
+        this.manifestTool = manifestTool;
     }
 
     @Inject
@@ -111,7 +120,7 @@ abstract public class PushManifestListTask extends DefaultTask {
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 result = getExecOperations().exec(spec -> {
                     spec.setEnvironment(Collections.emptyMap());
-                    spec.setExecutable(GithubDownloadPlugin.getExecutable(getProject(), "manifest-tool"));
+                    spec.setExecutable(manifestTool);
                     spec.setArgs(Arrays.asList(
                             "push", "from-args",
                             "--platforms",

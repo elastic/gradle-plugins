@@ -35,7 +35,7 @@ public class ComponentBuildDSL {
         otherProject.getPluginManager().apply(DockerBasePlugin.class);
         // We add both local and remote instructions and select the right one when building
         // This does have the undesired side-effect that we will build local images for the current platform, without
-        // actually using them but it's not something that we could easily precent without moving the DSL into a project
+        // actually using them but it's not something that we could easily prevent without moving the DSL into a project
         // extension.
         instructions.add(
                 new JibInstruction.FromLocalImageBuild(

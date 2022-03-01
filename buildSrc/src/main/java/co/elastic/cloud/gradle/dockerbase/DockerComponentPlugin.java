@@ -2,8 +2,11 @@ package co.elastic.cloud.gradle.dockerbase;
 
 import co.elastic.cloud.gradle.docker.DockerPluginConventions;
 import co.elastic.cloud.gradle.docker.manifest_tool.ManifestToolPlugin;
+import co.elastic.cloud.gradle.snyk.SnykCLIExecTask;
+import co.elastic.cloud.gradle.snyk.SnykCLIPlugin;
 import co.elastic.cloud.gradle.util.Architecture;
 import co.elastic.cloud.gradle.util.GradleUtils;
+import co.elastic.cloud.gradle.util.StaticCliProvisionPlugin;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -12,6 +15,7 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskProvider;
 
 import java.lang.String;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
@@ -25,9 +29,11 @@ public class DockerComponentPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
         project.getPluginManager().apply(ManifestToolPlugin.class);
-
+        project.getPluginManager().apply(SnykCLIPlugin.class);
 
         final String localImportTag = DockerPluginConventions.localImportImageTag(project);
+        final String manifestPushTag = DockerPluginConventions.manifestListTag(project);
+
         final TaskProvider<DockerComponentLocalImport> localImport = project.getTasks().register(LOCAL_IMPORT_TASK_NAME, DockerComponentLocalImport.class);
 
         TaskProvider<ComponentBuildTask> dockerComponentImageBuild = project.getTasks().register(
@@ -38,8 +44,6 @@ public class DockerComponentPlugin implements Plugin<Project> {
                 // way we found that to work if it happens before the builds task is evaluated, thus we have it here
                 DockerPluginConventions.mapCopySpecToTaskInputs(localImport)
         );
-        // Skip component image build since these require the base images to have build in CI
-        dockerComponentImageBuild.configure(task -> task.onlyIf(t -> GradleUtils.isCi()));
 
         localImport.configure(task -> {
             task.getTag().set(localImportTag);
@@ -83,11 +87,38 @@ public class DockerComponentPlugin implements Plugin<Project> {
                 PushManifestListTask.class
         );
         pushManifestList.configure(task -> {
+            task.setManifestTool(ManifestToolPlugin.getExecutable(task));
             task.dependsOn(dockerComponentImagePush);
             task.getArchitectureTags().set(
                     dockerComponentImagePush.flatMap(ComponentPushTask::getTags)
             );
-            task.getTag().set(DockerPluginConventions.manifestListTag(project));
+            task.getTag().set(manifestPushTag);
+        });
+
+        final TaskProvider<SnykCLIExecTask> dockerComponentImageScanLocal = project.getTasks().register(
+                "dockerComponentImageScanLocal",
+                SnykCLIExecTask.class
+        );
+        dockerComponentImageScanLocal.configure(task -> {
+            task.setGroup("security");
+            task.setDescription("Runs a snyk test on the resulting locally imported image." +
+                    " The task fails if voulnerabilitiues are discovered.");
+            task.dependsOn(localImport);
+            task.setArgs(Arrays.asList("container", "test", localImportTag));
+        });
+
+        final TaskProvider<SnykCLIExecTask> dockerComponentImageScan = project.getTasks().register(
+                "dockerComponentImageScan",
+                SnykCLIExecTask.class
+        );
+        dockerComponentImageScan.configure(task -> {
+            task.setGroup("security");
+            task.setDescription(
+                    "Runs Snyk monitor on the resulting image from the container registry. " +
+                    "Does not depend on pushing the image, instead assumes that this has already happened." +
+                    "The task creates a report in Snyk and alwasy suceeds."
+            );
+            task.setArgs(Arrays.asList("container", "monitor", manifestPushTag));
         });
 
         GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
