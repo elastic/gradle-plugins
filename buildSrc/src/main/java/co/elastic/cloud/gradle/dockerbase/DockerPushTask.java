@@ -38,6 +38,7 @@ abstract public class DockerPushTask extends DefaultTask {
     abstract protected Property<Instant> getCreatedAt();
 
     @InputFile
+    @PathSensitive(PathSensitivity.NONE)
     abstract protected RegularFileProperty getImageArchive();
 
     @TaskAction
