@@ -31,6 +31,10 @@ subprojects {
         }
     }
 
+    tasks.withType<Test> {
+       maxParallelForks = gradle.startParameter.maxWorkerCount
+    }
+
     dependencies {
         "integrationTestImplementation"(project(":libs:test-utils"))
     }
