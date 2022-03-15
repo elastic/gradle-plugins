@@ -17,7 +17,7 @@
  *
  */
 
-package co.elastic.cloud.gradle.docker;
+package co.elastic.gradle.dockerbase;
 
 import java.io.Serializable;
 import java.util.*;

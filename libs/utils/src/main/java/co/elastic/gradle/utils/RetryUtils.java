@@ -1,4 +1,4 @@
-package co.elastic.cloud.gradle.util;
+package co.elastic.gradle.utils;
 
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -63,7 +63,7 @@ public class RetryUtils {
                 return action.get();
             } catch (Exception e) {
                 maxAttempt
-                        .filter(maxAttempt -> attempts >= maxAttempt)
+                        .filter(maxAttempt -> attempts >= maxAttempt - 1)
                         .ifPresent( it -> { throw e; } );
                 retryErrorConsumer.ifPresent(onError -> onError.accept(e));
                 scheduler.ifPresent(scheduler -> {

@@ -5,7 +5,9 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.List;
+import java.util.Set;
 
 public record GradleTestkitHelper(Path projectDir) {
 
@@ -19,6 +21,23 @@ public record GradleTestkitHelper(Path projectDir) {
 
     public void buildScript(String subprojectPath, String content) {
         writeFile(projectDir.resolve(subprojectPath).resolve("build.gradle.kts"), content);
+    }
+
+    public void writeScript(String path, String contents) {
+        Path scriptPath = projectDir.resolve(path);
+        writeFile(scriptPath, contents);
+        final Set<PosixFilePermission> permissions;
+        try {
+            permissions = Files.getPosixFilePermissions(scriptPath);
+            permissions.add(PosixFilePermission.OWNER_EXECUTE);
+            Files.setPosixFilePermissions(scriptPath, permissions);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public void writeFile(String path, String contents) {
+        writeFile(projectDir.resolve(path), contents);
     }
 
     private void writeFile(Path path, String content) {

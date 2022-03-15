@@ -17,24 +17,20 @@
  *
  */
 
-package co.elastic.cloud.gradle.docker.action;
+package co.elastic.gradle.dockerbase;
 
-import co.elastic.cloud.gradle.docker.Package;
-import co.elastic.cloud.gradle.dockerbase.DaemonInstruction;
-import co.elastic.cloud.gradle.util.Architecture;
-import co.elastic.cloud.gradle.util.RetryUtils;
+import co.elastic.gradle.utils.Architecture;
+import co.elastic.gradle.utils.docker.instruction.CreateUser;
+import co.elastic.gradle.utils.docker.DockerUtils;
+import co.elastic.gradle.utils.docker.instruction.*;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
 import org.apache.commons.io.IOUtils;
-import org.gradle.api.Action;
 import org.gradle.api.GradleException;
-import org.gradle.api.tasks.TaskExecutionException;
-import org.gradle.internal.os.OperatingSystem;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
-import org.gradle.process.ExecSpec;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -44,7 +40,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -54,21 +49,12 @@ public class DockerDaemonActions {
 
     public static String EPHEMERAL_MOUNT = "/mnt/ephemeral";
     public static final String CONTEXT_FOLDER = "context";
-    private final ExecOperations execOperations;
+    private final DockerUtils dockerUtils;
 
     public DockerDaemonActions(ExecOperations execOperations) {
-        this.execOperations = execOperations;
+        this.dockerUtils = new DockerUtils(execOperations);
     }
 
-    /**
-     * Adds or updates the PATH environment variable to work around a Docker Desktop for Mac issue.
-     * See https://github.com/elastic/cloud/issues/79374 for more context but be very careful removing this.
-     *
-     * @param env
-     */
-    public static void dockerForMacWorkaround(Map<String, String> env) {
-        env.merge("PATH", "/Applications/Docker.app/Contents/Resources/bin/", (a, b) -> a + File.pathSeparator + b);
-    }
 
     /**
      * Reads a Zstandard compressed or plain TAR docker image into an InputStream
@@ -79,7 +65,9 @@ public class DockerDaemonActions {
         InputStream imageStream = new BufferedInputStream(Files.newInputStream(imageArchive, StandardOpenOption.READ));
         byte[] magicBytes = new byte[4];
         imageStream.mark(4);
-        imageStream.read(magicBytes);
+        if (imageStream.read(magicBytes) != 4) {
+            throw new IOException("Failed to read magic bytes");
+        }
         imageStream.reset();
         int magicNumber = ByteBuffer.wrap(magicBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
         // https://tools.ietf.org/html/rfc8478
@@ -130,50 +118,35 @@ public class DockerDaemonActions {
         }
     }
 
-    public void pull(String from) {
-        RetryUtils.retry(() -> {
-                    try {
-                        return execute(spec -> {
-                            spec.setEnvironment(Collections.emptyMap());
-                            spec.commandLine("docker", "--config", System.getProperty("user.home") + File.separator + ".docker", "pull", from);
-                        });
-                    } catch (TaskExecutionException e) {
-                        throw new GradleException("Error pulling " + from + " through Docker daemon", e);
-                    }
-                }).maxAttempt(3)
-                .exponentialBackoff(1000, 30000)
-                .execute();
-    }
-
 
     public List<String> installCommands(Package.PackageInstaller installer, List<Package> packages) {
         List<String> result = new ArrayList<>();
         switch (installer) {
             // temporary workaround (https://github.com/elastic/cloud/issues/70170)
             case CONFIG:
-                result.addAll(packages.stream().map(Package::getName).collect(Collectors.toList()));
+                result.addAll(packages.stream().map(Package::getName).toList());
                 break;
             case YUM:
                 result.addAll(installCommands(
-                        new DaemonInstruction.Install(
-                                DaemonInstruction.Install.PackageInstaller.YUM,
+                        new Install(
+                                Install.PackageInstaller.YUM,
                                 new ArrayList<>(),
-                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))
+                                packages.stream().map(p -> new Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))
                 ));
                 break;
             case APT:
                 result.addAll(installCommands(
-                        new DaemonInstruction.Install(
-                                DaemonInstruction.Install.PackageInstaller.APT,
+                        new Install(
+                                Install.PackageInstaller.APT,
                                 new ArrayList<>(),
-                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
+                                packages.stream().map(p -> new Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
                 break;
             case APK:
                 result.addAll(installCommands(
-                        new DaemonInstruction.Install(
-                                DaemonInstruction.Install.PackageInstaller.APK,
+                        new Install(
+                                Install.PackageInstaller.APK,
                                 new ArrayList<>(),
-                                packages.stream().map(p -> new DaemonInstruction.Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
+                                packages.stream().map(p -> new Install.Package(p.getName(), p.getVersion())).collect(Collectors.toList()))));
                 break;
             default:
                 throw new GradleException("Unexpected value for package installer generating command for " + installer);
@@ -181,24 +154,11 @@ public class DockerDaemonActions {
         return result;
     }
 
-    public ExecResult execute(Action<? super ExecSpec> action) {
-        Map<String, String> environment = new HashMap<>();
-        // Only pass specific env vars for more reproducible builds
-        if (OperatingSystem.current().isMacOsX()) {
-            dockerForMacWorkaround(environment);
-        }
-        environment.put("LANG", System.getenv("LANG"));
-        environment.put("LC_ALL", System.getenv("LC_ALL"));
-        environment.put("DOCKER_BUILDKIT", "1");
-        return execOperations.exec(spec -> {
-            action.execute(spec);
-            spec.setEnvironment(environment);
-        });
-    }
+
 
     public void checkVersion() throws IOException {
         ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
-        execute(spec -> {
+        dockerUtils.exec(spec -> {
             spec.setStandardOutput(commandOutput);
             spec.setEnvironment(Collections.emptyMap());
             spec.commandLine("docker", "version", "--format='{{.Server.Version}}'");
@@ -211,8 +171,8 @@ public class DockerDaemonActions {
         }
     }
 
-    public String dockerFileFromInstructions(List<DaemonInstruction> instructions, Path workingDirectory) {
-        Function<DaemonInstruction, String> partialApply = (DaemonInstruction i) -> instructionAsDockerFileInstruction(i, workingDirectory);
+    public String dockerFileFromInstructions(List<ContainerImageBuildInstruction> instructions, Path workingDirectory) {
+        Function<ContainerImageBuildInstruction, String> partialApply = (ContainerImageBuildInstruction i) -> instructionAsDockerFileInstruction(i, workingDirectory);
         return "#############################\n" +
                 "#                           #\n" +
                 "# Auto generated Dockerfile #\n" +
@@ -220,16 +180,16 @@ public class DockerDaemonActions {
                 "#############################\n\n" +
                 "# syntax = docker/dockerfile:experimental" +
                 instructions.stream().flatMap(i -> {
-                            if (i instanceof DaemonInstruction.From || i instanceof DaemonInstruction.FromLocalImageBuild) {
+                            if (i instanceof From || i instanceof FromLocalImageBuild) {
                                 // There's an unfortunate Catch-22 where we need ca-certificates to use artifactory,
                                 // but can't get the package from artifactory because we need ca-certificates first.
 
                                 // This *hack* will determine if the image will use APT and if so install any defined
                                 // `ca-certificates` package before anything else, and without custom repositories.
-                                List<DaemonInstruction.Install.Package> aptPackages = instructions.stream()
-                                        .filter(install -> (install instanceof DaemonInstruction.Install) &&
-                                                DaemonInstruction.Install.PackageInstaller.APT.equals(((DaemonInstruction.Install) install).getInstaller()))
-                                        .flatMap(install -> ((DaemonInstruction.Install) install).getPackages().stream())
+                                List<Install.Package> aptPackages = instructions.stream()
+                                        .filter(install -> (install instanceof Install) &&
+                                                Install.PackageInstaller.APT.equals(((Install) install).getInstaller()))
+                                        .flatMap(install -> ((Install) install).getPackages().stream())
                                         .collect(Collectors.toList());
 
                                 // The install-instruction is injected just after the FROM-instruction
@@ -238,8 +198,8 @@ public class DockerDaemonActions {
                                                 .filter(p -> List.of("ca-certificates", "ca-certificates:all").contains(p.getName()))
                                                 .findFirst()
                                                 .stream()
-                                                .map(p -> new DaemonInstruction.Install(
-                                                        DaemonInstruction.Install.PackageInstaller.APT,
+                                                .map(p -> new Install(
+                                                        Install.PackageInstaller.APT,
                                                         new ArrayList<>(),
                                                         Collections.singletonList(p))));
                             } else {
@@ -250,19 +210,16 @@ public class DockerDaemonActions {
                         .reduce("", (acc, value) -> acc + "\n\n" + value);
     }
 
-    public String instructionAsDockerFileInstruction(DaemonInstruction instruction, Path workingDirectory) {
-        if (instruction instanceof DaemonInstruction.From) {
-            DaemonInstruction.From from = (DaemonInstruction.From) instruction;
+    public String instructionAsDockerFileInstruction(ContainerImageBuildInstruction instruction, Path workingDirectory) {
+        if (instruction instanceof From from) {
             return "FROM " + from.getImage() + ":" + from.getVersion() + Optional.ofNullable(from.getSha()).map(sha -> "@" + sha).orElse("");
-        } else if (instruction instanceof DaemonInstruction.FromLocalImageBuild) {
-            final DaemonInstruction.FromLocalImageBuild fromLocalImageBuild = (DaemonInstruction.FromLocalImageBuild) instruction;
+        } else if (instruction instanceof FromLocalImageBuild) {
+            final FromLocalImageBuild fromLocalImageBuild = (FromLocalImageBuild) instruction;
             return "# " + fromLocalImageBuild.getOtherProjectPath() + "\n" +
                     "FROM " + fromLocalImageBuild.getTag().get();
-        } else if (instruction instanceof DaemonInstruction.Copy) {
-            DaemonInstruction.Copy copySpec = (DaemonInstruction.Copy) instruction;
+        } else if (instruction instanceof Copy copySpec) {
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") + copySpec.getLayer() + " /";
-        } else if (instruction instanceof DaemonInstruction.Run) {
-            DaemonInstruction.Run run = (DaemonInstruction.Run) instruction;
+        } else if (instruction instanceof Run run) {
             String bindMounts = run.getBindMounts().stream()
                     .filter(m -> m.getSource().toFile().exists())
                     .map(m -> {
@@ -270,8 +227,7 @@ public class DockerDaemonActions {
                         return "--mount=type=bind," + opts + ",target=" + m.getTarget() + ",source=" + workingDirectory.relativize(m.getSource());
                     }).collect(Collectors.joining(" "));
             return "RUN " + bindMounts + " " + String.join(" && \\ \n\t", run.getCommands());
-        } else if (instruction instanceof DaemonInstruction.CreateUser) {
-            DaemonInstruction.CreateUser createUser = (DaemonInstruction.CreateUser) instruction;
+        } else if (instruction instanceof CreateUser createUser) {
             return String.format(
                     "RUN if ! command -v busybox &> /dev/null; then \\ \n" +
                             "       groupadd -g %4$s %3$s ; \\ \n" +
@@ -285,17 +241,15 @@ public class DockerDaemonActions {
                     createUser.getGroup(),
                     createUser.getGroupId()
             );
-        } else if (instruction instanceof DaemonInstruction.SetUser) {
-            return "USER " + ((DaemonInstruction.SetUser) instruction).getUsername();
-        } else if (instruction instanceof DaemonInstruction.Install) {
-            DaemonInstruction.Install install = ((DaemonInstruction.Install) instruction);
+        } else if (instruction instanceof SetUser) {
+            return "USER " + ((SetUser) instruction).getUsername();
+        } else if (instruction instanceof Install install) {
             return instructionAsDockerFileInstruction(
-                    new DaemonInstruction.Run(installCommands(install), installBindMounts(install, workingDirectory)),
+                    new Run(installCommands(install), installBindMounts(install, workingDirectory)),
                     workingDirectory);
-        } else if (instruction instanceof DaemonInstruction.Env) {
-            return "ENV " + ((DaemonInstruction.Env) instruction).getKey() + "=" + ((DaemonInstruction.Env) instruction).getValue();
-        } else if (instruction instanceof DaemonInstruction.HealthCheck) {
-            DaemonInstruction.HealthCheck healthcheck = ((DaemonInstruction.HealthCheck) instruction);
+        } else if (instruction instanceof Env) {
+            return "ENV " + ((Env) instruction).getKey() + "=" + ((Env) instruction).getValue();
+        } else if (instruction instanceof HealthCheck healthcheck) {
             return "HEALTHCHECK " + Optional.ofNullable(healthcheck.getInterval()).map(interval -> "--interval=" + interval + " ").orElse("") +
                     Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
                     Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
@@ -306,7 +260,7 @@ public class DockerDaemonActions {
         }
     }
 
-    public List<String> repositoryFormat(DaemonInstruction.Install.PackageInstaller installer, DaemonInstruction.Install.Repository repository) {
+    public List<String> repositoryFormat(Install.PackageInstaller installer, Install.Repository repository) {
         switch (installer) {
             case YUM:
                 return Arrays.asList(
@@ -325,25 +279,25 @@ public class DockerDaemonActions {
         }
     }
 
-    public List<DaemonInstruction.Run.BindMount> installBindMounts(DaemonInstruction.Install instruction, Path workingDirectory) {
+    public List<Run.BindMount> installBindMounts(Install instruction, Path workingDirectory) {
         Path ephemeralPath = workingDirectory.resolve("ephemeral");
-        DaemonInstruction.Run.InternalBindMount ephemeralBindMount =
-                new DaemonInstruction.Run.InternalBindMount(ephemeralPath, EPHEMERAL_MOUNT, false);
-        DaemonInstruction.Install.PackageInstaller installer = instruction.getInstaller();
+        Run.InternalBindMount ephemeralBindMount =
+                new Run.InternalBindMount(ephemeralPath, EPHEMERAL_MOUNT, false);
+        Install.PackageInstaller installer = instruction.getInstaller();
 
         if (!instruction.getRepositories().isEmpty() &&
-                installer == DaemonInstruction.Install.PackageInstaller.YUM) {
+                installer == Install.PackageInstaller.YUM) {
             return List.of(
                     ephemeralBindMount,
-                    new DaemonInstruction.Run.InternalBindMount(
+                    new Run.InternalBindMount(
                             ephemeralPath.resolve("repository").resolve("repos.d"),
                             "/etc/yum.repos.d", false)
             );
         } else if (!instruction.getRepositories().isEmpty() &&
-                installer == DaemonInstruction.Install.PackageInstaller.APT) {
+                installer == Install.PackageInstaller.APT) {
             return List.of(
                     ephemeralBindMount,
-                    new DaemonInstruction.Run.InternalBindMount(
+                    new Run.InternalBindMount(
                             ephemeralPath.resolve("repository").resolve("repos.d"),
                             "/etc/apt/sources.list.d",
                             true)
@@ -353,10 +307,10 @@ public class DockerDaemonActions {
         }
     }
 
-    public List<String> installCommands(DaemonInstruction.Install instruction) {
-        DaemonInstruction.Install.PackageInstaller installer = instruction.getInstaller();
-        List<DaemonInstruction.Install.Package> packages = instruction.getPackages();
-        List<DaemonInstruction.Install.Repository> repositories = instruction.getRepositories();
+    public List<String> installCommands(Install instruction) {
+        Install.PackageInstaller installer = instruction.getInstaller();
+        List<Install.Package> packages = instruction.getPackages();
+        List<Install.Repository> repositories = instruction.getRepositories();
 
         switch (installer) {
             case YUM:
@@ -366,7 +320,7 @@ public class DockerDaemonActions {
                     rm -rf /var/cache/yum
                  */
                 String enabledRepos = repositories.stream()
-                        .map(DaemonInstruction.Install.Repository::getName).collect(Collectors.joining(","));
+                        .map(Install.Repository::getName).collect(Collectors.joining(","));
                 if (enabledRepos.isEmpty()) {
                     enabledRepos = "*";
                 }
@@ -428,8 +382,9 @@ public class DockerDaemonActions {
         }
     }
 
+    @SuppressWarnings("unused")
     public UUID build(
-            List<DaemonInstruction> instructions,
+            List<ContainerImageBuildInstruction> instructions,
             Path workingDirectory,
             Path imageArchive,
             Path idfile,
@@ -439,19 +394,19 @@ public class DockerDaemonActions {
             throw new GradleException("Can't build docker image, missing working directory " + workingDirectory);
         }
         Path dockerFile = workingDirectory.resolve("Dockerfile");
-        Files.write(
+        Files.writeString(
                 dockerFile,
                 dockerFileFromInstructions(
                         instructions,
                         workingDirectory
-                ).getBytes(StandardCharsets.UTF_8)
+                )
         );
         Files.write(workingDirectory.resolve(".dockerignore"), ("**\n!" + CONTEXT_FOLDER + "\n!ephemeral").getBytes());
 
         final UUID uuid = UUID.randomUUID();
 
         // We build with --no-cache to make things more straight forward, since we already cache images using Gradle's build cache
-        int imageBuild = execute(spec -> {
+        int imageBuild = dockerUtils.exec(spec -> {
             spec.setWorkingDir(dockerFile.getParent());
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
@@ -468,7 +423,7 @@ public class DockerDaemonActions {
         }
 
         try (BufferedOutputStream createAtFileOut = new BufferedOutputStream(Files.newOutputStream(createdAtFile))) {
-            int imageInspect = execute(spec -> {
+            int imageInspect = dockerUtils.exec(spec -> {
                 spec.setWorkingDir(dockerFile.getParent());
                 spec.setStandardOutput(createAtFileOut);
                 spec.commandLine("docker", "image", "inspect", "--format", "{{.Created}}", uuid);
@@ -488,7 +443,7 @@ public class DockerDaemonActions {
     private void saveCompressedDockerImage(String imageId, Path imageArchive) throws IOException {
         try (ZstdCompressorOutputStream compressedOut = new ZstdCompressorOutputStream(
                 new BufferedOutputStream(Files.newOutputStream(imageArchive)))) {
-            ExecResult imageSave = execute(spec -> {
+            ExecResult imageSave = dockerUtils.exec(spec -> {
                 spec.setStandardOutput(compressedOut);
                 spec.setCommandLine("docker", "save", imageId);
                 spec.setIgnoreExitValue(true);

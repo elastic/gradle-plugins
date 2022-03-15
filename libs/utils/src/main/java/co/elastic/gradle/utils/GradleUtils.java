@@ -1,4 +1,4 @@
-package co.elastic.cloud.gradle.util;
+package co.elastic.gradle.utils;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.InvalidUserDataException;
