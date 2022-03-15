@@ -70,6 +70,11 @@ public class CloudBuildLifecyclePlugin implements Plugin<Project> {
         // These binaries are platform dependent, we need to verify that they are available
         tasks.named("checkForPlatform", check -> check.dependsOn("syncBinDir"));
 
+        tasks.register("securityScan", task -> {
+           task.setGroup("security");
+           task.setDescription("Runs all security scans defined for a project");
+        });
+
         // Deal with common lifecycle tasks from other plugins
         target.getPlugins().withType(JavaPlugin.class, plugin -> {
             tasks.named("checkPlatformIndependent", it -> it.dependsOn("test"));

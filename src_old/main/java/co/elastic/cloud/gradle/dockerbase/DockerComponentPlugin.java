@@ -105,6 +105,12 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     " The task fails if voulnerabilitiues are discovered.");
             task.dependsOn(localImport);
             task.setArgs(Arrays.asList("container", "test", localImportTag));
+            // snyk only scans the image of the platform it's running on and would fail if onw is not available.
+            // luckily a non-existing image can't have any vulnerabilities, so we can just skip it
+            task.onlyIf(
+                    unsused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
+                            .contains(Architecture.current())
+            );
         });
 
         final TaskProvider<SnykCLIExecTask> dockerComponentImageScan = project.getTasks().register(
@@ -119,6 +125,10 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     "The task creates a report in Snyk and alwasy suceeds."
             );
             task.setArgs(Arrays.asList("container", "monitor", manifestPushTag));
+            task.onlyIf(
+                    unsused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
+                            .contains(Architecture.current())
+            );
         });
 
         GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
@@ -130,5 +140,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
 
         project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
         project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(pushManifestList));
+        
+        project.getTasks().named("securityScan", task -> task.dependsOn(dockerComponentImageScan));
     }
 }
