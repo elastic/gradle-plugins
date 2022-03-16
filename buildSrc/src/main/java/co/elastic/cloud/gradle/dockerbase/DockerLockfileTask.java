@@ -12,10 +12,7 @@ import org.gradle.api.GradleException;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.Property;
-import org.gradle.api.tasks.CacheableTask;
-import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.OutputFile;
-import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.tasks.*;
 import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
@@ -56,6 +53,7 @@ abstract public class DockerLockfileTask extends DefaultTask {
     abstract public Property<String> getTag();
 
     @Input
+    @Optional
     abstract public Property<Lockfile.Image> getLockfileImage();
 
     @OutputFile
@@ -85,8 +83,8 @@ abstract public class DockerLockfileTask extends DefaultTask {
                     return new Lockfile.LockedPackage(name, version, release, arch);
                 }).collect(Collectors.toList());
 
-                Lockfile.Image image = getLockfileImage().get();
-                if (image.getDigest() == null) {
+                Lockfile.Image image = getLockfileImage().getOrNull();
+                if (image != null && image.getDigest() == null) {
                     String digest = getManifestDigest(image);
                     if (digest == null) {
                         throw new GradleException(
