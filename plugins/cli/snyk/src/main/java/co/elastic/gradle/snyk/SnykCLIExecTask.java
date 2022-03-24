@@ -1,4 +1,4 @@
-package co.elastic.cloud.gradle.snyk;
+package co.elastic.gradle.snyk;
 
 import org.gradle.api.tasks.Exec;
 

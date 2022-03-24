@@ -18,7 +18,7 @@ class LifecyclePluginIT extends TestkitIntegrationTest {
                  id("co.elastic.lifecycle")
               }
               """);
-        final BuildResult result = gradleRunner.withArguments("-s", "publish")
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "publish")
                 .build();
     }
 
@@ -38,7 +38,7 @@ class LifecyclePluginIT extends TestkitIntegrationTest {
                 }                             
                 """);
         final BuildResult result = gradleRunner
-                .withArguments("-s", "resolveAllDependencies")
+                .withArguments("--warning-mode", "fail", "-s", "resolveAllDependencies")
                 .build();
 
         assertEquals(
@@ -47,7 +47,7 @@ class LifecyclePluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult resultOffline = gradleRunner
-                .withArguments("-offline", "resolveAllDependencies")
+                .withArguments("--warning-mode", "fail", "-offline", "resolveAllDependencies")
                 .build();
 
         assertEquals(

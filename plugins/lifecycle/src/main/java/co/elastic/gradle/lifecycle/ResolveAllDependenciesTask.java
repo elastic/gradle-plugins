@@ -37,6 +37,8 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
     public Set<Configuration> getResolvableConfigurations() {
         return getProject().getConfigurations().stream()
                 .filter(Configuration::isCanBeResolved)
+                // Resolving these will trigger a deprecation warning
+                .filter(each -> ! Set.of("default", "archives").contains(each.getName()))
                 .collect(Collectors.toSet());
     }
 

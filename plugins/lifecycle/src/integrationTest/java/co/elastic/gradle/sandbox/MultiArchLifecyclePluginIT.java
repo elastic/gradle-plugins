@@ -17,7 +17,7 @@ class MultiArchLifecyclePluginIT extends TestkitIntegrationTest {
                  id("co.elastic.lifecycle-multi-arch")
               }
               """);
-      final BuildResult result = gradleRunner.withArguments("-s", "check")
+      final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "check")
               .build();
 
       Assert.assertEquals(
@@ -37,7 +37,7 @@ class MultiArchLifecyclePluginIT extends TestkitIntegrationTest {
                  dependsOn("foo")
               }
               """);
-        final BuildResult result = gradleRunner.withArguments("-s", "check")
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "check")
                 .buildAndFail();
 
         Assert.assertEquals(
@@ -57,7 +57,7 @@ class MultiArchLifecyclePluginIT extends TestkitIntegrationTest {
                  dependsOn("foo")
               }
               """);
-        final BuildResult result = gradleRunner.withArguments("-s", "check")
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "check")
                 .build();
 
         Assert.assertEquals(
