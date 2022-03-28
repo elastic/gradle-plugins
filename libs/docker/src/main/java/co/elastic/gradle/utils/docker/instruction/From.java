@@ -3,6 +3,8 @@ package co.elastic.gradle.utils.docker.instruction;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Optional;
 
+import java.util.Objects;
+
 public class From implements ContainerImageBuildInstruction {
 
     private final String image;
@@ -29,5 +31,22 @@ public class From implements ContainerImageBuildInstruction {
     @Optional
     public String getSha() {
         return sha;
+    }
+
+    public String getReference() {
+        Objects.requireNonNull(image);
+        if (sha == null) {
+            if (version == null) {
+                return image;
+            } else {
+                return String.format("%s:%s", image, version);
+            }
+        } else {
+            if (version == null) {
+                return String.format("%s@%s", image, sha);
+            } else {
+                return String.format("%s:%s@%s", image, version, sha);
+            }
+        }
     }
 }

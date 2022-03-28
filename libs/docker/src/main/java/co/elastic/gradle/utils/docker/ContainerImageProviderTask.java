@@ -9,4 +9,6 @@ public interface ContainerImageProviderTask extends Task {
     @Internal
     Provider<String> getTag();
 
+    @Internal
+    Provider<String> getImageId();
 }

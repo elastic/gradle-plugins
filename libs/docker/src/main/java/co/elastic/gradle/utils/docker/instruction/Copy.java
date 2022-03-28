@@ -17,6 +17,8 @@ public class Copy implements ContainerImageBuildInstruction {
         this.owner = owner;
     }
 
+    // The CopySpec can't be an input on its own.
+    // We make sure to register the files that the copy spec covers in the task at runtime
     @Internal
     public Action<CopySpec> getSpec() {
         return spec;
