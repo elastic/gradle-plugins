@@ -1,12 +1,9 @@
-package co.elastic.cloud.gradle.testing.buildscan;
+package co.elastic.gradle.buildscan.xunit;
 
 import org.gradle.api.GradleException;
-import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.testing.*;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
-import org.gradle.api.tasks.StopExecutionException;
-import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.testing.TestOutputEvent;
 import org.gradle.api.tasks.testing.TestResult;
 import org.gradle.internal.id.IdGenerator;
@@ -16,6 +13,7 @@ import java.io.File;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -23,26 +21,15 @@ import java.util.stream.Collectors;
 public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
     private final Set<File> fromFiles;
-    private final TaskProvider<? extends Task> generatorTask;
     private static final Logger logger = Logging.getLogger(ExternalTestExecuter.class);
 
-    public ExternalTestExecuter(Set<File> fromFile, TaskProvider<? extends Task> generatorTask) {
+    public ExternalTestExecuter(Set<File> fromFile) {
         this.fromFiles = fromFile;
-        this.generatorTask = generatorTask;
+
     }
 
     @Override
     public void execute(TestExecutionSpec testExecutionSpec, TestResultProcessor processor) {
-        if (!generatorTask.get().getDidWork()) {
-            // The generator task was skipped, possibly because nothing changed so we don't have to re-run the tests.
-            // Exception will stop current task without failing the build
-            throw new StopExecutionException("Generator task did no work: " + generatorTask.get().getPath());
-        }
-
-        if(fromFiles.isEmpty()) {
-            throw new GradleException("No XML results produced by " + generatorTask.get().getPath());
-        }
-
         List<String> missingFiles = fromFiles.stream()
                 .filter(file -> !file.exists())
                 .map(File::getAbsolutePath)
@@ -57,50 +44,56 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
                 .peek(file -> logger.lifecycle("Loading results from {}", file))
                 .flatMap(resultFile -> XUnitXmlParser.parse(resultFile).stream())
                 .forEach(testSuite -> {
-                    DefaultTestClassDescriptor suiteDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testSuite.getName());
+                    DefaultTestClassDescriptor suiteDescriptor = new DefaultTestClassDescriptor(idGenerator.generateId(), testSuite.name());
                     LocalDateTime suiteStartTime = testSuite.startedTime(LocalDateTime::now);
                     processor.started(suiteDescriptor, new TestStartEvent(toEpochMilli(suiteStartTime)));
-                    testSuite.getTests().forEach(testCase -> {
+
+                    testSuite.tests().forEach(testCase -> {
+
                         DefaultTestMethodDescriptor methodDescriptor = new DefaultTestMethodDescriptor(
                                 idGenerator.generateId(),
-                                testSuite.getName(),
-                                testCase.getName());
+                                testSuite.name(),
+                                testCase.name());
+
                         processor.started(methodDescriptor, new TestStartEvent(toEpochMilli(suiteStartTime), suiteDescriptor.getId()));
 
                         // Cannot switch on types ...
-                        if (testCase.getStatus() instanceof TestCaseSuccess) {
-                            TestCaseSuccess success = (TestCaseSuccess) testCase.getStatus();
-                            success.getStdout().ifPresent(stdout -> processor.output(
+                        if (testCase.status() instanceof TestCaseSuccess success) {
+                            Optional.of(success.stdout()).ifPresent(stdout -> processor.output(
                                     methodDescriptor.getId(),
                                     new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, stdout)
                             ));
-                            success.getStderr().ifPresent(stderr -> processor.output(
+                            Optional.of(success.stderr()).ifPresent(stderr -> processor.output(
                                     methodDescriptor.getId(),
                                     new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, stderr)
                             ));
                             processor.completed(
                                     methodDescriptor.getId(),
-                                    new TestCompleteEvent(toEpochMilli(testCase.endTime(suiteStartTime)), TestResult.ResultType.SUCCESS)
+                                    new TestCompleteEvent(
+                                            toEpochMilli(testCase.endTime(suiteStartTime)),
+                                            TestResult.ResultType.SUCCESS
+                                    )
                             );
-                        } else if (testCase.getStatus() instanceof TestCaseFailure) {
-                            TestCaseFailure failure = (TestCaseFailure) testCase.getStatus();
+                        } else if (testCase.status() instanceof TestCaseFailure failure) {
                             processor.failure(
-                                    methodDescriptor.getId(), new ExternalTestFailureException(
-                                            "Test case being imported failed (" + failure.getType().orElse("Untyped") + "): " +
-                                                    failure.getMessage().orElse("") + " " +
-                                                    failure.getDescription().orElse(""))
+                                    methodDescriptor.getId(),
+                                    new ExternalTestFailureException(
+                                            "Test case being imported failed (" + Optional.ofNullable(failure.type()).orElse("Untyped") + "): " +
+                                            Optional.ofNullable(failure.message()).orElse("") + " " +
+                                            Optional.ofNullable(failure.description()).orElse("")
+                                    )
                             );
-                        } else if (testCase.getStatus() instanceof TestCaseError) {
-                            TestCaseError error = (TestCaseError) testCase.getStatus();
+                        } else if (testCase.status() instanceof TestCaseError error) {
                             processor.failure(
-                                    methodDescriptor.getId(), new ExternalTestFailureException(
-                                            "Test case being imported failed (" + error.getType().orElse("Untyped") + "): " +
-                                                    error.getMessage().orElse("") +
-                                                    error.getDescription().map(desc -> "\n" + desc).orElse(""))
+                                    methodDescriptor.getId(),
+                                    new ExternalTestFailureException(
+                                            "Test case being imported failed (" + Optional.ofNullable(error.type()).orElse("Untyped") + "): " +
+                                            Optional.ofNullable(error.message()).orElse("") +
+                                            Optional.ofNullable(error.description()).map(desc -> "\n" + desc).orElse("")
+                                    )
                             );
-                        } else if (testCase.getStatus() instanceof TestCaseSkipped) {
-                            TestCaseSkipped skipped = (TestCaseSkipped) testCase.getStatus();
-                            skipped.getMessage().ifPresent(message -> processor.output(
+                        } else if (testCase.status() instanceof TestCaseSkipped skipped) {
+                            Optional.ofNullable(skipped.message()).ifPresent(message -> processor.output(
                                     methodDescriptor.getId(),
                                     new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, message)
                             ));
