@@ -2,10 +2,11 @@ package co.elastic.gradle.dockercomponent;
 
 
 import co.elastic.gradle.utils.Architecture;
+import co.elastic.gradle.utils.GradleUtils;
 import co.elastic.gradle.utils.RegularFileUtils;
-import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import com.google.cloud.tools.jib.api.JibContainer;
 import org.gradle.api.DefaultTask;
+import org.gradle.api.Project;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFile;
 import org.gradle.api.provider.MapProperty;
@@ -19,6 +20,7 @@ import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -37,7 +39,22 @@ abstract public class ComponentPushTask extends DefaultTask {
                 getImageArchive().map(map -> map.keySet().stream()
                         .collect(Collectors.toMap(
                                 Function.identity(),
-                                architecture -> DockerPluginConventions.componentImageTag(getProject(), architecture)
+                                architecture -> {
+                                    Project project = getProject();
+                                    String result;
+                                    if (GradleUtils.isCi()) {
+                                        // FIXME: This needs to be configurable!!
+                                        result = "cloud-ci";
+                                    } else {
+                                        result = Optional.ofNullable(project.findProperty("co.elastic.docker.push.organization"))
+                                                .map(String::valueOf)
+                                                .orElse("gradle");
+                                    }
+                                    return "docker.elastic.co" + "/" +
+                                           result + "/" +
+                                           project.getName() + "-" + architecture.dockerName() +
+                                           ":" + project.getVersion();
+                                }
                         ))
                 )
         );
@@ -92,7 +109,7 @@ abstract public class ComponentPushTask extends DefaultTask {
             final String repoDigest = container.getDigest().toString();
             try {
                 Files.writeString(
-                        getDigestFiles().get().get(architecture).get().getAsFile().toPath(),
+                        RegularFileUtils.toPath(getDigestFiles().get().get(architecture)),
                         repoDigest
                 );
             } catch (IOException e) {

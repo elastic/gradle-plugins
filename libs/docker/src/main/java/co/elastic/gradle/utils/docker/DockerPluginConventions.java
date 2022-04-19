@@ -19,9 +19,6 @@
 
 package co.elastic.gradle.utils.docker;
 
-import co.elastic.gradle.utils.Architecture;
-import co.elastic.gradle.utils.GradleUtils;
-import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.file.DuplicatesStrategy;
 import org.gradle.api.file.FileTree;
@@ -30,82 +27,9 @@ import org.gradle.api.internal.file.copy.CopySpecResolver;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskProvider;
 
-import java.util.Optional;
 import java.util.concurrent.Callable;
 
 public class DockerPluginConventions {
-
-    // See https://github.com/moby/moby/blob/master/image/spec/v1.2.md#terminology for Repository and Tag terminology
-    // Tag : [Registry]/[Repository]:[Version]
-    // Repository : [OrganizationPathComponent]/[NamePathComponent]
-
-    public static String getRegistry() {
-        return "docker.elastic.co";
-    }
-
-    public static String getOrganizationPathComponent(Project project) {
-        if (GradleUtils.isCi()) {
-            // FIXME: This needs to be configurable!!
-            return "cloud-ci";
-        } else {
-            return Optional.ofNullable(project.findProperty("co.elastic.docker.push.organization"))
-                    .map(String::valueOf)
-                    .orElse("gradle");
-        }
-    }
-
-    public static String componentImageTag(Project project, Architecture architecture) {
-        return getRegistry() + "/" +
-                getOrganizationPathComponent(project) + "/" +
-                project.getName() + "-" + architecture.dockerName() +
-                ":" + project.getVersion();
-    }
-
-    public static String baseImageTag(Project project, Architecture architecture) {
-        return getRegistry() + "/" +
-                getOrganizationPathComponent(project) + "/" +
-                project.getName() + "-" + architecture.dockerName() +
-                ":" + project.getVersion();
-    }
-
-    public static String manifestListTag(Project project) {
-        return getRegistry() + "/" +
-                getOrganizationPathComponent(project) + "/" +
-                project.getName() +
-                ":" + project.getVersion();
-    }
-
-    public static String imageTag(Project gradleProject) {
-        return imageTag(gradleProject, null, null);
-    }
-
-    public static String imageTagWithQualifier(Project project, String qualifier) {
-        return imageTag(project, qualifier, null);
-    }
-
-    public static String imageTagWithAlias(Project project, String alias) {
-        return imageTag(project, null, alias);
-    }
-
-    private static String imageTag(Project project, String qualifier, String alias) {
-        return getRegistry() + "/" +
-                getOrganizationPathComponent(project) + "/" +
-                Optional.ofNullable(alias).orElse(project.getName()) +
-                Optional.ofNullable(qualifier).orElse("") + ":" +
-                project.getVersion();
-    }
-
-    public static String localImportImageTag(Project project) {
-        return localImportImageTag(project, null);
-    }
-
-    public static String localImportImageTag(Project project, String qualifier) {
-        return getRegistry() + "/" +
-                "gradle/" +
-                project.getName() +
-                Optional.ofNullable(qualifier).map(it -> "-" + it).orElse("") + ":" +
-                "latest";
-    }
 
     public static CopySpecInternal.CopySpecListener mapCopySpecToTaskInputs(TaskProvider<? extends Task> taskProvider) {
         return (path, spec) -> {

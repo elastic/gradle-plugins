@@ -1,5 +1,6 @@
 package co.elastic.gradle.lifecycle;
 
+import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.ProjectLayout;
@@ -47,7 +48,7 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
         final Set<Configuration> resolvableConfigurations = getResolvableConfigurations();
         resolvableConfigurations.forEach(Configuration::resolve);
         Files.writeString(
-                getMarkerFile().get().getAsFile().toPath(),
+                RegularFileUtils.toPath(getMarkerFile()),
                 "Resolved configurations:" + resolvableConfigurations.size()
         );
     }

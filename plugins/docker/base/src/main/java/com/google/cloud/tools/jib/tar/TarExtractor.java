@@ -16,7 +16,7 @@
 
 package com.google.cloud.tools.jib.tar;
 
-import co.elastic.cloud.gradle.docker.action.DockerDaemonActions;
+import co.elastic.gradle.docker.base.ExtractCompressedTar;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -36,6 +36,6 @@ public class TarExtractor {
      * @throws IOException if extraction fails
      */
     public static void extract(Path source, Path destination) throws IOException {
-        DockerDaemonActions.extractDockerImage(source, destination, e -> true);
+        ExtractCompressedTar.extract(source, destination);
     }
 }

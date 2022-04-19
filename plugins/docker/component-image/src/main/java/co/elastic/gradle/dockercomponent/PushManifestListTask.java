@@ -95,9 +95,9 @@ abstract public class PushManifestListTask extends DefaultTask {
                 .execute();
 
         if (output.startsWith("Digest: sha256:")) {
-            Files.write(
-                    getDigestFile().get().getAsFile().toPath(),
-                    output.substring(8, 79).getBytes(StandardCharsets.UTF_8)
+            Files.writeString(
+                    RegularFileUtils.toPath(getDigestFile()),
+                    output.substring(8, 79)
             );
         } else {
             if (output.isEmpty()) {

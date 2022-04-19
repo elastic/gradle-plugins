@@ -40,7 +40,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     shellcheck {
-                       val credentials = vault.readSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }

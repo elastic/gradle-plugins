@@ -1,11 +1,12 @@
 package co.elastic.gradle.utils.docker.instruction;
 
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Optional;
 
 import java.util.Objects;
 
-public class From implements ContainerImageBuildInstruction {
+public class From implements FromImageReference {
 
     private final String image;
     private final String version;
@@ -33,6 +34,8 @@ public class From implements ContainerImageBuildInstruction {
         return sha;
     }
 
+    @Internal
+    @Override
     public String getReference() {
         Objects.requireNonNull(image);
         if (sha == null) {

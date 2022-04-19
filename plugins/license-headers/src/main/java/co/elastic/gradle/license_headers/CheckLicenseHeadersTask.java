@@ -1,5 +1,6 @@
 package co.elastic.gradle.license_headers;
 
+import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.ProjectLayout;
@@ -37,7 +38,7 @@ public abstract class CheckLicenseHeadersTask extends DefaultTask {
             throw new GradleException("No license header configurations defined, use `licenseHeaders { checkAll() }` or  `licenseHeaders { matching(...) { }}`");
         }
         for (LicenseHeaderConfig c : getConfigs().get()) {
-            final String[] expectedHeader = Files.readAllLines(c.getHeaderFile().get().getAsFile().toPath()).toArray(String[]::new);
+            final String[] expectedHeader = Files.readAllLines(RegularFileUtils.toPath(c.getHeaderFile())).toArray(String[]::new);
             Path projectDir = getProjectLayout().getProjectDirectory().getAsFile().toPath();
             final List<File> files = c.getFiles().get();
 
@@ -57,7 +58,7 @@ public abstract class CheckLicenseHeadersTask extends DefaultTask {
                 );
             }
         }
-        Files.writeString(getMarkerFile().get().getAsFile().toPath(), "Header is present in all files");
+        Files.writeString(RegularFileUtils.toPath(getMarkerFile()), "Header is present in all files");
     }
 
     @Inject

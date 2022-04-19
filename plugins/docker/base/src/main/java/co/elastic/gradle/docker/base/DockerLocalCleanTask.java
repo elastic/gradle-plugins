@@ -8,16 +8,13 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
-import java.io.IOException;
-import java.util.Collections;
 
 abstract public class DockerLocalCleanTask extends DefaultTask {
 
     @TaskAction
-    public void cleanUpImages() throws IOException {
+    public void cleanUpImages() {
         DockerUtils dockerUtils = new DockerUtils(getExecOperations());
         dockerUtils.exec(spec -> {
-            spec.setEnvironment(Collections.emptyMap());
             spec.commandLine("docker", "image", "rm", getImageTag().get());
             spec.setIgnoreExitValue(true);
         });

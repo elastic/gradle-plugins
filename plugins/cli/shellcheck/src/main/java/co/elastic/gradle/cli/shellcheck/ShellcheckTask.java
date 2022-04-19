@@ -1,6 +1,7 @@
 package co.elastic.gradle.cli.shellcheck;
 
 import co.elastic.gradle.utils.PrefixingOutputStream;
+import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.ProjectLayout;
@@ -68,7 +69,7 @@ public abstract class ShellcheckTask extends DefaultTask {
             );
             spec.setArgs(args);
         });
-        Files.writeString(getMarkerFile().get().getAsFile().toPath(), "ran successfully");
+        Files.writeString(RegularFileUtils.toPath(getMarkerFile()), "ran successfully");
     }
 
     @Inject

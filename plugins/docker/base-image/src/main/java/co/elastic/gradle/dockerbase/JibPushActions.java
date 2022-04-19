@@ -59,10 +59,12 @@ public class JibPushActions {
                                 .containerize(
                                         Containerizer.to(getAuthenticatedRegistryImage(tag))
                                 );
-                    } catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
+                    }
+                    catch (InterruptedException | RegistryException | IOException | CacheDirectoryCreationException | ExecutionException | InvalidImageReferenceException e) {
                         throw new GradleException("Error pushing image archive in registry (" + tag + ").", e);
                     }
-                }).maxAttempt(6)
+                })
+                .maxAttempt(6)
                 .exponentialBackoff(1000, 30000)
                 .onRetryError(error -> logger.warn("Error while pushing image with Jib. Retrying", error))
                 .execute();

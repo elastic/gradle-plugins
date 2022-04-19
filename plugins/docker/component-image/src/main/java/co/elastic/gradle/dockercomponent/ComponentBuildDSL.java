@@ -2,7 +2,6 @@ package co.elastic.gradle.dockercomponent;
 
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.docker.ContainerArchiveProviderTask;
-import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import co.elastic.gradle.utils.docker.instruction.*;
 import kotlin.Pair;
 import org.gradle.api.Action;
@@ -42,9 +41,8 @@ public class ComponentBuildDSL {
                                 .flatMap(task -> task.getImageArchive().getAsFile())
                 )
         );
-        final String[] image = DockerPluginConventions.baseImageTag(
-                otherProject, architecture
-        ).split(":");
+        final String[] image = (otherProject.getName() + "-" + architecture.dockerName() +
+                                ":" + otherProject.getVersion()).split(":");
         instructions.add(
                 new From(image[0], image[1], null)
         );

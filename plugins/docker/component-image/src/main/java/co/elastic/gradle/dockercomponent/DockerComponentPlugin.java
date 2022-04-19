@@ -14,6 +14,7 @@ import org.gradle.api.Task;
 import org.gradle.api.tasks.TaskProvider;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 public class DockerComponentPlugin implements Plugin<Project> {
@@ -25,8 +26,25 @@ public class DockerComponentPlugin implements Plugin<Project> {
         project.getPluginManager().apply(ManifestToolPlugin.class);
         project.getPluginManager().apply(SnykPlugin.class);
 
-        final String localImportTag = DockerPluginConventions.localImportImageTag(project);
-        final String manifestPushTag = DockerPluginConventions.manifestListTag(project);
+        // FIXME: Make it configurable
+        final String localImportTag = "docker.elastic.co" + "/" +
+                                      "gradle/" +
+                                      project.getName() +
+                                      Optional.ofNullable((String) null).map(it -> "-" + it).orElse("") + ":" +
+                                      "latest";
+        String result;
+        if (GradleUtils.isCi()) {
+            // FIXME: This needs to be configurable!!
+            result = "cloud-ci";
+        } else {
+            result = Optional.ofNullable(project.findProperty("co.elastic.docker.push.organization"))
+                    .map(String::valueOf)
+                    .orElse("gradle");
+        }
+        final String manifestPushTag = "docker.elastic.co" + "/" +
+                                       result + "/" +
+                                       project.getName() +
+                                       ":" + project.getVersion();
 
         final TaskProvider<DockerComponentLocalImport> localImport = project.getTasks().register(LOCAL_IMPORT_TASK_NAME, DockerComponentLocalImport.class);
 

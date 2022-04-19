@@ -1,6 +1,7 @@
 package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.utils.Architecture;
+import co.elastic.gradle.utils.RegularFileUtils;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.JibContainer;
 import org.gradle.api.DefaultTask;
@@ -44,16 +45,15 @@ abstract public class DockerPushTask extends DefaultTask {
     public void pushImage() throws InvalidImageReferenceException, IOException {
         final String tag = getTag().get();
         final Instant createdAt = getCreatedAt().get();
-        // FIXME: Don't depend on Jib here
         final JibContainer container = new JibPushActions().pushImage(
-            getImageArchive().get().getAsFile().toPath(), 
-            tag, 
-            createdAt
+                RegularFileUtils.toPath(getImageArchive()),
+                tag,
+                createdAt
         );
 
         final String repoDigest = container.getDigest().toString();
         Files.writeString(
-                getDigestFile().get().getAsFile().toPath(),
+                RegularFileUtils.toPath(getDigestFile()),
                 repoDigest
         );
         getLogger().lifecycle("Pushed image {}@{}", tag, repoDigest);

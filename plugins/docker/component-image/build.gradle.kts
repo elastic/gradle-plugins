@@ -1,3 +1,13 @@
+gradlePlugin {
+    plugins {
+        testSourceSets(java.sourceSets.integrationTest.get())
+        create("co.elastic.gradle.docker-component") {
+            id = "co.elastic.gradle.docker-component"
+            implementationClass = "co.elastic.gradle.dockercomponent.DockerComponentPlugin"
+        }
+    }
+}
+
 dependencies {
     implementation(project(":libs:docker"))
     implementation(project(":libs:utils"))

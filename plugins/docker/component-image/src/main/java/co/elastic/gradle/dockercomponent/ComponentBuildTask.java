@@ -162,9 +162,9 @@ abstract public class ComponentBuildTask extends DefaultTask {
                                 throw new UncheckedIOException(e);
                             }
                         })
-                        .reduce(0L, Long::sum)
-
-        );
+                        .reduce(0L, Long::sum),
+                    GradleCacheUtilities.MAX_CACHE_ARTIFACT_SIZE_MB
+                );
     }
 
     public void createLayersDir() {

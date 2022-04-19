@@ -1,5 +1,6 @@
 package co.elastic.gradle.license_headers;
 
+import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.provider.ListProperty;
@@ -25,7 +26,7 @@ public abstract class FixLicenseHeadersTask extends DefaultTask {
     public void fixHeaders() throws IOException {
         for (LicenseHeaderConfig c : getConfigs().get()) {
             Path projectDir = getProjectLayout().getProjectDirectory().getAsFile().toPath();
-            final String[] expectedHeader = Files.readAllLines(c.getHeaderFile().get().getAsFile().toPath()).toArray(String[]::new);
+            final String[] expectedHeader = Files.readAllLines(RegularFileUtils.toPath(c.getHeaderFile())).toArray(String[]::new);
             final List<File> files = c.getFiles().get();
             final Map<Path, ViolationReason> brokenPaths = LicenseCheckUtils.nonCompliantFilesWithReason(
                     projectDir, expectedHeader, files

@@ -4,7 +4,7 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
 
-public class FromLocalImageBuild implements ContainerImageBuildInstruction {
+public class FromLocalImageBuild implements FromImageReference {
 
     private final Provider<String> tag;
     private final Provider<String> imageId;
@@ -16,7 +16,7 @@ public class FromLocalImageBuild implements ContainerImageBuildInstruction {
         this.otherProjectPath = otherProjectPath;
     }
 
-    @Input
+    @Internal
     public Provider<String> getTag() {
         return tag;
     }
@@ -29,5 +29,11 @@ public class FromLocalImageBuild implements ContainerImageBuildInstruction {
     @Internal
     public String getOtherProjectPath() {
         return otherProjectPath;
+    }
+
+    @Override
+    @Internal
+    public String getReference() {
+        return tag.get();
     }
 }

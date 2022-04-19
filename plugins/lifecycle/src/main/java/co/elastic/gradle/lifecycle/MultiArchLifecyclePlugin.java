@@ -213,38 +213,47 @@ public class MultiArchLifecyclePlugin implements Plugin<Project> {
 
     public static void publishForPlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, PUBLISH_TASK_NAME + "ForPlatform");
+        LifecyclePlugin.publish(target, dependency);
     }
 
     public static void checkForPlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.CHECK_TASK_NAME + "ForPlatform");
+        LifecyclePlugin.check(target, dependency);
     }
 
     public static void assembleForPlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.ASSEMBLE_TASK_NAME + "ForPlatform");
+        LifecyclePlugin.assemble(target, dependency);
     }
 
     public static void publishPlatformIndependent(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, PUBLISH_TASK_NAME + "PlatformIndependent");
+        LifecyclePlugin.publish(target, dependency);
     }
 
     public static void checkPlatformIndependent(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.CHECK_TASK_NAME + "PlatformIndependent");
+        LifecyclePlugin.check(target, dependency);
     }
 
     public static void assemblePlatformIndependent(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.ASSEMBLE_TASK_NAME + "PlatformIndependent");
+        LifecyclePlugin.assemble(target, dependency);
     }
 
     public static void publishCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, PUBLISH_TASK_NAME + "");
+        LifecyclePlugin.publish(target, dependency);
     }
 
     public static void checkCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.CHECK_TASK_NAME + "");
+        LifecyclePlugin.check(target, dependency);
     }
 
     public static void assembleCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.ASSEMBLE_TASK_NAME + "");
+        LifecyclePlugin.assemble(target, dependency);
     }
 
 }
