@@ -1,17 +1,15 @@
 package co.elastic.gradle.utils;
 
 
+import java.util.Map;
+
 public enum OS {
     LINUX,
-    WINDOWS,
     DARWIN;
 
 
     public static OS current() {
         String osName = System.getProperty("os.name").toLowerCase();
-        if (osName.contains("windows")) {
-            return WINDOWS;
-        }
         if (osName.contains("mac os x") || osName.contains("darwin") || osName.contains("osx")) {
             return DARWIN;
         }
@@ -19,5 +17,9 @@ public enum OS {
             return LINUX;
         }
         throw new IllegalStateException("Unknown OS " + osName);
+    }
+
+    public String map(Map<OS, String> map) {
+        return map.getOrDefault(this, name()).toLowerCase();
     }
 }
