@@ -37,7 +37,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     //      packages are not updated and still awaitable as time goes by
 
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04", "centos:7", "debian:11"})
+    @ValueSource(strings = {"ubuntu:20.04", "centos:7"/*, "debian:11"*/}) // FIXME: re-enable once performance issues are fixed
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
