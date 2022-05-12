@@ -33,17 +33,17 @@ public class DockerPluginConventions {
 
     public static CopySpecInternal.CopySpecListener mapCopySpecToTaskInputs(TaskProvider<? extends Task> taskProvider) {
         return (path, spec) -> {
-            doMapCopySpecToTaskInoputs(path, spec, taskProvider.get());
+            doMapCopySpecToTaskInputs(path, spec, taskProvider.get());
         };
     }
 
     public static CopySpecInternal.CopySpecListener mapCopySpecToTaskInputs(Task task) {
         return (path, spec) -> {
-            doMapCopySpecToTaskInoputs(path, spec, task);
+            doMapCopySpecToTaskInputs(path, spec, task);
         };
     }
 
-    private static void doMapCopySpecToTaskInoputs(CopySpecInternal.CopySpecAddress path, CopySpecInternal spec, Task task) {
+    private static void doMapCopySpecToTaskInputs(CopySpecInternal.CopySpecAddress path, CopySpecInternal spec, Task task) {
         // Create runtime properties to track the CopySpec as input thus invalidating the cache if any of the input files change
         // unfortunetly there's no public API so we use some internals here, the code is inspired from Gradles
         // AbstractCopyTask

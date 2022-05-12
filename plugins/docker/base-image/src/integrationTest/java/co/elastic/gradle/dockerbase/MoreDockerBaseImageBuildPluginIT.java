@@ -50,7 +50,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.docker-base")
                    id("co.elastic.vault")
                 }
-                project.version="myversion"
+                project.version = "myversion"
                 vault {
                       address.set("https://secrets.elastic.co:8200")
                       auth {
@@ -65,7 +65,6 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                     dockerTagPrefix.set("docker.elastic.co/employees/%s")
                     mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
                     fromUbuntu("ubuntu", "20.04")
-                 
                 }
                 """, ghUsername
         ));
@@ -155,12 +154,6 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                repositories {
-                    mavenCentral()
-                }
-                dependencies {
-                   dockerEphemeral("org.slf4j:slf4j-api:1.7.36")
-                }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
                     mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
@@ -178,6 +171,62 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
         ).buildAndFail();
 
         assertContains(result.getOutput(), "is greater than the current limit of 10Mb");
+    }
+
+    @Test
+    public void testWithGeneratedInput() throws IOException {
+        helper.buildScript("""
+                import java.net.URL
+                plugins {
+                   id("co.elastic.docker-base")
+                   id("co.elastic.vault")
+                }
+                vault {
+                      address.set("https://secrets.elastic.co:8200")
+                      auth {
+                        ghTokenFile()
+                        ghTokenEnv()
+                        tokenEnv()
+                        roleAndSecretEnv()
+                      }
+                }
+                val archive by tasks.registering(Zip::class) {
+                    from("build.gradle.kts")
+                    archiveFileName.set("my.zip")
+                    destinationDirectory.set(layout.buildDirectory.dir("dist"))
+                }
+                val custom by tasks.registering {
+                    outputs.file("$buildDir/build.gradle.kts")
+                    doLast {
+                       copy {
+                          from("build.gradle.kts")
+                          into(buildDir)
+                       }   
+                    }
+                }
+                
+                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                dockerBaseImage {
+                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    fromUbuntu("ubuntu", "20.04")
+                    copySpec {
+                        from(archive)
+                        from(custom)
+                        into("home")
+                    }
+                    run("find /home", "ls /home/my.zip", "ls /home/build.gradle.kts")
+                }
+                """
+        );
+        Files.copy(
+                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
+                helper.projectDir().resolve("docker-base-image.lock")
+        );
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s",
+                "dockerBaseImageBuild"
+        ).build();
+
+        assertContains(result.getOutput(), "/home/my.zip");
     }
 
     @Test

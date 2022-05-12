@@ -2,6 +2,7 @@ package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.GradleTestkitHelper;
 import co.elastic.gradle.TestkitIntegrationTest;
+import co.elastic.gradle.utils.Architecture;
 import org.apache.commons.io.IOUtils;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
@@ -20,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -35,7 +37,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     //      packages are not updated and still awaitable as time goes by
 
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04", "centos:7", /*"debian:11"*/}) // FIXME: re-enable debian after fixing performance issues with artefactory
+    @ValueSource(strings = {"ubuntu:20.04", "centos:7", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
@@ -77,7 +79,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         final Set<String> imagesInDaemonRightBeforeClean = getImagesInDaemon();
         final String expectedLocalTag = "gradle-test-local/" + helper.projectDir().getFileName() + "-base:latest";
-        if (! imagesInDaemonRightBeforeClean.contains(expectedLocalTag)) {
+        if (!imagesInDaemonRightBeforeClean.contains(expectedLocalTag)) {
             fail("Expected " + expectedLocalTag + " to be present in the daemon after local import but it was not");
         }
 
@@ -86,7 +88,9 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         Set<String> imagesInDaemonAfterClean = getImagesInDaemon();
         imagesInDaemonAfterClean.removeAll(imagesInDaemonAlreadyThere);
-        if (! imagesInDaemonAfterClean.isEmpty()) {
+        if (!imagesInDaemonAfterClean.isEmpty()) {
+            // There aren't a lot of great ways to test this, and this one might be too fragile as other tests might add
+            // images that make this fail ...
             fail("Expected clean task to clean up everything but daemon was left with " + imagesInDaemonAfterClean);
         }
     }
@@ -183,9 +187,10 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void testPullTask() throws IOException {
+        Files.createDirectories(helper.projectDir().resolve("s1"));
         Files.copy(
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
-                helper.projectDir().resolve("docker-base-image.lock")
+                helper.projectDir().resolve("s1/docker-base-image.lock")
         );
         helper.settings("""
                 include("s1")
@@ -211,8 +216,14 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBasePull").build();
-        assertContains(result.getOutput(), "20.04: Pulling from library/ubuntu");
-        assertContains(result.getOutput(), "sha256:9101220a875cee98b016668342c489ff0674f247f6ca20dfc91b91c0f28581ae");
+        assertContains(result.getOutput(), "Pulling from library/ubuntu");
+        assertContains(
+                result.getOutput(),
+                Architecture.current().map(Map.of(
+                        Architecture.AARCH64, "sha256:a51c8bb81605567ea27d627425adf94a613d675a664bf473d43a55a8a26416b8",
+                        Architecture.X86_64, "sha256:31cd7bbfd36421dfd338bceb36d803b3663c1bfa87dfe6af7ba764b5bf34de05"
+                ))
+        );
         assertEquals(TaskOutcome.SKIPPED, Objects.requireNonNull(result.task(":s2:dockerBasePull")).getOutcome());
     }
 

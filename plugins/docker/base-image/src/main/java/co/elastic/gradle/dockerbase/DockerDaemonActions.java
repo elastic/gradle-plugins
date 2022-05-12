@@ -143,10 +143,10 @@ public abstract class DockerDaemonActions {
 
     public String instructionAsDockerFileInstruction(ContainerImageBuildInstruction instruction) {
         if (instruction instanceof From from) {
-            return "FROM " + from.getReference();
+            return "FROM " + from.getReference().get();
         } else if (instruction instanceof final FromLocalImageBuild fromLocalImageBuild) {
-            return "# " + fromLocalImageBuild.getOtherProjectPath() + "\n" +
-                   "FROM " + fromLocalImageBuild.getTag().get();
+            return "# " + fromLocalImageBuild.otherProjectPath() + "\n" +
+                   "FROM " + fromLocalImageBuild.tag().get();
         } else if (instruction instanceof Copy copySpec) {
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") +
                    workingDir.relativize(getContextDir().resolve(copySpec.getLayer())) + " /";
@@ -199,7 +199,7 @@ public abstract class DockerDaemonActions {
         };
         String authPath = switch (buildable.getOSDistribution().get()) {
             case DEBIAN, UBUNTU -> "/etc/apt/auth.conf.d";
-            case CENTOS -> "/etc/auth"; // TODO: fixme
+            case CENTOS -> "/etc/auth";
         };
         return Map.of(
                 "readwrite,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir(),
@@ -358,7 +358,7 @@ public abstract class DockerDaemonActions {
         {
             final String baseImage = buildable.getActualInstructions().stream()
                     .filter(each -> each instanceof FromImageReference)
-                    .map(each -> ((FromImageReference) each).getReference())
+                    .map(each -> ((FromImageReference) each).getReference().get())
                     .findFirst()
                     .orElseThrow(() -> new GradleException("A base image is not configured"));
             final ByteArrayOutputStream whoAmIOut = new ByteArrayOutputStream();

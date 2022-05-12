@@ -1,9 +1,9 @@
 package co.elastic.gradle.dockerbase;
 
 
-import co.elastic.gradle.dockerbase.lockfile.Lockfile;
+import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.dockerbase.lockfile.Packages;
-import co.elastic.gradle.dockerbase.lockfile.UnchangingContainerReference;
+import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.dockerbase.lockfile.UnchangingPackage;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
@@ -26,6 +26,8 @@ import org.gradle.api.internal.file.copy.DefaultCopySpec;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
+import org.gradle.api.provider.Provider;
+import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.tasks.*;
 import org.gradle.process.ExecOperations;
 
@@ -64,6 +66,13 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     public Instant getCurrentTime() {
         // Task should never be considered up-to-date
         return Instant.now();
+    }
+
+    @Override
+    @Internal
+    public Provider<String> getImageId() {
+        //Convenience Provider to access the imageID from the imageIdFile
+        return getImageIdFile().map(RegularFileUtils::readString).map(String::trim);
     }
 
     @Override
@@ -109,14 +118,19 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                         getInputInstructions().get().stream()
                                 .map(instruction -> {
                                     if (instruction instanceof From from) {
-                                        if (from.getSha() != null) {
+                                        if (from.getReference().get().contains("@")) {
                                             throw new IllegalStateException("Input instruction can't have a digest");
                                         }
-                                        return new From(
-                                                from.getImage(),
-                                                from.getVersion(),
-                                                getManifestDigest(from.getReference())
-                                        );
+                                        return new From(getProviderFactory().provider(() ->
+                                        {
+                                            final String[] split = from.getReference().get().split(":");
+                                            return String.format(
+                                                    "%s:%s@%s",
+                                                    split[0],
+                                                    split[1],
+                                                    getManifestDigest(from.getReference().get())
+                                            );
+                                        }));
                                     } else {
                                         return instruction;
                                     }
@@ -134,6 +148,9 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                 )
                 .toList();
     }
+
+    @Inject
+    protected abstract ProviderFactory getProviderFactory();
 
     @Internal
     public abstract RegularFileProperty getLockFileLocation();
@@ -170,11 +187,11 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
         dockerUtils.exec(spec -> spec.commandLine("docker", "image", "rm", uuid));
 
-        final Lockfile oldLockfile;
+        final BaseLockfile oldLockfile;
         if (Files.exists(RegularFileUtils.toPath(getLockFileLocation()))) {
-            oldLockfile = Lockfile.parse(Files.newBufferedReader(RegularFileUtils.toPath(getLockFileLocation())));
+            oldLockfile = BaseLockfile.parse(Files.newBufferedReader(RegularFileUtils.toPath(getLockFileLocation())));
         } else {
-            oldLockfile = new Lockfile(Map.of(), null);
+            oldLockfile = new BaseLockfile(Map.of(), null);
         }
         final Map<Architecture, Packages> packages = new HashMap<>(oldLockfile.getPackages());
         Map<Architecture, UnchangingContainerReference> image;
@@ -210,12 +227,18 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         Optional<UnchangingContainerReference> newImage = getActualInstructions().stream()
                 .filter(each -> each instanceof From)
                 .map(each -> (From) each)
-                .map(each -> new UnchangingContainerReference(
-                        each.getImage(),
-                        each.getVersion(),
-                        getManifestDigest(each.getReference())
-                ))
+                .map(each -> {
+                    final String[] split = each.getReference().get().split(":", 2);
+                    return new UnchangingContainerReference(
+                            split[0],
+                            // At this point the sha was added to the instructions because we are operating on the
+                            // actual instructions
+                            split[1].split("@", 2)[0],
+                            getManifestDigest(each.getReference().get())
+                    );
+                })
                 .findAny();
+
         if (newImage.isPresent()) {
             if (image == null) {
                 image = new HashMap<>();
@@ -226,8 +249,8 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         }
 
         try (Writer writer = Files.newBufferedWriter(RegularFileUtils.toPath(getLockFileLocation()))) {
-            Lockfile.write(
-                    new Lockfile(
+            BaseLockfile.write(
+                    new BaseLockfile(
                             packages,
                             image
                     ),
@@ -259,6 +282,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                     }
                 }
                 if (digest == null) {
+                    // Happens when the tag does not point to a manifest list
                     // We could make this work for a single platform if we really wanted to, for now it's an error
                     throw new GradleException("Can't find manifest digest from docker output. " +
                                               "Does the image have a manifest?\n" + stdout

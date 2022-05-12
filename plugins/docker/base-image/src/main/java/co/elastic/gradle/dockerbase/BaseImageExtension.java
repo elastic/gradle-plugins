@@ -1,6 +1,6 @@
 package co.elastic.gradle.dockerbase;
 
-import co.elastic.gradle.dockerbase.lockfile.Lockfile;
+import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.ContainerImageProviderTask;
@@ -49,9 +49,9 @@ public abstract class BaseImageExtension implements ExtensionAware {
 
         getMaxOutputSizeMB().convention(-1L);
 
-        getDockerTagPrefix().convention("gradle-docker-plugin");
+        getDockerTagPrefix().convention("gradle-docker-base");
 
-        getDockerTagLocalPrefix().convention("local/gradle-docker-plugin");
+        getDockerTagLocalPrefix().convention("local/gradle-docker-base");
     }
 
     public abstract Property<OSDistribution> getOSDistribution();
@@ -60,10 +60,10 @@ public abstract class BaseImageExtension implements ExtensionAware {
 
     public abstract RegularFileProperty getLockFileLocation();
 
-    public Provider<Lockfile> getLockFile() {
+    public Provider<BaseLockfile> getLockFile() {
         return getProviderFactory().provider(() -> {
             try {
-                return Lockfile.parse(Files.newBufferedReader(RegularFileUtils.toPath(getLockFileLocation())));
+                return BaseLockfile.parse(Files.newBufferedReader(RegularFileUtils.toPath(getLockFileLocation())));
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not read lockfile", e);
             }
@@ -173,7 +173,7 @@ public abstract class BaseImageExtension implements ExtensionAware {
 
     private void from(String image, String version) {
         // The sha comes from the lockfile
-        instructions.add(new From(image, version, null));
+        instructions.add(new From(getProviderFactory().provider(() -> String.format("%s:%s", image, version))));
     }
 
     public void from(Project otherProject) {
@@ -243,7 +243,7 @@ public abstract class BaseImageExtension implements ExtensionAware {
     }
 
     public List<ContainerImageBuildInstruction> getInstructions() {
-        return List.copyOf(instructions);
+        return instructions;
     }
 
     public void useDefaultRepos() {

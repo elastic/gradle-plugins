@@ -9,10 +9,16 @@ import co.elastic.gradle.utils.PrefixingOutputStream;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 
 public class ManifestToolPlugin implements Plugin<Project> {
+
+    public static File getExecutable(Project target) {
+        return BaseCliPlugin.getExecutable(target, "manifest-tool");
+    }
+
     @Override
     public void apply(Project target) {
         target.getPluginManager().apply(BaseCliPlugin.class);
@@ -32,7 +38,7 @@ public class ManifestToolPlugin implements Plugin<Project> {
         target.getTasks().withType(ManifestToolExecTask.class)
                 .configureEach(task -> {
                     task.setEnvironment(Collections.emptyMap());
-                    task.setExecutable(BaseCliPlugin.getExecutable(target, "manifest-tool"));
+                    task.setExecutable(getExecutable(target));
                     task.dependsOn(":" + BaseCliPlugin.SYNC_TASK_NAME);
                     task.setStandardOutput(new PrefixingOutputStream("[manifest-tool] ", System.out));
                     task.setErrorOutput(new PrefixingOutputStream("[manifest-tool] ", System.err));

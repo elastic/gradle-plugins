@@ -1,24 +1,19 @@
 package co.elastic.gradle.utils.docker.instruction;
 
 import org.gradle.api.provider.Provider;
-import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.PathSensitive;
-import org.gradle.api.tasks.PathSensitivity;
+import org.gradle.api.tasks.Input;
 
 import java.io.File;
 
-public class FromLocalArchive implements ContainerImageBuildInstruction {
+public record FromLocalArchive(
+        Provider<File> archive,
+        // No need to declare as input as we have the ID, so we can save some time by avoiding fingerprinting large files
+        Provider<String> imageId
+) implements ContainerImageBuildInstruction {
 
-        private final Provider<File> baseImage;
-
-        public FromLocalArchive(Provider<File> baseImage) {
-            this.baseImage = baseImage;
-        }
-
-        @InputFile
-        @PathSensitive(PathSensitivity.RELATIVE)
-        public Provider<File> getImageArchive() {
-            return baseImage;
-        }
+    @Input
+    public Provider<String> getImageId() {
+        return imageId;
+    }
 
 }

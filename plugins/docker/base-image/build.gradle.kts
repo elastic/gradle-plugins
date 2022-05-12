@@ -14,7 +14,6 @@ dependencies {
     implementation(project(":libs:docker"))
     implementation(project(":libs:utils"))
 
-    implementation(project(":plugins:docker:base"))
     implementation(project(":plugins:lifecycle"))
 
     val jacksonVersion = "2.13.2"
@@ -23,9 +22,10 @@ dependencies {
     implementation("org.jetbrains:annotations:23.0.0")
     implementation("org.apache.commons:commons-csv:1.9.0")
 
+    runtimeOnly("com.github.luben:zstd-jni:1.5.0-4")
 
     // Fixme: remove dependency from base image
-    implementation("com.google.cloud.tools:jib-core:0.20.0")
+    implementation("com.google.cloud.tools:jib-core:0.21.0")
 
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:vault"))

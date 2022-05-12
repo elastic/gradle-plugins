@@ -71,7 +71,6 @@ public class DockerUtils {
         return exec(action, OperatingSystem.current().isMacOsX());
     }
 
-
     /**
      * Adds or updates the PATH environment variable to work around a Docker Desktop for Mac issue.
      * See https://github.com/elastic/cloud/issues/79374 for more context

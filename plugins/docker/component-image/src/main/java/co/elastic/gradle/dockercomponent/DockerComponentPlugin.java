@@ -1,157 +1,184 @@
 package co.elastic.gradle.dockercomponent;
 
 import co.elastic.gradle.cli.manifest.ManifestToolPlugin;
-import co.elastic.gradle.docker.base.DockerLocalCleanTask;
+import co.elastic.gradle.dockerbase.DockerLocalCleanTask;
+import co.elastic.gradle.lifecycle.LifecyclePlugin;
+import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;
 import co.elastic.gradle.snyk.SnykPlugin;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.GradleUtils;
-import co.elastic.gradle.utils.docker.DockerPluginConventions;
-import org.gradle.api.Action;
+import co.elastic.gradle.utils.docker.InstructionCopySpecMapper;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.Task;
 import org.gradle.api.tasks.TaskProvider;
 
 import java.util.Arrays;
-import java.util.Optional;
-import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class DockerComponentPlugin implements Plugin<Project> {
 
-    public static final String LOCAL_IMPORT_TASK_NAME = "dockerComponentImageLocalImport";
+    public static final String LOCK_FILE_TASK_NAME = "dockerComponentLockFile";
 
     @Override
-    public void apply(Project project) {
-        project.getPluginManager().apply(ManifestToolPlugin.class);
-        project.getPluginManager().apply(SnykPlugin.class);
+    public void apply(Project target) {
+        target.getPluginManager().apply(ManifestToolPlugin.class);
+        target.getPluginManager().apply(SnykPlugin.class);
 
-        // FIXME: Make it configurable
-        final String localImportTag = "docker.elastic.co" + "/" +
-                                      "gradle/" +
-                                      project.getName() +
-                                      Optional.ofNullable((String) null).map(it -> "-" + it).orElse("") + ":" +
-                                      "latest";
-        String result;
-        if (GradleUtils.isCi()) {
-            // FIXME: This needs to be configurable!!
-            result = "cloud-ci";
-        } else {
-            result = Optional.ofNullable(project.findProperty("co.elastic.docker.push.organization"))
-                    .map(String::valueOf)
-                    .orElse("gradle");
-        }
-        final String manifestPushTag = "docker.elastic.co" + "/" +
-                                       result + "/" +
-                                       project.getName() +
-                                       ":" + project.getVersion();
+        final ComponentImageBuildExtension extension = target.getExtensions()
+                .create("dockerComponentImage", ComponentImageBuildExtension.class);
 
-        final TaskProvider<DockerComponentLocalImport> localImport = project.getTasks().register(LOCAL_IMPORT_TASK_NAME, DockerComponentLocalImport.class);
+        final TaskProvider<ComponentPullTask> dockerComponentPull = target.getTasks().register(
+                "dockerComponentPull",
+                ComponentPullTask.class,
+                task -> {
+                    task.getLockfileLocation().set(extension.getLockFileLocation());
+                }
+        );
+        LifecyclePlugin.resolveAllDependencies(target, dockerComponentPull);
 
-        TaskProvider<ComponentBuildTask> dockerComponentImageBuild = project.getTasks().register(
+        target.getTasks().register(
+                LOCK_FILE_TASK_NAME,
+                ComponentLockfileTask.class,
+                task -> {
+                    task.getInstructions().set(extension.getInstructions());
+                    task.getLockFileLocation().set(extension.getLockFileLocation());
+                }
+        );
+
+        TaskProvider<ComponentBuildTask> dockerComponentImageBuild = target.getTasks().register(
                 "dockerComponentImageBuild",
                 ComponentBuildTask.class,
-                // This is again a hack, because we don't have the DSL on a project extensions, so we need to make sure
-                // that import task is registered with the copy specs from the DSL and maps them as inputs. The only
-                // way we found that to work if it happens before the builds task is evaluated, thus we have it here
-                DockerPluginConventions.mapCopySpecToTaskInputs(localImport)
-        );
-
-        localImport.configure(task -> {
-            task.getTag().set(localImportTag);
-            task.getInstructions().set(dockerComponentImageBuild.flatMap(ComponentBuildTask::getInstructions));
-            task.doFirst("create layers from build task", new Action<Task>() {
-                @Override
-                public void execute(Task t) {
-                    // This is a wired interaction between tasks. It's clear that we have a DSL for specifying the docker image
-                    // and multiple tasks that do different operations with it so a better model would be to have the DSL
-                    // as a project extensions rather than attached to the task, but that's too bug of a change to tackle
-                    // as of this writing
-                    dockerComponentImageBuild.get().createLayersDir();
+                task -> {
+                    task.getInstructions().set(extension.getInstructions());
+                    task.getLockFileLocation().set(extension.getLockFileLocation());
+                    task.getMaxOutputSizeMB().set(extension.getMaxOutputSizeMB());
                 }
-            });
-            // To make sure that everything can indeed be synced we must inherit the dependencies of the build task
-            task.dependsOn((Callable<Object>) () -> dockerComponentImageBuild.get().getDependsOn());
-        });
+        );
 
+        final TaskProvider<DockerComponentLocalImport> localImport = target.getTasks().register(
+                "dockerComponentImageLocalImport",
+                DockerComponentLocalImport.class,
+                task -> {
+                    task.getTag().set(
+                            extension.getDockerTagLocalPrefix()
+                                    .map(prefix -> prefix + "/" + target.getName() + ":latest")
+                    );
+                    task.getInstructions().set(extension.getInstructions());
+                    task.getLockFileLocation().set(extension.getLockFileLocation());
+                }
+        );
 
-        project.getTasks().register("dockerComponentImageClean", DockerLocalCleanTask.class, task -> {
-            task.getImageTag().set(localImportTag);
-        });
-        project.getTasks().named("clean", clean->clean.dependsOn("dockerComponentImageClean"));
+        final TaskProvider<DockerLocalCleanTask> dockerComponentImageClean = target.getTasks().register(
+                "dockerComponentImageClean",
+                DockerLocalCleanTask.class,
+                task -> {
+                    task.getImageTag().set(localImport.flatMap(DockerComponentLocalImport::getTag));
+                });
 
-        TaskProvider<ComponentPushTask> dockerComponentImagePush = project.getTasks().register(
+        LifecyclePlugin.clean(target, dockerComponentImageClean);
+
+        TaskProvider<ComponentPushTask> dockerComponentImagePush = target.getTasks().register(
                 "dockerComponentImagePush",
-                ComponentPushTask.class
+                ComponentPushTask.class,
+                task -> {
+                    task.dependsOn(dockerComponentImageBuild);
+                    task.getImageArchive().set(
+                            dockerComponentImageBuild.flatMap(ComponentBuildTask::getImageArchive)
+                    );
+                    task.getCreatedAtFiles().set(
+                            dockerComponentImageBuild.flatMap(ComponentBuildTask::getCreatedAtFile)
+                    );
+                    task.getTags().set(
+                            extension.getDockerTagPrefix().flatMap(prefix ->
+                                    extension.getInstructions().map(instructions ->
+                                            instructions.keySet().stream()
+                                                    .collect(Collectors.toMap(
+                                                            Function.identity(),
+                                                            (Architecture arch) -> prefix + "/" + target.getName() +
+                                                                                   ":" + target.getVersion() + "-" +
+                                                                                   arch.dockerName())
+                                                    ))
+                            ));
+                }
         );
-        dockerComponentImagePush.configure(task -> {
-            task.dependsOn(dockerComponentImageBuild);
-            task.getImageArchive().set(
-                    dockerComponentImageBuild.flatMap(ComponentBuildTask::getImageArchive)
-            );
-            task.getCreatedAtFiles().set(
-                    dockerComponentImageBuild.flatMap(ComponentBuildTask::getCreatedAtFile)
-            );
-        });
 
-        TaskProvider<PushManifestListTask> pushManifestList = project.getTasks().register(
+        TaskProvider<PushManifestListTask> pushManifestList = target.getTasks().register(
                 "pushManifestList",
-                PushManifestListTask.class
+                PushManifestListTask.class,
+                task -> {
+                    task.dependsOn(dockerComponentImagePush);
+                    task.getArchitectureTags().set(
+                            dockerComponentImagePush.flatMap(ComponentPushTask::getTags)
+                    );
+                    task.getTag().set(
+                            extension.getDockerTagPrefix()
+                                    .map(prefix -> prefix + "/" + target.getName() + ":" + target.getVersion())
+                    );
+                }
         );
-        pushManifestList.configure(task -> {
-            task.dependsOn(dockerComponentImagePush);
-            task.getArchitectureTags().set(
-                    dockerComponentImagePush.flatMap(ComponentPushTask::getTags)
-            );
-            task.getTag().set(manifestPushTag);
-        });
 
-        final TaskProvider<SnykCLIExecTask> dockerComponentImageScanLocal = project.getTasks().register(
+        final TaskProvider<SnykCLIExecTask> dockerComponentImageScanLocal = target.getTasks().register(
                 "dockerComponentImageScanLocal",
-                SnykCLIExecTask.class
-        );
-        dockerComponentImageScanLocal.configure(task -> {
-            task.setGroup("security");
-            task.setDescription("Runs a snyk test on the resulting locally imported image." +
-                    " The task fails if voulnerabilitiues are discovered.");
-            task.dependsOn(localImport);
-            task.setArgs(Arrays.asList("container", "test", localImportTag));
-            // snyk only scans the image of the platform it's running on and would fail if onw is not available.
-            // luckily a non-existing image can't have any vulnerabilities, so we can just skip it
-            task.onlyIf(
-                    unsused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
-                            .contains(Architecture.current())
-            );
-        });
+                SnykCLIExecTask.class,
+                task -> {
+                    task.setGroup("security");
+                    task.setDescription("Runs a snyk test on the resulting locally imported image." +
+                                        " The task fails if vulnerabilities are discovered.");
+                    task.dependsOn(localImport);
+                    task.doFirst(t -> task.setArgs(Arrays.asList("container", "test", localImport.get().getTag().get())));
+                    // snyk only scans the image of the platform it's running on and would fail if one is not available.
+                    // luckily a non-existing image can't have any vulnerabilities, so we can just skip it
+                    task.onlyIf(
+                            unsused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
+                                    .contains(Architecture.current())
+                    );
+                });
 
-        final TaskProvider<SnykCLIExecTask> dockerComponentImageScan = project.getTasks().register(
+        final TaskProvider<SnykCLIExecTask> dockerComponentImageScan = target.getTasks().register(
                 "dockerComponentImageScan",
-                SnykCLIExecTask.class
-        );
-        dockerComponentImageScan.configure(task -> {
-            task.setGroup("security");
-            task.setDescription(
-                    "Runs Snyk monitor on the resulting image from the container registry. " +
-                    "Does not depend on pushing the image, instead assumes that this has already happened." +
-                    "The task creates a report in Snyk and alwasy suceeds."
-            );
-            task.setArgs(Arrays.asList("container", "monitor", manifestPushTag));
-            task.onlyIf(
-                    unsused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
-                            .contains(Architecture.current())
-            );
-        });
+                SnykCLIExecTask.class,
+                task -> {
+                    task.setGroup("security");
+                    task.setDescription(
+                            "Runs Snyk monitor on the resulting image from the container registry. " +
+                            "Does not depend on pushing the image, instead assumes that this has already happened." +
+                            "The task creates a report in Snyk and alwasy suceeds."
+                    );
+                    task.doFirst(t ->
+                            task.setArgs(Arrays.asList("container", "monitor", pushManifestList.get().getTag().get()))
+                    );
+                    task.onlyIf(
+                            unused -> dockerComponentImageBuild.get().getInstructions().keySet().get()
+                                    .contains(Architecture.current())
+                    );
+                });
 
-        GradleUtils.registerOrGet(project, "dockerBuild").configure(task ->
+        GradleUtils.registerOrGet(target, "dockerBuild").configure(task ->
                 task.dependsOn(dockerComponentImageBuild)
         );
-        GradleUtils.registerOrGet(project, "dockerLocalImport").configure(task ->
+        GradleUtils.registerOrGet(target, "dockerLocalImport").configure(task ->
                 task.dependsOn(localImport)
         );
 
-        project.getTasks().named("assembleCombinePlatform", task -> task.dependsOn(dockerComponentImageBuild));
-        project.getTasks().named("publishCombinePlatform", task -> task.dependsOn(pushManifestList));
-        
-        project.getTasks().named("securityScan", task -> task.dependsOn(dockerComponentImageScan));
+        MultiArchLifecyclePlugin.assembleCombinePlatform(target, dockerComponentImageBuild);
+        MultiArchLifecyclePlugin.publishCombinePlatform(target, pushManifestList);
+
+        LifecyclePlugin.securityScan(target, dockerComponentImageScan);
+
+        target.afterEvaluate(p -> {
+            // assign copy specs to the build tasks to correctly evaluate build avoidance
+            dockerComponentImageBuild.configure(task ->
+                    extension.getInstructions().get().forEach((arch, instructions) ->
+                            InstructionCopySpecMapper.assignCopySpecs(instructions, task.rootCopySpec)
+                    )
+            );
+            localImport.configure(task ->
+                    extension.getInstructions().get().forEach((arch, instructions) ->
+                            InstructionCopySpecMapper.assignCopySpecs(instructions, task.rootCopySpec)
+                    )
+            );
+        });
     }
 }

@@ -27,7 +27,7 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     manifestTool {
-                       val credentials = vault.readSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -65,7 +65,7 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
                     manifestTool {
                        baseURL.set(java.net.URL("https://artifactory.elastic.dev/artifactory/github-release-proxy"))
                        version.set("v1.0.2")
-                       val credentials = vault.readSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }

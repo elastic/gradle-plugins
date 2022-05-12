@@ -1,6 +1,6 @@
 package co.elastic.gradle.dockerbase;
 
-import co.elastic.gradle.docker.base.ExtractCompressedTar;
+import co.elastic.gradle.utils.ExtractCompressedTar;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.ContainerImageProviderTask;
 import co.elastic.gradle.utils.docker.DockerUtils;

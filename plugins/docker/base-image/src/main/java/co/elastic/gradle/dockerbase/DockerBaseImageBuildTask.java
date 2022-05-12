@@ -1,11 +1,10 @@
 package co.elastic.gradle.dockerbase;
 
-import co.elastic.gradle.dockerbase.lockfile.Lockfile;
+import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.dockerbase.lockfile.Packages;
-import co.elastic.gradle.dockerbase.lockfile.UnchangingContainerReference;
+import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
-import co.elastic.gradle.utils.docker.ContainerArchiveProviderTask;
 import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.GradleCacheUtilities;
@@ -24,6 +23,7 @@ import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.tasks.*;
 import org.gradle.process.ExecOperations;
 import org.gradle.process.ExecResult;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @CacheableTask
-public abstract class DockerBaseImageBuildTask extends DefaultTask implements ContainerArchiveProviderTask, ImageBuildable {
+public abstract class DockerBaseImageBuildTask extends DefaultTask implements ImageBuildable {
 
     private final Configuration dockerEphemeralConfiguration; // Dependencies for docker
     private final DefaultCopySpec rootCopySpec;
@@ -81,7 +81,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Co
     public abstract RegularFileProperty getImageIdFile();
 
     @Nested
-    public abstract Property<Lockfile> getLockFile();
+    public abstract Property<BaseLockfile> getLockFile();
 
     @Nested
     public abstract ListProperty<OsPackageRepository> getMirrorRepositories();
@@ -91,7 +91,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Co
 
     @Nested
     public List<ContainerImageBuildInstruction> getActualInstructions() {
-        Lockfile lockfile = getLockFile().get();
+        BaseLockfile lockfile = getLockFile().get();
         List<ContainerImageBuildInstruction> instructions = getInputInstructions().get();
 
         Packages packages = lockfile.getPackages().get(getArchitecture());
@@ -117,24 +117,27 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Co
                                     throw new GradleException("Missing image in lockfile, does it need to be regenerated?");
                                 }
                                 UnchangingContainerReference lockedImage = lockfile.getImage().get(Architecture.current());
-                                if (from.getSha() != null) {
+                                if (from.getReference().get().contains("@")) {
                                     throw new IllegalStateException(
                                             "The sha should come from the lockfile and thus should " +
                                             "not be specified in the input instructions."
                                     );
                                 }
-                                if (!from.getImage().equals(lockedImage.getRepository()) ||
-                                    !from.getVersion().equals(lockedImage.getTag())
+                                if (!from.getReference().get().contains(lockedImage.getRepository()) ||
+                                    !from.getReference().get().contains(lockedImage.getTag())
                                 ) {
                                     throw new GradleException(
-                                            "Can't find " + from.getReference() + " in the lockfile. " +
-                                            "Does the lockfile needs to be regenerated?"
+                                            "Can't find " + from.getReference().get() + " in the lockfile. " +
+                                            "Does the lockfile needs to be regenerated?\n" + lockedImage.getTag()
                                     );
                                 }
                                 return new From(
-                                        lockedImage.getRepository(),
-                                        lockedImage.getTag(),
-                                        lockedImage.getDigest()
+                                        getProviderFactory().provider(() -> String.format(
+                                                "%s:%s@%s",
+                                                lockedImage.getRepository(),
+                                                lockedImage.getTag(),
+                                                lockedImage.getDigest()
+                                        ))
                                 );
                             } else if (instruction instanceof Install install) {
                                 final List<String> missingPackages = install.getPackages().stream()
@@ -172,6 +175,9 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Co
         ).toList();
     }
 
+    @Inject
+    protected abstract ProviderFactory getProviderFactory();
+
     @Override
     @Internal
     public DefaultCopySpec getRootCopySpec() {
@@ -187,6 +193,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Co
     @Inject
     abstract protected ObjectFactory getObjectFactory();
 
+    @Override
     @Internal
     public Provider<String> getImageId() {
         //Convenience Provider to access the imageID from the imageIdFile

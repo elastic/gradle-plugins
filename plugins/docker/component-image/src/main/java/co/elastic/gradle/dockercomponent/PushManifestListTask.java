@@ -1,10 +1,9 @@
 package co.elastic.gradle.dockercomponent;
 
+import co.elastic.gradle.cli.manifest.ManifestToolExecTask;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.RetryUtils;
-import com.google.common.collect.ImmutableMap;
-import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
@@ -21,30 +20,22 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
-abstract public class PushManifestListTask extends DefaultTask {
+abstract public class PushManifestListTask extends ManifestToolExecTask {
 
-    private File manifestTool;
 
     public PushManifestListTask() {
         getDigestFile().convention(
                 getProjectLayout().getBuildDirectory().file(getName() + ".digest")
         );
-    }
-
-    public void setManifestTool(File manifestTool) {
-        this.manifestTool = manifestTool;
+        setArgs(List.of("--version"));
     }
 
     @Inject
@@ -61,9 +52,7 @@ abstract public class PushManifestListTask extends DefaultTask {
 
     @Internal
     public Provider<String> getDigest() {
-        return getDigestFile().map(regularFile -> {
-            return RegularFileUtils.readString(regularFile).trim();
-        });
+        return getDigestFile().map(regularFile -> RegularFileUtils.readString(regularFile).trim());
     }
 
     @Inject
@@ -89,8 +78,8 @@ abstract public class PushManifestListTask extends DefaultTask {
 
         final Random random = new Random();
         final String output = RetryUtils.retry(() -> pushManifestList(templates))
-                .maxAttempt(12)
-                .exponentialBackoff(random.nextInt(5) * 1000, 300000)
+                .maxAttempt(6)
+                .exponentialBackoff(random.nextInt(5) * 1000, 30000)
                 .onRetryError(error -> getLogger().warn("Error while pushing manifest. Retrying", error))
                 .execute();
 
@@ -99,9 +88,11 @@ abstract public class PushManifestListTask extends DefaultTask {
                     RegularFileUtils.toPath(getDigestFile()),
                     output.substring(8, 79)
             );
+            getLogger().lifecycle("Pushed manifest list to {}", getTag().get());
         } else {
             if (output.isEmpty()) {
-                throw new GradleException("manifest-tool succeeded but generated no ouxput. Check the task output for additional details.");
+                throw new GradleException("manifest-tool succeeded but generated no output. " +
+                                          "Check the task output for additional details.");
             } else {
                 throw new GradleException("manifest-tool succeeded but generated unexpected output: `" + output +
                         "`. Check the task output for additional details.");
@@ -116,16 +107,15 @@ abstract public class PushManifestListTask extends DefaultTask {
             final String output;
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 result = getExecOperations().exec(spec -> {
-                    spec.setEnvironment(Collections.emptyMap());
-                    spec.setExecutable(manifestTool);
+                    spec.setEnvironment(Collections.singletonMap(
+                            "HOME", System.getProperty("user.home")
+                    ));
+                    spec.setExecutable(getExecutable());
                     spec.setArgs(Arrays.asList(
                             "push", "from-args",
                             "--platforms",
                             getArchitectureTags().get().keySet().stream()
-                                    .map(each -> "linux/" + each.map(ImmutableMap.of(
-                                            Architecture.AARCH64, "arm64",
-                                            Architecture.X86_64, "amd64"
-                                    )))
+                                    .map(each -> "linux/" + each.dockerName())
                                     .collect(Collectors.joining(",")),
                             "--template", templates.iterator().next(),
                             "--target", getTag().get()
@@ -133,7 +123,7 @@ abstract public class PushManifestListTask extends DefaultTask {
                     spec.setStandardOutput(out);
                     spec.setIgnoreExitValue(true);
                 });
-                output = new String(out.toByteArray(), StandardCharsets.UTF_8).trim();
+                output = out.toString(StandardCharsets.UTF_8).trim();
             }
             if (result.getExitValue() != 0) {
                 throw new GradleException("Creating the manifest list failed: " + output);

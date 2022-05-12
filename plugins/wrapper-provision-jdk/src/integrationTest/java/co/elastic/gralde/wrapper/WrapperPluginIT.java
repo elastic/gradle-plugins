@@ -22,19 +22,19 @@ class WrapperPluginIT extends TestkitIntegrationTest {
                                 id("co.elastic.wrapper-provision-jdk")
                             }
                             tasks.wrapperProvisionJdk {
-                                jdkCacheDir.set("$\\{JENKINS_HOME:-$HOME\\}/.gradle/jdks")
-                                javaReleaseName.set("11.0.13+8")
+                                jdkCacheDir.set("\\${JENKINS_HOME:-\\$HOME}/.gradle/jdks")
+                                javaReleaseName.set("11.0.15+10")
                                 appleM1URLOverride.set(
                                     "https://download.bell-sw.com/java/11.0.13+8/bellsoft-jdk11.0.13+8-macos-aarch64.tar.gz"
                                 )
                                 checksums.set(
                                   mapOf(
                                      LINUX to mapOf(
-                                       X86_64 to "3b1c0c34be4c894e64135a454f2d5aaa4bd10aea04ec2fa0c0efe6bb26528e30",
-                                       AARCH64 to "a77013bff10a5e9c59159231dd5c4bd071fc4c24beed42bd49b82803ba9506ef"
+                                       X86_64 to "5fdb4d5a1662f0cca73fec30f99e67662350b1fa61460fa72e91eb9f66b54d0b",
+                                       AARCH64 to "999fbd90b070f9896142f0eb28354abbeb367cbe49fd86885c626e2999189e0a"
                                      ),
                                      DARWIN to mapOf(
-                                       X86_64 to "2b862f97b872e37f8c7ad6d3d30f7d0fcb3f0b951740c8fa142dea702945973c",
+                                       X86_64 to "ebd8b9553a7b4514599bc0566e108915ce7dc95d29d49a9b10b8afe4ab7cc9db",
                                        AARCH64 to "7dce00825d5ff0d6f2d39fa1add59ce7f4eefee5b588981b43708d00c43f4f9b"
                                      )
                                   )

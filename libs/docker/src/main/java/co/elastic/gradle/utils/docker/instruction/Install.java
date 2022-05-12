@@ -4,12 +4,7 @@ import org.gradle.api.tasks.Input;
 
 import java.util.List;
 
-public class Install implements ContainerImageBuildInstruction {
-    private final List<String> packages;
-
-    public Install(List<String> packages) {
-        this.packages = packages;
-    }
+public record Install(List<String> packages) implements ContainerImageBuildInstruction {
 
     @Input
     public List<String> getPackages() {
