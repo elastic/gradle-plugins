@@ -3,12 +3,13 @@ package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.dockerbase.lockfile.Packages;
-import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.dockerbase.lockfile.UnchangingPackage;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
+import co.elastic.gradle.utils.RetryUtils;
 import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import co.elastic.gradle.utils.docker.DockerUtils;
+import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.ContainerImageBuildInstruction;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.SetUser;
@@ -264,37 +265,44 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
             return manifestDigest;
         }
         DockerUtils daemonActions = new DockerUtils(getExecOperations());
-        try (ByteArrayOutputStream stdout = new ByteArrayOutputStream()) {
-            daemonActions.exec(spec -> {
-                spec.setStandardOutput(stdout);
-                spec.commandLine("docker", "manifest", "inspect", image);
-            });
-            try (InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(stdout.toByteArray()))) {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode root = mapper.readTree(reader);
-                String digest = null;
-                Iterator<JsonNode> manifests = root.path("manifests").elements();
-                while (manifests.hasNext()) {
-                    JsonNode manifest = manifests.next();
-                    if (Architecture.current().dockerName().equals(manifest.path("platform").path("architecture").asText())) {
-                        digest = manifest.path("digest").asText(null);
-                        break;
+        return RetryUtils.retry(() -> {
+                    try (ByteArrayOutputStream stdout = new ByteArrayOutputStream()) {
+                        daemonActions.exec(spec -> {
+                            spec.setStandardOutput(stdout);
+                            spec.commandLine("docker", "manifest", "inspect", image);
+                        });
+                        try (InputStreamReader reader = new InputStreamReader(new ByteArrayInputStream(stdout.toByteArray()))) {
+                            ObjectMapper mapper = new ObjectMapper();
+                            JsonNode root = mapper.readTree(reader);
+                            String digest = null;
+                            Iterator<JsonNode> manifests = root.path("manifests").elements();
+                            while (manifests.hasNext()) {
+                                JsonNode manifest = manifests.next();
+                                if (Architecture.current().dockerName().equals(manifest.path("platform").path("architecture").asText())) {
+                                    digest = manifest.path("digest").asText(null);
+                                    break;
+                                }
+                            }
+                            if (digest == null) {
+                                // Happens when the tag does not point to a manifest list
+                                // We could make this work for a single platform if we really wanted to, for now it's an error
+                                throw new GradleException("Can't find manifest digest from docker output. " +
+                                                          "Does the image have a manifest?\n" + stdout
+                                );
+                            }
+                            manifestDigest = digest;
+                            return digest;
+                        }
+                    } catch (IOException e) {
+                        throw new UncheckedIOException("Failed to read the image manifest", e);
                     }
-                }
-                if (digest == null) {
-                    // Happens when the tag does not point to a manifest list
-                    // We could make this work for a single platform if we really wanted to, for now it's an error
-                    throw new GradleException("Can't find manifest digest from docker output. " +
-                                              "Does the image have a manifest?\n" + stdout
-                    );
-                }
-                manifestDigest = digest;
-                return digest;
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read the image manifest", e);
-        }
+                })
+                .maxAttempt(3)
+                .exponentialBackoff(1000, 100000)
+                .execute();
     }
+
+
 
     private Path writeScript(Path dir) {
         InputStream resourceStream = getClass().getResourceAsStream(String.format("/%s", PRINT_INSTALLED_PACKAGES_NAME));
