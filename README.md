@@ -1,17 +1,11 @@
 About
 =====
 
-This is a temporary feature branch that is NOT meant to ever be reintegrated. 
-The goal is to move the gradle tools into their own repo and publish them as plugins. 
+This repository hosts a collection of Gradle plugins meant to extend the capabilities of Gradle and 
+implement [hermetic builds](https://sre.google/sre-book/release-engineering/#hermetic-builds-nqslhnid).
 
-This branch was created by `git mv`ing everything into a separate folder and then moving `buildSrc` to the top level. 
-Some of the `.ci` setup was kept so that we can still crate PRs and run checks on them. 
-The way this was set up  allows us to work on the buildSrc code base like it was a separate repo, while still being able to merge and get any potential upstream changes. 
-
-Eventually we'll push this branch as main on a new repository, remove the `to_be_deleted` part, and do the necesary git garbadge collection such that the new repo will have all the 
-history of buildSrc. 
-
-[Jenkins Jobs](https://cloud-ci.elastic.co/view/Cloud%20-%20Feature%20Branches/job/dsl-gen-feature-feature-publish-gradle-plugins/job/cloud-pipeline/)
+The plugins are likely to work best if Gradle is the build system of choice, but can be used integrated 
+with other build systems too, e.g. just to build docker images.
 
 Gradle plugins 
 ==============
@@ -19,9 +13,8 @@ Gradle plugins
 - [co.elastic.build-scan.xunit](plugins/build-scan-xunit/README.md): import xunit files into build scan test results
 - [co.elastic.check-in-generated](plugins/check-in-generated/README.md): Support for keeping checked in generated code up to date
 - [co.elastic.cli](plugins/cli/README.md): Efficiently provision and run various cli tools
-- [co.elastic.gradle.lifecycle](plugins/lifecycle/README.md): Extended build lifecycle
 - [co.elastic.docker-base](plugins/docker/base-image/README.md): Building reproducible Docker base images
-- [co.elastic.gradle.docker-component](plugins/docker/component-image/README.md): Building multi-platform Docker images for applications
+- [co.elastic.docker-component](plugins/docker/component-image/README.md): Building multi-platform Docker images for applications
 - [co.elastic.license-headers](plugins/license-headers/README.md): Enforce license headers in source files
 - [co.elastic.lifecycle](plugins/lifecycle/README.md): extended lifecycle tasks
 - [co.elastic.lifecycle-multi-arch](plugins/lifecycle/README.md): support for building on multiple architectures
