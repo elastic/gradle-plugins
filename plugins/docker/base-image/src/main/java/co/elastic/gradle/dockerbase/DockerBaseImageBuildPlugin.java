@@ -1,16 +1,18 @@
 package co.elastic.gradle.dockerbase;
 
-import co.elastic.gradle.docker.base.DockerLocalCleanTask;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.GradleUtils;
+import co.elastic.gradle.utils.docker.InstructionCopySpecMapper;
+import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.FromLocalImageBuild;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.specs.Spec;
@@ -71,7 +73,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             extension.getInstructions().stream()
                     .filter(each -> each instanceof FromLocalImageBuild)
                     .map(each -> (FromLocalImageBuild) each)
-                    .map(FromLocalImageBuild::getOtherProjectPath)
+                    .map(FromLocalImageBuild::otherProjectPath)
                     .forEach(projectPath -> {
                         dockerBaseImageBuild.configure(task ->
                                 task.dependsOn(projectPath + ":" + LOCAL_IMPORT_TASK_NAME)
@@ -85,11 +87,9 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     });
 
             // assign copy specs to the build tasks to correctly evaluate build avoidance
-            dockerBaseImageBuild.configure(task ->
-                    ImageBuildable.assignCopySpecs(extension.getInstructions(), task)
+            dockerBaseImageBuild.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
             );
-            dockerLockfileTask.configure(task ->
-                    ImageBuildable.assignCopySpecs(extension.getInstructions(), task)
+            dockerLockfileTask.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
             );
         });
     }
@@ -133,17 +133,28 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     dockerBaseImageBuild.flatMap(DockerBaseImageBuildTask::getImageArchive)
             );
             task.getTag().set(
-                    extension.getDockerTagPrefix().map(value ->
-                            value + "/" +
-                            target.getName() + "-" + Architecture.current().dockerName() +
-                            ":" + target.getVersion()
-                    )
+                    pushedTagConvention(target, Architecture.current())
             );
             task.getCreatedAt().set(dockerBaseImageBuild.flatMap(DockerBaseImageBuildTask::getCreatedAt));
             task.onlyIf(runningOnSupportedArchitecture(extension));
         });
         MultiArchLifecyclePlugin.publishForPlatform(target, dockerBaseImagePush);
         return dockerBaseImagePush;
+    }
+
+    @NotNull
+    public static Provider<String> pushedTagConvention(@NotNull Project target, Architecture current) {
+        Property<String> dockerTagPrefix = target.getExtensions()
+                .getByType(BaseImageExtension.class)
+                .getDockerTagPrefix();
+
+        return dockerTagPrefix.map(value ->
+                {
+                    return value + "/" +
+                           target.getName() + "-" + current.dockerName() +
+                           ":" + target.getVersion();
+                }
+        );
     }
 
     private void registerCleanTask(@NotNull Project target, BaseImageExtension extension) {
@@ -159,9 +170,9 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
     }
 
     private Provider<String> localImportTag(Project target, BaseImageExtension extension) {
-        return extension.getDockerTagLocalPrefix().map( value -> value + "/" +
-               target.getName() + "-base" +
-               ":latest"
+        return extension.getDockerTagLocalPrefix().map(value -> value + "/" +
+                                                                target.getName() + "-base" +
+                                                                ":latest"
         );
     }
 
@@ -212,12 +223,23 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                 BasePullTask.class,
                 task -> {
                     task.getTag().set(
-                            getProviderFactory().provider(() -> extension.getInstructions().stream()
+                            extension.getInstructions().stream()
                                     .filter(each -> each instanceof From)
                                     .map(each -> ((From) each))
+                                    .map(from -> extension.getLockFile().map(lockfile -> {
+                                        if (lockfile.image() != null &&
+                                            lockfile.getImage().get(Architecture.current()) != null) {
+                                            final UnchangingContainerReference ref = lockfile.image().get(Architecture.current());
+                                            return new From(getProviderFactory().provider(() -> String.format("%s:%s@%s",
+                                                    ref.getRepository(), ref.getTag(), ref.getDigest()
+                                            )));
+                                        } else {
+                                            return from;
+                                        }
+                                    }))
                                     .findAny()
-                                    .orElseThrow(() -> new IllegalStateException("Can't find an image to pull. This is a bug."))
-                                    .getReference())
+                                    .map(provider -> provider.flatMap(From::getReference))
+                                    .orElse(getProviderFactory().provider(() -> ""))
                     );
                     task.onlyIf(t -> extension.getInstructions().stream()
                             .anyMatch(each -> each instanceof From)

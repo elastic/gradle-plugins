@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import static co.elastic.gradle.AssertContains.assertContains;
 import static co.elastic.gradle.AssertFiles.assertPathExists;
-import static org.junit.jupiter.api.Assertions.*;
 
 class SnykPluginIT extends TestkitIntegrationTest {
 
@@ -29,7 +28,7 @@ class SnykPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     snyk {
-                       val credentials = vault.readSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }

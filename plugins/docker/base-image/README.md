@@ -101,12 +101,18 @@ instruction creates a layer in the resulting docker image.
 The name of the image matches the current `project.name`, and the tag is set from
 `project.version` and current Architecture (e.g. `amd64` or `arm64`) by convention and is not configurable.
 
-If one doesn't already exist, a lockfile needs to be created. This file is meant to be checked in to source control. The
-same command can be used to update the lockfile to pick up newer packages too:
+Before building the image for the first time, or to update the version of dependencies and base image that are to be
+picked up:
 
 ```shell
 ./gradlew dockerBaseImageLockfile 
 ```
+
+This will create a lock-file that that is meant to be checked in and offers a way to control when the base image is
+updated. Running the command again will always get the latest repo digests pointed to by the tag. This approach works
+better with build avoidance and is more predictable as one can control when updates are picked up as opposed to maybe
+getting them right before or while preparing for a release. For convenience and to make sure it's not forgotten, this
+functionality can be used in automation that will re-generate the lock-file and open a PR with the result.
 
 One can then build and optionally push the resulting image:
 
@@ -140,6 +146,37 @@ Will also remove any image from the daemon created or imported by this plugin.
 Add files to the container. Similar to a Gradle [Copy] task. Check out the Gradle docs
 on [working with files](https://docs.gradle.org/current/userguide/working_with_files.html)
 for more information on how to use it.
+
+### Adding dynamically generated content
+
+One might want to add something to the container image that is generated as part of the same build. Since the image
+contents is defined in an extension, there's no `dependsOn`, so this can't work as a regular dependency.
+
+To make it work, one can pass a task in the `from` instruction of a `copySpec`. For built-in tasks that define their
+outputs this is all it takes. Custom tasks need to be explicit about their outputs:
+
+```kotlin
+val archive by tasks.registering(Zip::class) {
+    from(fileTree("src"))
+    archiveFileName.set("my.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("dist"))
+}
+val custom by tasks.registering {
+    outputs.file("$buildDir/some_output.txt")
+    doLast {
+        // generate some_output.txt 
+    }
+}
+dockerBaseImage {
+    copySpec {
+        from(archive)
+        from(custom)
+        into("home")
+    }
+    run("ls /home/my.zip", "ls /home/some_output.txt")
+}
+```
+That's all, Gradle creates a task dependency based on the copySpec for you.  
 
 ### Multi project support
 
@@ -259,8 +296,9 @@ is running on `aarch64`.
 
 ### Integration with the Docker Sandbox Plugin
 
-The plugin can be used in conjunction with the [sandbox plugin](../../sandbox/README.md) to run a container with the 
+The plugin can be used in conjunction with the [sandbox plugin](../../sandbox/README.md) to run a container with the
 image that was just built:
+
 ```kotlin
 import java.net.URL
 import co.elastic.gradle.sandbox.SandboxDockerExecTask
@@ -295,5 +333,5 @@ tasks.register<SandboxDockerExecTask>("test") {
 }
 ```
 
-This is a powerful combination that allows one to build a custom image and then use it to generate a build artefact 
+This is a powerful combination that allows one to build a custom image and then use it to generate a build artefact
 using that image all with build avoidance end-to-end (e.g. the image is only rebuilt if something actually changed). 

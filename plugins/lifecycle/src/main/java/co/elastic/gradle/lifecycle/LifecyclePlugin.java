@@ -16,6 +16,7 @@ public class LifecyclePlugin implements Plugin<Project> {
     protected static final String SYNC_BIN_DIR_TASK_NAME = "syncBinDir";
     protected static final String PRE_COMMIT_TASK_NAME = "preCommit";
     protected static final String AUTO_FIX_TASK_NAME = "autoFix";
+    protected static final String SECURITY_SCAN_TASK_NAME = "securityScan";
 
 
     @Override
@@ -93,5 +94,9 @@ public class LifecyclePlugin implements Plugin<Project> {
 
     public static void autoFix(Project target, TaskProvider<? extends Task> dependency) {
         whenPluginAddedAddDependency(target, dependency, AUTO_FIX_TASK_NAME);
+    }
+
+    public static void securityScan(Project target, TaskProvider<? extends Task> dependency) {
+        whenPluginAddedAddDependency(target, dependency, SECURITY_SCAN_TASK_NAME);
     }
 }

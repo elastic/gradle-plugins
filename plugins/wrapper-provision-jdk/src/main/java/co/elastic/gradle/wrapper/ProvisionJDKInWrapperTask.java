@@ -70,7 +70,7 @@ abstract public class ProvisionJDKInWrapperTask extends DefaultTask {
                             final String downloadUrl = "https://api.adoptium.net/v3/binary/version/" +
                                                        String.format(
                                                                "%s/%s/%s/jdk/hotspot/normal/eclipse?project=jdk",
-                                                               URLEncoder.encode(getJavaReleaseName().get(), StandardCharsets.UTF_8),
+                                                               URLEncoder.encode("jdk-" + getJavaReleaseName().get(), StandardCharsets.UTF_8),
                                                                OS.current().map(Map.of(
                                                                        OS.LINUX, "linux",
                                                                        OS.DARWIN, "mac"
