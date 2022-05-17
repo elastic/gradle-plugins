@@ -275,7 +275,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
 
     private BuildResult runGradleTask(String task) throws IOException {
         try {
-            return gradleRunner.withArguments("--warning-mode", "fail", "-s", task).build();
+            return gradleRunner.withArguments("--warning-mode", "fail", "-s", "-i", task).build();
         } finally {
             System.out.println("Listing of project dir:");
             Set<String> fileNamesOfInterest = Set.of("docker-component-image.lock");

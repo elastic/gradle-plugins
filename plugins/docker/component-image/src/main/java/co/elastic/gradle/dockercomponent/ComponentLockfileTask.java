@@ -27,7 +27,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.*;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public abstract class ComponentLockfileTask extends ManifestToolExecTask {
@@ -67,21 +66,10 @@ public abstract class ComponentLockfileTask extends ManifestToolExecTask {
         getLogger().info("Reading manifest list with manifest-tool --raw:\n{}", output);
 
         final JsonNode root = new ObjectMapper().readTree(output);
-        final Iterator<JsonNode> elements = root.elements();
         final Map<Architecture, String> result = new HashMap<>();
-        while (elements.hasNext()) {
-            final JsonNode element = elements.next();
-            final String architecture = element.get("Architecture").asText();
-            final String digest = element.get("Digest").asText();
-
-            final Optional<Architecture> identifiedArchitecture = Arrays.stream(Architecture.values())
-                    .filter(each -> each.dockerName().equals(architecture))
-                    .findAny();
-            identifiedArchitecture.ifPresent(value -> result.put(value, digest));
-        }
-
-        if (result.isEmpty()) {
-            throw new GradleException("Was not able to identify the digests of " + reference);
+        final String digest = root.get("digest").asText();
+        for (Architecture arch : Architecture.values()) {
+            result.put(arch, digest);
         }
 
         try (Writer writer = Files.newBufferedWriter(RegularFileUtils.toPath(getLockFileLocation()))) {
