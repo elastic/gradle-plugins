@@ -42,6 +42,8 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
         assertContains(result.getOutput(), "[manifest-tool]    1.0.3 (commit: 505479b95ee682b7302a76e86f3b913d506ab3fc)");
 
         assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test

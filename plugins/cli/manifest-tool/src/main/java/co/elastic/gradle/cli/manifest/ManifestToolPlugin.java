@@ -10,8 +10,9 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 
 import java.io.File;
+import java.util.Arrays;
+
 import java.util.Collections;
-import java.util.Map;
 
 public class ManifestToolPlugin implements Plugin<Project> {
 
@@ -25,13 +26,24 @@ public class ManifestToolPlugin implements Plugin<Project> {
 
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("manifestTool", BaseCLiExtension.class);
+                .create("manifestTool", BaseCLiExtension.class, "manifest-tool");
         extension.getVersion().convention("v1.0.3");
 
         target.afterEvaluate(p -> {
             BaseCliPlugin.addDownloadRepo(target, extension);
-            BaseCliPlugin.addDependency(target,
-                    "estesp/manifest-tool:manifest-tool:" + extension.getVersion().get() + ":" + getKind()
+            Arrays.stream(OS.values()).forEach(os ->
+                    Arrays.stream(Architecture.values())
+                            .filter(arch -> !(OS.current().equals(OS.DARWIN) && arch.equals(Architecture.AARCH64)))
+                            .forEach(arch -> {
+                                        BaseCliPlugin.addDependency(
+                                                target,
+                                                "estesp/manifest-tool:manifest-tool:" +
+                                                extension.getVersion().get() + ":" +
+                                                os.name().toLowerCase() + "-" +
+                                                arch.dockerName()
+                                        );
+                                    }
+                            )
             );
         });
 
@@ -45,13 +57,5 @@ public class ManifestToolPlugin implements Plugin<Project> {
                 });
     }
 
-    private String getKind() {
-        return OS.current().toString().toLowerCase() + "-" +
-               Architecture.current()
-                       .map(Map.of(
-                               // Use emulation, no native release for darwin yet
-                               Architecture.AARCH64, OS.current().equals(OS.DARWIN) ? "amd64" : "arm64",
-                               Architecture.X86_64, "amd64"
-                       ));
-    }
+
 }

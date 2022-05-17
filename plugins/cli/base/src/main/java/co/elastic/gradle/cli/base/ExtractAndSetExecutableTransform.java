@@ -14,6 +14,7 @@ import org.gradle.api.provider.Provider;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.util.List;
 
 public abstract class ExtractAndSetExecutableTransform implements TransformAction<TransformParameters.None> {
 
@@ -23,7 +24,9 @@ public abstract class ExtractAndSetExecutableTransform implements TransformActio
     @Override
     public void transform(TransformOutputs outputs) {
         File inputFile = getInputArtifact().get().getAsFile();
-        String executableName = inputFile.getName().split("-v")[0];
+        String executableName = inputFile.getName()
+                .split("\\.transform")[0]
+                .replace(".tar.xz", "");
         File outputFile = outputs.file(executableName);
 
         if (inputFile.getName().contains("tar.xz")) {
@@ -31,16 +34,16 @@ public abstract class ExtractAndSetExecutableTransform implements TransformActio
                 try (TarArchiveInputStream archive = new TarArchiveInputStream(
                         new XZCompressorInputStream(
                                 new BufferedInputStream(new FileInputStream(inputFile))
-                        ));
-                     OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))
+                        ))
                 ) {
                     TarArchiveEntry entry;
                     while ((entry = archive.getNextTarEntry()) != null) {
-                        if (entry.isFile() && entry.getName().endsWith(executableName)) {
-                            out.write(IOUtils.toByteArray(archive, entry.getSize()));
-                            break;
-                        } else {
-                            IOUtils.skip(archive, entry.getSize());
+                        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))) {
+                            if (entry.isFile() && !List.of("README.txt", "LICENSE.txt").contains(entry.getName())) {
+                                out.write(IOUtils.toByteArray(archive, entry.getSize()));
+                            } else {
+                                IOUtils.skip(archive, entry.getSize());
+                            }
                         }
                     }
                 }

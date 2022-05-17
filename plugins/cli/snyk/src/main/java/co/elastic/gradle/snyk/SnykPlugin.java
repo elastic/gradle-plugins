@@ -13,6 +13,7 @@ import org.gradle.api.Project;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collections;
+import java.util.List;
 
 public class SnykPlugin implements Plugin<Project> {
 
@@ -21,7 +22,7 @@ public class SnykPlugin implements Plugin<Project> {
         target.getPluginManager().apply(BaseCliPlugin.class);
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("snyk", BaseCLiExtension.class);
+                .create("snyk", BaseCLiExtension.class, "snyk");
         extension.getVersion().convention("v1.856.0");
         try {
             extension.getBaseURL()
@@ -33,7 +34,13 @@ public class SnykPlugin implements Plugin<Project> {
 
         target.afterEvaluate(p -> {
             BaseCliPlugin.addDownloadRepo(target, extension);
-            BaseCliPlugin.addDependency(target, "snyk:snyk:" + extension.getVersion().get() + ":" + getKind());
+            for (String kind : List.of("linux", "macos", "linux-arm64")) {
+                BaseCliPlugin.addDependency(
+                        target,
+                        "snyk:snyk:" + extension.getVersion().get() + ":" + kind
+
+                );
+            }
         });
 
         target.getTasks().withType(SnykCLIExecTask.class).configureEach(task -> {
@@ -53,13 +60,13 @@ public class SnykPlugin implements Plugin<Project> {
         });
     }
 
-    public static String getKind() {
-        switch (OS.current()) {
+    public static String getKind(final OS os, final Architecture arch) {
+        switch (os) {
             case DARWIN:
                 // No arm mac binaries as of this writing
                 return "macos";
             case LINUX: {
-                switch (Architecture.current()) {
+                switch (arch) {
                     case AARCH64:
                         return "linux-arm64";
                     case X86_64:
@@ -67,7 +74,7 @@ public class SnykPlugin implements Plugin<Project> {
                 }
             }
             default:
-                throw new GradleException("Unsupported OS: " + OS.current());
+                throw new GradleException("Unsupported OS: " + os);
         }
     }
 
