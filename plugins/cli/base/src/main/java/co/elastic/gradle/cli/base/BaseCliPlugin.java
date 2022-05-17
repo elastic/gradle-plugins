@@ -52,7 +52,11 @@ public abstract class BaseCliPlugin implements Plugin<Project> {
         });
         configuration.getAttributes().attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "transform-extracted");
 
-        final TaskProvider<MultipleSymlinkTask> syncBinDirStaticCli = target.getTasks().register(SYNC_TASK_NAME, MultipleSymlinkTask.class);
+        final TaskProvider<MultipleSymlinkTask> syncBinDirStaticCli = target.getTasks().register(
+                SYNC_TASK_NAME,
+                MultipleSymlinkTask.class,
+                task -> task.dependsOn(configuration)
+        );
 
         LifecyclePlugin.syncBinDir(target, syncBinDirStaticCli);
     }
