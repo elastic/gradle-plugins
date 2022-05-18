@@ -35,13 +35,12 @@ public class JFrogPlugin implements Plugin<Project> {
             BaseCliPlugin.addDownloadRepo(target, extension);
             Arrays.stream(OS.values()).forEach(os ->
                     Arrays.stream(Architecture.values())
-                            .filter(arch -> !(OS.current().equals(OS.DARWIN) && arch.equals(Architecture.AARCH64)))
-                            .forEach(arch -> {
+                           .forEach(arch -> {
                                 BaseCliPlugin.addDependency(
                                         target,
                                         "artifactory:jfrog-cli:" +
                                         extension.getVersion().get() + ":" +
-                                        getKind(OS.current(), Architecture.current())
+                                        getKind(os, arch)
                                 );
                             })
             );
@@ -49,6 +48,10 @@ public class JFrogPlugin implements Plugin<Project> {
 
         target.getTasks().withType(JFrogCliUsingTask.class, t -> {
             t.getJFrogCli().set(BaseCliPlugin.getExecutable(target, "jfrog-cli"));
+            t.dependsOn(":" + BaseCliPlugin.SYNC_TASK_NAME);
+        });
+        target.getTasks().withType(JFrogCliExecTask.class, t -> {
+            t.setExecutable(BaseCliPlugin.getExecutable(target, "jfrog-cli"));
             t.dependsOn(":" + BaseCliPlugin.SYNC_TASK_NAME);
         });
     }

@@ -180,6 +180,22 @@ The `check` method can be used to add additional `FileCollection`s to be checked
 Additional `ShellcheckTask` tasks can be created and the plugin will configure them to work with the provisioned
 executable.
 
+### jfrog-cli 
+
+```kotlin
+ import co.elastic.gradle.cli.jfrog.JFrogCliExecTask
+
+cli {
+    jfrog {
+        // see above for configuration
+    }
+}
+
+tasks.register<JFrogCliExecTask>("jfrog")
+```
+
+Makes it possible to provision and run the [jfrog-cli](https://www.jfrog.com/confluence/display/CLI/JFrog+CLI).
+
 Limitations
 -----------
 
