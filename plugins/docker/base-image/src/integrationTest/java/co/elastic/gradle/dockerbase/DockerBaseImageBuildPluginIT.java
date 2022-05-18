@@ -299,6 +299,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 import java.net.URL
                 plugins {
                    id("co.elastic.docker-base")
+                   id("co.elastic.cli.jfrog")
                    id("co.elastic.vault")
                 }
                 vault {
@@ -311,6 +312,12 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                       }
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
                 dockerBaseImage {
                     dockerTagLocalPrefix.set("gradle-test-local")
                     mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))

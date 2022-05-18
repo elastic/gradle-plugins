@@ -22,7 +22,7 @@ public class SnykPlugin implements Plugin<Project> {
         target.getPluginManager().apply(BaseCliPlugin.class);
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("snyk", BaseCLiExtension.class, "snyk");
+                .create("snyk", BaseCLiExtension.class);
         extension.getVersion().convention("v1.856.0");
         try {
             extension.getBaseURL()

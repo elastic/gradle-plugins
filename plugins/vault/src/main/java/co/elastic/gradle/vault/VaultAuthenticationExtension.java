@@ -215,7 +215,7 @@ abstract public class VaultAuthenticationExtension {
         public String getExplanation() {
             if (Files.exists(ghTokenPath)) {
                 if (Files.isReadable(ghTokenPath)) {
-                    return "Red github token from " + ghTokenPath;
+                    return "Read github token from " + ghTokenPath;
                 } else {
                     return "Tried to read github token from " + ghTokenPath + " but the file is not readable.";
                 }

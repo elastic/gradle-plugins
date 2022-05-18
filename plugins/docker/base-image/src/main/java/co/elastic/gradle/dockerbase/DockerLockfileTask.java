@@ -1,6 +1,7 @@
 package co.elastic.gradle.dockerbase;
 
 
+import co.elastic.gradle.cli.jfrog.JFrogCliUsingTask;
 import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.dockerbase.lockfile.Packages;
 import co.elastic.gradle.dockerbase.lockfile.UnchangingPackage;
@@ -43,8 +44,9 @@ import java.util.Optional;
 import java.util.*;
 import java.util.stream.Stream;
 
-public abstract class DockerLockfileTask extends DefaultTask implements ImageBuildable {
+public abstract class DockerLockfileTask extends DefaultTask implements ImageBuildable, JFrogCliUsingTask {
 
+    private static final String ARCHIVE_PACKAGES_NAME = "archive-packages.sh";
     private static final String PRINT_INSTALLED_PACKAGES_NAME = "print-installed-packages.sh";
     private final Configuration dockerEphemeralConfiguration;
     private final DefaultCopySpec rootCopySpec;
@@ -58,6 +60,8 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         getWorkingDirectory().convention(
                 getProjectLayout().getBuildDirectory().dir(getName())
         );
+        getOnlyUseMirrorRepositories().convention(false);
+        getRequiresCleanLayers().convention(false);
         this.dockerEphemeralConfiguration = dockerEphemeralConfiguration;
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
@@ -108,6 +112,19 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     @Input
     public abstract Property<String> getDockerEphemeralMount();
 
+    @Override
+    @InputFile
+    @PathSensitive(PathSensitivity.NAME_ONLY)
+    public abstract RegularFileProperty getJFrogCli();
+
+    @Override
+    @Input
+    public abstract Property<Boolean> getRequiresCleanLayers();
+
+    @Override
+    @Input
+    public abstract Property<Boolean> getOnlyUseMirrorRepositories();
+
     @Nested
     public abstract ListProperty<ContainerImageBuildInstruction> getInputInstructions();
 
@@ -139,7 +156,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                         Stream.of(
                                 new SetUser("root"),
                                 DockerDaemonActions.wrapInstallCommand(
-                                        getOSDistribution().get(),
+                                        this,
                                         switch (getOSDistribution().get()) {
                                             case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
                                             case CENTOS -> "yum -y upgrade";
@@ -167,27 +184,35 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
     @TaskAction
     public void generateLockfile() throws IOException {
-        DockerUtils dockerUtils = new DockerUtils(getExecOperations());
         DockerDaemonActions daemonActions = getObjectFactory().newInstance(DockerDaemonActions.class, this);
+        DockerUtils dockerUtils = new DockerUtils(getExecOperations());
+
         final UUID uuid = daemonActions.build();
 
-        final Path csvGenScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()));
+        final Path csvGenScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), PRINT_INSTALLED_PACKAGES_NAME);
+        final Path archiveScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), ARCHIVE_PACKAGES_NAME);
 
-        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        dockerUtils.exec(spec -> {
-            spec.setStandardOutput(byteArrayOutputStream);
-            spec.commandLine(
-                    "docker", "run", "--rm",
-                    "-v", csvGenScript + ":/mnt/script.sh",
-                    "--entrypoint", "/bin/bash",
-                    uuid,
-                    "/mnt/script.sh"
-            );
-            spec.setIgnoreExitValue(false);
-        });
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+            dockerUtils.exec(spec -> {
+                spec.setStandardOutput(byteArrayOutputStream);
+                spec.commandLine(
+                        "docker", "run", "--rm",
+                        "-v", csvGenScript + ":/mnt/" + PRINT_INSTALLED_PACKAGES_NAME,
+                        "-v", archiveScript + ":/mnt/" + ARCHIVE_PACKAGES_NAME,
+                        "-v", getJFrogCli().get().getAsFile().toPath() + ":/mnt/jfrog-cli",
+                        "--entrypoint", "/bin/bash",
+                        uuid,
+                        "/mnt/" + ARCHIVE_PACKAGES_NAME
+                );
+                spec.setIgnoreExitValue(false);
+            });
+            writeLockfile(byteArrayOutputStream);
+            dockerUtils.exec(spec -> spec.commandLine("docker", "image", "rm", uuid));
+        }
+    }
 
-        dockerUtils.exec(spec -> spec.commandLine("docker", "image", "rm", uuid));
 
+    private void writeLockfile(ByteArrayOutputStream csvStream) throws IOException {
         final BaseLockfile oldLockfile;
         if (Files.exists(RegularFileUtils.toPath(getLockFileLocation()))) {
             oldLockfile = BaseLockfile.parse(Files.newBufferedReader(RegularFileUtils.toPath(getLockFileLocation())));
@@ -202,7 +227,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
             image = null;
         }
 
-        final String csvString = byteArrayOutputStream.toString().trim();
+        final String csvString = csvStream.toString().trim();
         if (csvString.isEmpty()) {
             throw new IllegalStateException("Failed to read installed packages from docker image");
         }
@@ -260,7 +285,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         }
     }
 
-    public String getManifestDigest(String image) {
+    private String getManifestDigest(String image) {
         if (manifestDigest != null) {
             return manifestDigest;
         }
@@ -304,14 +329,14 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
 
 
-    private Path writeScript(Path dir) {
+    private Path writeScript(Path dir, String resource) {
         InputStream resourceStream = getClass().getResourceAsStream(String.format("/%s", PRINT_INSTALLED_PACKAGES_NAME));
         if (resourceStream == null) {
             throw new GradleException(
-                    String.format("Could not find an embedded resource for %s", PRINT_INSTALLED_PACKAGES_NAME));
+                    String.format("Could not find an embedded resource for %s", resource));
         }
         try {
-            final Path csvGenScript = dir.resolve(PRINT_INSTALLED_PACKAGES_NAME);
+            final Path csvGenScript = dir.resolve(resource);
             Files.copy(
                     resourceStream, csvGenScript,
                     StandardCopyOption.REPLACE_EXISTING

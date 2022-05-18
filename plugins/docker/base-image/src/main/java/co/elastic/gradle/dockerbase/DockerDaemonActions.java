@@ -29,6 +29,7 @@ import org.gradle.api.file.FileSystemOperations;
 import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -96,23 +97,36 @@ public abstract class DockerDaemonActions {
                        .collect(Collectors.joining("\n"));
     }
 
-    public static Run wrapInstallCommand(OSDistribution distribution, String command) {
+    public static Run wrapInstallCommand(ImageBuildable buildable, String command) {
+        final OSDistribution distribution = buildable.getOSDistribution().get();
+        final boolean onlyUseMirrorRepositories = buildable.getOnlyUseMirrorRepositories().get();
+        final boolean requiresCleanLayers = buildable.getRequiresCleanLayers().get();
         return new Run(
                 switch (distribution) {
-                    case UBUNTU, DEBIAN -> List.of(
-                            ". /etc/os-release",
-                            "cp /etc/apt/sources.list.d/certs/90sslConfig /etc/apt/apt.conf.d/",
-                            "mv /etc/apt/sources.list /etc/apt/sources.list.bak",
-                            """
-                                    sed -i -e "s#\\$releasever#\\"$VERSION_CODENAME\\"#" /etc/apt/sources.list.d/*.list
-                                    """.trim(),
-                            "export DEBIAN_FRONTEND=noninteractive",
-                            "apt-get update",
-                            command,
-                            "apt-get clean",
-                            "mv /etc/apt/sources.list.bak /etc/apt/sources.list",
-                            "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/apt.conf.d/90sslConfig"
-                    );
+                    case UBUNTU, DEBIAN -> Stream.of(
+                            Stream.of(
+                                    "export DEBIAN_FRONTEND=noninteractive",
+                                    ". /etc/os-release",
+                                    "cp /etc/apt/sources.list.d/certs/90sslConfig /etc/apt/apt.conf.d/",
+                                    """
+                                            sed -i -e "s#\\$releasever#\\"$VERSION_CODENAME\\"#" /etc/apt/sources.list.d/*.list
+                                            """.trim()
+                            ),
+                            Stream.of(
+                                    "rm -f /etc/apt/apt.conf.d/docker-clean",
+                                    """
+                                        echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/docker-dirty
+                                    """.trim()).filter(s -> !requiresCleanLayers),
+                            Stream.of("mv /etc/apt/sources.list /etc/apt/sources.list.bak").filter(s -> onlyUseMirrorRepositories),
+                            Stream.of(
+                                    "apt-get update",
+                                    command),
+                            Stream.of("mv /etc/apt/sources.list.bak /etc/apt/sources.list").filter(s -> onlyUseMirrorRepositories),
+                            Stream.of(
+                                    "apt-get clean",
+                                    "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/apt.conf.d/90sslConfig"
+                            ).filter(s -> requiresCleanLayers)
+                    ).flatMap(s -> s).collect(Collectors.toList());
                     case CENTOS -> List.of(
                             command,
                             "yum clean all",
@@ -128,7 +142,7 @@ public abstract class DockerDaemonActions {
                     // Install instructions need to be run with root
                     new SetUser("root"),
                     wrapInstallCommand(
-                            buildable.getOSDistribution().get(),
+                            buildable,
                             switch (buildable.getOSDistribution().get()) {
                                 case UBUNTU, DEBIAN -> "apt-get install -y " + String.join(" ", install.getPackages());
                                 case CENTOS -> "yum install -y " + String.join(" ", install.getPackages());
@@ -149,16 +163,16 @@ public abstract class DockerDaemonActions {
                    "FROM " + fromLocalImageBuild.tag().get();
         } else if (instruction instanceof Copy copySpec) {
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") +
-                   workingDir.relativize(getContextDir().resolve(copySpec.getLayer())) + " /";
+                    workingDir.relativize(getContextDir().resolve(copySpec.getLayer())) + " /";
         } else if (instruction instanceof Run run) {
             String mountOptions = getBindMounts().entrySet().stream()
                     .map(entry -> {
                         // Key is something like: target=/mnt, additional options are possible
                         return "--mount=type=bind," + entry.getKey() +
-                               ",source=" + workingDir.relativize(entry.getValue());
+                                ",source=" + workingDir.relativize(entry.getValue());
                     }).collect(Collectors.joining(" "));
             return "RUN " + mountOptions + "\\\n " +
-                   String.join(" && \\ \n\t", run.getCommands());
+                    String.join(" && \\ \n\t", run.getCommands());
         } else if (instruction instanceof CreateUser createUser) {
             // Specific case for Alpine and Busybox
             return String.format(
@@ -183,16 +197,16 @@ public abstract class DockerDaemonActions {
             return "ENV " + ((Env) instruction).getKey() + "=" + ((Env) instruction).getValue();
         } else if (instruction instanceof HealthCheck healthcheck) {
             return "HEALTHCHECK " + Optional.ofNullable(healthcheck.getInterval()).map(interval -> "--interval=" + interval + " ").orElse("") +
-                   Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
-                   Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
-                   Optional.ofNullable(healthcheck.getRetries()).map(retries -> "--retries=" + retries + " ").orElse("") +
-                   "CMD " + healthcheck.getCmd();
+                    Optional.ofNullable(healthcheck.getTimeout()).map(timeout -> "--timeout=" + timeout + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.getStartPeriod()).map(startPeriod -> "--start-period=" + startPeriod + " ").orElse("") +
+                    Optional.ofNullable(healthcheck.getRetries()).map(retries -> "--retries=" + retries + " ").orElse("") +
+                    "CMD " + healthcheck.getCmd();
         } else {
             throw new GradleException("Docker instruction " + instruction + " is not supported for Docker daemon build");
         }
     }
 
-    private Map<String, Path> getBindMounts() {
+    public Map<String, Path> getBindMounts() {
         String reposPath = switch (buildable.getOSDistribution().get()) {
             case DEBIAN, UBUNTU -> "/etc/apt/sources.list.d";
             case CENTOS -> "/etc/yum.repos.d";
@@ -201,11 +215,16 @@ public abstract class DockerDaemonActions {
             case DEBIAN, UBUNTU -> "/etc/apt/auth.conf.d";
             case CENTOS -> "/etc/auth";
         };
+
         return Map.of(
-                "readwrite,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir(),
-                "readonly,target=" + reposPath, getRepositoryEphemeralDir(),
-                "readonly,target=" + authPath, getAuthEphemeralDir()
+                "readonly=false,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir(),
+                "readonly=false,target=" + reposPath, getRepositoryEphemeralDir(),
+                "readonly=true,target=" + authPath, getAuthEphemeralDir()
         );
+    }
+
+    public Path getWorkingDir() {
+        return workingDir;
     }
 
     public Path getDockerEphemeralDir() {
@@ -294,58 +313,44 @@ public abstract class DockerDaemonActions {
         final Set<List<String>> hosts = buildable.getMirrorRepositories().get().stream()
                 .map(each -> List.of(each.getUrl().get().getHost(), each.getUrl().get().getUserInfo()))
                 .collect(Collectors.toSet());
+        final Path certsDir = listsEphemeralDir.resolve("certs");
 
-        if (hosts.size() != 1) {
-            throw new IllegalStateException("Only one mirror host is supported: " + hosts);
-        }
-        List<String> mirrorUrl = hosts.iterator().next();
+        Files.createDirectories(certsDir);
+        try (BufferedWriter mirrorConfWriter = Files.newBufferedWriter(authEphemeralDir.resolve("mirror.conf"));
+             BufferedWriter sslConfWriter = Files.newBufferedWriter(listsEphemeralDir.resolve("certs/90sslConfig"));
+             BufferedWriter sslCertsWriter = Files.newBufferedWriter(certsDir.resolve("mirror.pem"))) {
+            for (List<String> hostAndAuth : hosts) {
+                final String[] userinfo = hostAndAuth.get(1).split(":");
+                final String hostName = hostAndAuth.get(0);
 
-        final String[] userinfo = mirrorUrl.get(1).split(":");
-        Files.writeString(
-                authEphemeralDir.resolve("mirror.conf"),
-                String.format(
-                        """
-                                machine %s
-                                login %s
-                                password %s
-                                """, mirrorUrl.get(0), userinfo[0], userinfo[1]
-                )
-        );
+                mirrorConfWriter.write(
+                        String.format("machine %s login %s password %s\n", hostName, userinfo[0], userinfo[1]));
 
+                final URL anyUrl = buildable.getMirrorRepositories().get().iterator().next().getUrl().get();
+                if (anyUrl.getProtocol().toLowerCase(Locale.ROOT).equals("https")) {
+                    // Pass in the CA chain to apt so it can still access https repos, even without ca-certificates installed
+                    // The CA chain is validated on the host, so it's ok to trust it in the container.
+                    sslConfWriter.write(String.format("""
+                            Acquire::https::%s {
+                              CaInfo      "/etc/apt/sources.list.d/certs/mirror.pem";
+                            }
+                            """, hostName));
 
-        Files.createDirectories(listsEphemeralDir.resolve("certs"));
-
-        final URL anyUrl = buildable.getMirrorRepositories().get().iterator().next().getUrl().get();
-        if (anyUrl.getProtocol().toLowerCase(Locale.ROOT).equals("https")) {
-            // Pass in the CA chain to apt so it can still access https repos, even without ca-certificates installed
-            // The CA chain is validated on the host, so it's ok to trust it in the container.
-            Files.writeString(listsEphemeralDir.resolve("certs/90sslConfig"), String.format("""
-                                    Acquire::https::%s {
-                                      CaInfo      "/etc/apt/sources.list.d/certs/mirror.pem";
-                                    }
-                                    """,
-                            mirrorUrl.get(0)
-                    )
-            );
-
-            Files.writeString(
-                    listsEphemeralDir.resolve("certs/mirror.pem"),
-                    SSLCAChainExtractor.extract(
+                    sslCertsWriter.write(SSLCAChainExtractor.extract(
                                     anyUrl.getHost(), anyUrl.getPort() == -1 ? anyUrl.getDefaultPort() : anyUrl.getPort()
                             ).stream()
                             .map(each -> {
                                 try {
                                     return "-----BEGIN CERTIFICATE-----\n" +
-                                           Base64.getEncoder().encodeToString(each.getEncoded()) +
-                                           "\n-----END CERTIFICATE-----";
+                                            Base64.getEncoder().encodeToString(each.getEncoded()) +
+                                            "\n-----END CERTIFICATE-----";
                                 } catch (CertificateEncodingException e1) {
-                                    throw new GradleException("Can't ecnode certificates", e1);
+                                    throw new GradleException("Can't encode certificates", e1);
                                 }
                             })
-                            .collect(Collectors.joining("\n"))
-            );
-        } else {
-            Files.writeString(listsEphemeralDir.resolve("certs/90sslConfig"), "");
+                            .collect(Collectors.joining("\n")));
+                }
+            }
         }
     }
 

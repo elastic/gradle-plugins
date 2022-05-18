@@ -7,12 +7,9 @@ import java.net.URL;
 
 public abstract class BaseCLiExtension {
 
-    private final String toolName;
-
-    public BaseCLiExtension(String toolName) throws MalformedURLException {
+    public BaseCLiExtension() throws MalformedURLException {
         getPattern().convention("[organisation]/releases/download/[revision]/[module]-[classifier]");
         getBaseURL().convention(new URL("https://artifactory.elastic.dev/artifactory/github-release-proxy"));
-        this.toolName = toolName;
     }
 
     public abstract Property<URL> getBaseURL();

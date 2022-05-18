@@ -1,9 +1,12 @@
 package co.elastic.gradle.dockerbase;
 
+import co.elastic.gradle.cli.jfrog.JFrogPlugin;
+import co.elastic.gradle.docker.base.DockerLocalCleanTask;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.GradleUtils;
+import co.elastic.gradle.utils.OS;
 import co.elastic.gradle.utils.docker.InstructionCopySpecMapper;
 import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.From;
@@ -112,7 +115,8 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.getLockFileLocation().set(extension.getLockFileLocation());
                     task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
                     task.getInputInstructions().set(extension.getInstructions());
-                    task.onlyIf(runningOnSupportedArchitecture(extension));
+                    // C=hard code Linux here, because we are using it inside a docker container
+                    task.getJFrogCli().set(JFrogPlugin.getExecutable(target, OS.LINUX));
                 }
         );
         return dockerBaseImageLockfile;
