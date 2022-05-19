@@ -46,7 +46,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         helper.writeFile("image_content/foo.txt", "sample content");
         writeSimpleBuildScript(helper, baseImages);
-        runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        final BuildResult lockfileResult = runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        System.out.println(lockfileResult.getOutput());
         runGradleTask(gradleRunner, "dockerLocalImport");
 
         System.out.println("Running verification script...");
@@ -321,6 +322,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 dockerBaseImage {
                     dockerTagLocalPrefix.set("gradle-test-local")
                     mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     from%s("%s", "%s")
                     install("patch")
                     copySpec("1234:1234") {

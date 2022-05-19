@@ -45,7 +45,7 @@ public class JFrogPluginIT extends TestkitIntegrationTest {
         assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli"));
         assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-darwin-x86_64"));
         assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-AARCH64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-aarch64"));
     }
 
 }

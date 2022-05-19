@@ -2,19 +2,24 @@ package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.cli.jfrog.JFrogPlugin;
 import co.elastic.gradle.docker.base.DockerLocalCleanTask;
+import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.GradleUtils;
 import co.elastic.gradle.utils.OS;
+import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.InstructionCopySpecMapper;
 import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.FromLocalImageBuild;
+import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
+import org.gradle.api.artifacts.repositories.PasswordCredentials;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.ProviderFactory;
@@ -23,6 +28,12 @@ import org.gradle.api.tasks.TaskProvider;
 import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 
 public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
@@ -36,14 +47,17 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
         final BaseImageExtension extension = target.getExtensions().create("dockerBaseImage", BaseImageExtension.class);
 
+        final Configuration osPackageConfiguration = target.getConfigurations().create("_osPackageRepo");
+
         registerPullTask(target, extension);
 
-        final Configuration configuration = target.getConfigurations().create("dockerEphemeral");
+        final Configuration dockerEphemeralConfiguration = target.getConfigurations().create("dockerEphemeral");
 
         TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = registerBuildTask(
                 target,
-                configuration,
-                extension
+                dockerEphemeralConfiguration,
+                extension,
+                osPackageConfiguration
         );
 
         TaskProvider<DockerLocalImportArchiveTask> dockerBaseImageLocalImport = registerLocalImportTask(
@@ -59,7 +73,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         final TaskProvider<DockerLockfileTask> dockerLockfileTask = registerLockfileTask(
                 target,
                 extension,
-                configuration
+                dockerEphemeralConfiguration
         );
 
         GradleUtils.registerOrGet(target, "dockerBuild").configure(task -> {
@@ -94,6 +108,60 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             );
             dockerLockfileTask.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
             );
+
+            final URL repoUrl = extension.getOsPackageRepository().get();
+            Action<? super PasswordCredentials> credentialsAction =
+                    (repoUrl.getUserInfo() != null) ?
+                            config -> {
+                                final String[] userinfo = repoUrl.getUserInfo().split(":");
+                                config.setUsername(userinfo[0]);
+                                config.setPassword(userinfo[1]);
+                            } : null;
+            target.getRepositories().ivy(repo -> {
+                repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
+                repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
+                try {
+                    repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
+                } catch (MalformedURLException e) {
+                    throw new IllegalStateException(e);
+                }
+                // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
+                repo.patternLayout(config -> config.artifact("[organisation]/[module]_[revision]_[classifier].[ext]"));
+                repo.content(content -> content.onlyForConfigurations(dockerEphemeralConfiguration.getName()));
+                if (credentialsAction != null) {
+                    repo.credentials(credentialsAction);
+                }
+            });
+
+            final Path lockfilePath = RegularFileUtils.toPath(extension.getLockFileLocation());
+            if (Files.exists(lockfilePath)) {
+                try {
+                    final BaseLockfile lockfile = BaseLockfile.parse(
+                            Files.newBufferedReader(lockfilePath)
+                    );
+                    lockfile.getPackages().get(Architecture.current()).getPackages()
+                            .stream()
+                            // FIXME: Random filter just for testing
+                            .filter(pkg -> pkg.name().contains("libsystemd"))
+                            .forEach( pkg ->
+                            {
+                                final String type = switch (extension.getOSDistribution().get()) {
+                                    case CENTOS -> "rpm:";
+                                    case DEBIAN, UBUNTU -> "deb";
+                                };
+                                target.getDependencies().add(
+                                        dockerEphemeralConfiguration.getName(),
+                                        type + ":" + pkg.name() +
+                                        ":" + pkg.getVersion() +
+                                        ":" + pkg.getArchitecture() +
+                                        "@" + type
+                                );
+                            }
+                    );
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
         });
     }
 
@@ -111,11 +179,12 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.setGroup("containers");
                     task.setDescription("Generates a new lockfile with the latest version of all packages");
                     task.getOSDistribution().set(extension.getOSDistribution());
-                    task.getMirrorRepositories().set(extension.getMirrorRepositories());
                     task.getLockFileLocation().set(extension.getLockFileLocation());
                     task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
                     task.getInputInstructions().set(extension.getInstructions());
-                    // C=hard code Linux here, because we are using it inside a docker container
+                    task.getOsPackageRepository().set(extension.getOsPackageRepository());
+                    task.getMirrorRepositories().set(extension.getMirrorRepositories());
+                    // hard code Linux here, because we are using it inside a docker container
                     task.getJFrogCli().set(JFrogPlugin.getExecutable(target, OS.LINUX));
                 }
         );
@@ -200,7 +269,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
     }
 
     @NotNull
-    private TaskProvider<DockerBaseImageBuildTask> registerBuildTask(@NotNull Project target, Configuration dockerEphemeral, BaseImageExtension extension) {
+    private TaskProvider<DockerBaseImageBuildTask> registerBuildTask(@NotNull Project target, Configuration dockerEphemeral, BaseImageExtension extension, Configuration osPackageConfiguration) {
         TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = target.getTasks().register(
                 BUILD_TASK_NAME,
                 DockerBaseImageBuildTask.class,
@@ -215,6 +284,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             task.getMaxOutputSizeMB().set(extension.getMaxOutputSizeMB());
             task.getInputInstructions().set(extension.getInstructions());
             task.onlyIf(runningOnSupportedArchitecture(extension));
+            task.dependsOn(osPackageConfiguration);
         });
         MultiArchLifecyclePlugin.assembleForPlatform(target, dockerBaseImageBuild);
         return dockerBaseImageBuild;

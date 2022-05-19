@@ -178,6 +178,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         ).toList();
     }
 
+
     @Inject
     protected abstract ProviderFactory getProviderFactory();
 

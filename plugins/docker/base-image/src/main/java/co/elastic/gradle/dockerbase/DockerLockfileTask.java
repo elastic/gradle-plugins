@@ -35,6 +35,7 @@ import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
 import java.io.*;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -167,6 +168,9 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                 .toList();
     }
 
+    @Input
+    public abstract Property<URL> getOsPackageRepository();
+
     @Inject
     protected abstract ProviderFactory getProviderFactory();
 
@@ -192,23 +196,37 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         final Path csvGenScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), PRINT_INSTALLED_PACKAGES_NAME);
         final Path archiveScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), ARCHIVE_PACKAGES_NAME);
 
+        getLogger().lifecycle(
+                "\nRunning the created image to extract package information and upload packages with {} ...",
+                getJFrogCli().get().getAsFile().toPath()
+        );
         try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+
+            final URL repoUrl = getOsPackageRepository().get();
+            final Optional<String[]> userinfo = Optional.ofNullable(repoUrl.getUserInfo()).map(it -> it.split(":"));
+            String jfrogCLiArgs = String.format(
+                    "--insecure-tls %s --url %s",
+                    userinfo.map(it -> String.format("--user %s --password %s", it[0], it[1])).orElse(""),
+                    new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", ""))
+            );
             dockerUtils.exec(spec -> {
                 spec.setStandardOutput(byteArrayOutputStream);
+                spec.setErrorOutput(System.err);
                 spec.commandLine(
                         "docker", "run", "--rm",
                         "-v", csvGenScript + ":/mnt/" + PRINT_INSTALLED_PACKAGES_NAME,
                         "-v", archiveScript + ":/mnt/" + ARCHIVE_PACKAGES_NAME,
                         "-v", getJFrogCli().get().getAsFile().toPath() + ":/mnt/jfrog-cli",
                         "--entrypoint", "/bin/bash",
+                        "-eJFROG_CLI_ARGS=" + jfrogCLiArgs,
                         uuid,
                         "/mnt/" + ARCHIVE_PACKAGES_NAME
                 );
-                spec.setIgnoreExitValue(false);
             });
             writeLockfile(byteArrayOutputStream);
-            dockerUtils.exec(spec -> spec.commandLine("docker", "image", "rm", uuid));
+            getLogger().lifecycle("Written new lockfile to {}", getLockFileLocation().get());
         }
+        dockerUtils.exec(spec -> spec.commandLine("docker", "image", "rm", uuid));
     }
 
 
@@ -328,21 +346,20 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     }
 
 
-
     private Path writeScript(Path dir, String resource) {
-        InputStream resourceStream = getClass().getResourceAsStream(String.format("/%s", PRINT_INSTALLED_PACKAGES_NAME));
+        InputStream resourceStream = getClass().getResourceAsStream(String.format("/%s", resource));
         if (resourceStream == null) {
             throw new GradleException(
                     String.format("Could not find an embedded resource for %s", resource));
         }
         try {
-            final Path csvGenScript = dir.resolve(resource);
+            final Path script = dir.resolve(resource);
             Files.copy(
-                    resourceStream, csvGenScript,
+                    resourceStream, script,
                     StandardCopyOption.REPLACE_EXISTING
             );
             Files.setPosixFilePermissions(
-                    csvGenScript,
+                    script,
                     Set.of(
                             PosixFilePermission.OWNER_READ,
                             PosixFilePermission.OTHERS_READ,
@@ -350,7 +367,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                             PosixFilePermission.OWNER_EXECUTE
                     )
             );
-            return csvGenScript;
+            return script;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

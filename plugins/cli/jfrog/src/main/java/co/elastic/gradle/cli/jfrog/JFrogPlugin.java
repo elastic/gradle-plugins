@@ -8,14 +8,16 @@ import co.elastic.gradle.utils.OS;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.file.ProjectLayout;
+import org.gradle.api.provider.ProviderFactory;
 
+import javax.inject.Inject;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 
-@SuppressWarnings("unused")
-public class JFrogPlugin implements Plugin<Project> {
+public abstract class JFrogPlugin implements Plugin<Project> {
 
     @Override
     public void apply(Project target) {
@@ -35,7 +37,7 @@ public class JFrogPlugin implements Plugin<Project> {
             BaseCliPlugin.addDownloadRepo(target, extension);
             Arrays.stream(OS.values()).forEach(os ->
                     Arrays.stream(Architecture.values())
-                           .forEach(arch -> {
+                            .forEach(arch -> {
                                 BaseCliPlugin.addDependency(
                                         target,
                                         "artifactory:jfrog-cli:" +
@@ -47,7 +49,11 @@ public class JFrogPlugin implements Plugin<Project> {
         });
 
         target.getTasks().withType(JFrogCliUsingTask.class, t -> {
-            t.getJFrogCli().set(BaseCliPlugin.getExecutable(target, "jfrog-cli"));
+            t.getJFrogCli().convention(getProjectLayout().file(
+                            getProviderFactory().provider(() ->
+                                    BaseCliPlugin.getExecutable(target, "jfrog-cli"))
+                    )
+            );
             t.dependsOn(":" + BaseCliPlugin.SYNC_TASK_NAME);
         });
         target.getTasks().withType(JFrogCliExecTask.class, t -> {
@@ -56,6 +62,13 @@ public class JFrogPlugin implements Plugin<Project> {
         });
     }
 
+    @Inject
+    protected abstract ProjectLayout getProjectLayout();
+
+    @Inject
+    protected abstract ProviderFactory getProviderFactory();
+
+    @SuppressWarnings("unused")
     public static File getExecutable(Project target) {
         return BaseCliPlugin.getExecutable(target, "jfrog-cli");
     }

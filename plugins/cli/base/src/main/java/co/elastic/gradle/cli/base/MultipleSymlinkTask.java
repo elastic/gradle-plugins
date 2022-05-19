@@ -64,7 +64,8 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     .replace(version, "");
         }
         for (Architecture value : Architecture.values()) {
-            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT));
+            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT))
+                    .replace(value.name(), value.name().toLowerCase(Locale.ROOT));
         }
         targetName = targetName.replace("macos", "darwin")
                 .replace("mac-386", "darwin-x86_64");

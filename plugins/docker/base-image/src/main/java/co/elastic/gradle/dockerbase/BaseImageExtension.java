@@ -82,6 +82,8 @@ public abstract class BaseImageExtension implements ExtensionAware {
 
     public abstract ListProperty<OsPackageRepository> getMirrorRepositories();
 
+    public abstract Property<URL> getOsPackageRepository();
+
     @Inject
     protected abstract ProviderFactory getProviderFactory();
 
