@@ -144,7 +144,11 @@ public abstract class DockerDaemonActions {
                     wrapInstallCommand(
                             buildable,
                             switch (buildable.getOSDistribution().get()) {
-                                case UBUNTU, DEBIAN -> "apt-get install -y " + String.join(" ", install.getPackages());
+                                case UBUNTU, DEBIAN -> "apt-get install -y " +
+                                                       install.getPackages().stream()
+                                                               .filter(p -> !p.contains("Packages.gz"))
+                                                               .collect(Collectors.joining(" "))
+                                ;
                                 case CENTOS -> "yum install -y " + String.join(" ", install.getPackages());
                             }
                     ),

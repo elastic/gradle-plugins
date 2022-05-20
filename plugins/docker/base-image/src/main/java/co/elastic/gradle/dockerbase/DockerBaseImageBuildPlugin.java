@@ -34,6 +34,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 
 public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
@@ -141,8 +142,6 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     );
                     lockfile.getPackages().get(Architecture.current()).getPackages()
                             .stream()
-                            // FIXME: Random filter just for testing
-                            .filter(pkg -> pkg.name().contains("libsystemd"))
                             .forEach( pkg ->
                             {
                                 final String type = switch (extension.getOSDistribution().get()) {
@@ -150,11 +149,14 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                     case DEBIAN, UBUNTU -> "deb";
                                 };
                                 target.getDependencies().add(
-                                        dockerEphemeralConfiguration.getName(),
-                                        type + ":" + pkg.name() +
-                                        ":" + pkg.getVersion() +
-                                        ":" + pkg.getArchitecture() +
-                                        "@" + type
+                                        osPackageConfiguration.getName(),
+                                        Map.of(
+                                                "group", type,
+                                                "name", pkg.name(),
+                                                "version",  pkg.version(),
+                                                "classifier", pkg.architecture(),
+                                                "ext", type
+                                        )
                                 );
                             }
                     );
