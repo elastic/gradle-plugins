@@ -37,7 +37,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     //      packages are not updated and still awaitable as time goes by
 
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04", "centos:7"/*, "debian:11"*/}) // FIXME: re-enable once performance issues are fixed
+    @ValueSource(strings = {"ubuntu:20.04"/*, "centos:7"*/, "debian:11"}) // FIXME: re-enable once performance issues are fixed
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
@@ -274,7 +274,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
             return gradleRunner.withArguments("--warning-mode", "fail", "-s", task).build();
         } finally {
             System.out.println("Listing of project dir:");
-            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore");
+            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore", "gradle-configuration.list");
             try (Stream<Path> s = Files.walk(helper.projectDir()).filter(each -> !each.toString().contains(".gradle"))) {
                 s.forEach(each -> {
                     if (fileNamesOfInterest.contains(each.getFileName().toString())) {
@@ -284,12 +284,13 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
-                        System.out.println("\n");
+                        System.out.println("\n----\n");
                     } else {
                         System.out.println(helper.projectDir().relativize(each));
                     }
                 });
             }
+            System.out.println("Done Listing of project dir");
         }
     }
 

@@ -20,7 +20,6 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
@@ -49,12 +48,11 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
     private static final String ARCHIVE_PACKAGES_NAME = "archive-packages.sh";
     private static final String PRINT_INSTALLED_PACKAGES_NAME = "print-installed-packages.sh";
-    private final Configuration dockerEphemeralConfiguration;
     private final DefaultCopySpec rootCopySpec;
     private String manifestDigest = null;
 
     @Inject
-    public DockerLockfileTask(Configuration dockerEphemeralConfiguration) {
+    public DockerLockfileTask() {
         getImageIdFile().convention(
                 getProjectLayout().getBuildDirectory().file(getName() + "/tmp.image.id")
         );
@@ -63,7 +61,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         );
         getOnlyUseMirrorRepositories().convention(false);
         getRequiresCleanLayers().convention(false);
-        this.dockerEphemeralConfiguration = dockerEphemeralConfiguration;
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
@@ -96,12 +93,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     @Override
     @Nested
     public abstract ListProperty<OsPackageRepository> getMirrorRepositories();
-
-    @Override
-    @InputFiles
-    public Configuration getDockerEphemeralConfiguration() {
-        return dockerEphemeralConfiguration;
-    }
 
     @Override
     @Internal
@@ -207,7 +198,9 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
             String jfrogCLiArgs = String.format(
                     "--insecure-tls %s --url %s",
                     userinfo.map(it -> String.format("--user %s --password %s", it[0], it[1])).orElse(""),
-                    new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", ""))
+                    new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "") +
+                            "/" + getOSDistribution().get().name().toLowerCase(Locale.ROOT)
+                    )
             );
             dockerUtils.exec(spec -> {
                 spec.setStandardOutput(byteArrayOutputStream);

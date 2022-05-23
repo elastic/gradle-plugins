@@ -2,19 +2,18 @@ package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.dockerbase.lockfile.Packages;
-import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.GradleCacheUtilities;
+import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.ContainerImageBuildInstruction;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.Install;
 import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
@@ -46,13 +45,11 @@ import java.util.stream.Stream;
 @CacheableTask
 public abstract class DockerBaseImageBuildTask extends DefaultTask implements ImageBuildable {
 
-    private final Configuration dockerEphemeralConfiguration; // Dependencies for docker
     private final DefaultCopySpec rootCopySpec;
 
     @Inject
-    public DockerBaseImageBuildTask(Configuration dockerEphemeralConfiguration) {
+    public DockerBaseImageBuildTask() {
         super();
-        this.dockerEphemeralConfiguration = dockerEphemeralConfiguration;
 
         final String baseFileName = getName() + "/" + "image-" + Architecture.current().name().toLowerCase();
 
@@ -75,6 +72,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
+
 
     @Input
     @NotNull
@@ -217,12 +215,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
                 .map(RegularFileUtils::readString)
                 .map(String::trim)
                 .map(Instant::parse);
-    }
-
-    @InputFiles
-    @PathSensitive(PathSensitivity.RELATIVE)
-    public Configuration getDockerEphemeralConfiguration() {
-        return dockerEphemeralConfiguration;
     }
 
     @Input
