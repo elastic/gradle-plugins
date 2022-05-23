@@ -44,6 +44,8 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
     @Override
     public void apply(@NotNull Project target) {
 
+        target.getPluginManager().apply(JFrogPlugin.class);
+
         final BaseImageExtension extension = target.getExtensions().create("dockerBaseImage", BaseImageExtension.class);
 
         final Configuration osPackageConfiguration = target.getConfigurations().create("_osPackageRepo");
@@ -98,6 +100,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.getOSPackagesConfiguration().set(osPackageConfiguration);
                     // hard code Linux here, because we are using it inside a docker container
                     task.getJFrogCli().set(JFrogPlugin.getExecutable(target, OS.LINUX));
+                    task.onlyIf(runningOnSupportedArchitecture(extension));
                 }
         );
 
@@ -136,30 +139,32 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             dockerLockfileTask.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
             );
 
-            final URL repoUrl = extension.getOsPackageRepository().get();
-            Action<? super PasswordCredentials> credentialsAction =
-                    (repoUrl.getUserInfo() != null) ?
-                            config -> {
-                                final String[] userinfo = repoUrl.getUserInfo().split(":");
-                                config.setUsername(userinfo[0]);
-                                config.setPassword(userinfo[1]);
-                            } : null;
+            if (extension.getOsPackageRepository().isPresent()) {
+                final URL repoUrl = extension.getOsPackageRepository().get();
+                Action<? super PasswordCredentials> credentialsAction =
+                        (repoUrl.getUserInfo() != null) ?
+                                config -> {
+                                    final String[] userinfo = repoUrl.getUserInfo().split(":");
+                                    config.setUsername(userinfo[0]);
+                                    config.setPassword(userinfo[1]);
+                                } : null;
 
-            target.getRepositories().ivy(repo -> {
-                repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
-                repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
-                try {
-                    repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
-                } catch (MalformedURLException e) {
-                    throw new IllegalStateException(e);
-                }
-                // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
-                repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision]-[classifier].[ext]"));
-                repo.content(content -> content.onlyForConfigurations(osPackageConfiguration.getName()));
-                if (credentialsAction != null) {
-                    repo.credentials(credentialsAction);
-                }
-            });
+                target.getRepositories().ivy(repo -> {
+                    repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
+                    repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
+                    try {
+                        repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
+                    } catch (MalformedURLException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
+                    repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision]-[classifier].[ext]"));
+                    repo.content(content -> content.onlyForConfigurations(osPackageConfiguration.getName()));
+                    if (credentialsAction != null) {
+                        repo.credentials(credentialsAction);
+                    }
+                });
+            }
 
             final Path lockfilePath = RegularFileUtils.toPath(extension.getLockFileLocation());
             if (Files.exists(lockfilePath)) {

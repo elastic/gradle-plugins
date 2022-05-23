@@ -62,7 +62,7 @@ dockerBaseImage {
     dockerTagLocalPrefix.set("gradle-test-local")                // configures how the image is imported to the local daemon
     dockerTagPrefix.set("docker.elastic.co/employees/ghHandle")  // configures where the image is pushed 
     // Using a mirror is mandatory as older version of pacakges are removed from public mirrors
-    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
     fromUbuntu("ubuntu", "20.04")           // Specify the source image, hinting at the distribution 
     install("patch")                        // Install the patch utility using the version from the lockfile  
     copySpec("1234:1234") {                 // Include files and set their ownership 
@@ -216,7 +216,7 @@ val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_cre
 subprojects {
     print(project.name)
     configure<BaseImageExtension> {
-        mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+        osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
     }
 }
 ```
@@ -319,7 +319,7 @@ vault {
 }
 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
 dockerBaseImage {
-    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
     fromUbuntu("ubuntu", "20.04")
     copySpec {
         from(projectDir) {

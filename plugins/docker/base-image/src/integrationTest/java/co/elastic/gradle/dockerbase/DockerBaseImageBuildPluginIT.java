@@ -125,10 +125,10 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 import java.net.URL
                 import %s
                                 
-                evaluationDependsOnChildren()
-                                
+                                                            
                 plugins {
                    id("co.elastic.vault")
+                   id("co.elastic.docker-base").apply(false)
                 }
                 vault {
                       address.set("https://secrets.elastic.co:8200")
@@ -142,18 +142,16 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                                 
                 subprojects {
+                    apply(plugin = "co.elastic.docker-base")
                     print(project.name)
                     configure<BaseImageExtension> {
-                        mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                        osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))  
                     }
                 }
                 """, BaseImageExtension.class.getName()
         ));
 
-        helper.buildScript("s1", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
+        helper.buildScript("s1", """             
                 dockerBaseImage {
                   fromUbuntu("ubuntu", "20.04")
                   install("patch")
@@ -161,9 +159,6 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
         helper.buildScript("s2", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
                 dockerBaseImage {
                   from(project(":s1"))
                   run("patch --version")
@@ -172,9 +167,6 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
         helper.buildScript("s3", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
                 dockerBaseImage {
                   from(project(":s2"))
                   run("jq --version")
@@ -182,7 +174,9 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
 
-        runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s1:dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s2:dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s3:dockerBaseImageLockfile");
         runGradleTask(gradleRunner, "dockerLocalImport");
     }
 
@@ -253,7 +247,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                     run(
                         "ls $dockerEphemeral/slf4j-api-1.7.36.jar",
@@ -322,7 +316,6 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 }
                 dockerBaseImage {
                     dockerTagLocalPrefix.set("gradle-test-local")
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     from%s("%s", "%s")
                     install("patch")

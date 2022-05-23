@@ -137,7 +137,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
         helper.buildScript(String.format("""
                 import java.net.URL
                 import %s
-               
+                               
                 plugins {
                    id("co.elastic.docker-component")
                    id("co.elastic.docker-base")
@@ -168,7 +168,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
                     dockerTagPrefix.set("docker.elastic.co/employees/%s")
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                 }
                 dockerComponentImage {

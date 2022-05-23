@@ -35,13 +35,13 @@ public abstract class BaseCliPlugin implements Plugin<Project> {
 
     @Override
     public void apply(Project target) {
+        target.getExtensions().create("cli", CliExtension.class);
+
         if (target.getParent() != null) {
             // We only add configuration here to the root project so that we provision the tools only once
             target.getRootProject().getPluginManager().apply(BaseCliPlugin.class);
             return;
         }
-
-        final CliExtension cli = target.getExtensions().create("cli", CliExtension.class);
 
         final Configuration configuration = target.getConfigurations().create(CONFIGURATION_NAME);
         final DependencyHandler dependencies = target.getDependencies();

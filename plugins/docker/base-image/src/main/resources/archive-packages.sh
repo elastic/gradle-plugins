@@ -33,7 +33,6 @@ function archive_apt_packages() {
       version="${BASH_REMATCH[2]}"
       arch="${BASH_REMATCH[3]}"
       version="$(echo $version | sed s/:/./g)"
-      find . -name "*$package*" >&2
       mv "${package}_${version}_${arch}.deb" "${package}-${version}-${arch}.deb"
     fi
   done
