@@ -1,6 +1,8 @@
 package co.elastic.gradle.cli.base;
 
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
+import co.elastic.gradle.utils.Architecture;
+import co.elastic.gradle.utils.OS;
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -17,6 +19,7 @@ import javax.inject.Inject;
 import java.io.File;
 import java.net.URL;
 import java.nio.file.Path;
+import java.util.Locale;
 
 
 public abstract class BaseCliPlugin implements Plugin<Project> {
@@ -49,7 +52,11 @@ public abstract class BaseCliPlugin implements Plugin<Project> {
         });
         configuration.getAttributes().attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "transform-extracted");
 
-        final TaskProvider<MultipleSymlinkTask> syncBinDirStaticCli = target.getTasks().register(SYNC_TASK_NAME, MultipleSymlinkTask.class);
+        final TaskProvider<MultipleSymlinkTask> syncBinDirStaticCli = target.getTasks().register(
+                SYNC_TASK_NAME,
+                MultipleSymlinkTask.class,
+                task -> task.dependsOn(configuration)
+        );
 
         LifecyclePlugin.syncBinDir(target, syncBinDirStaticCli);
     }
@@ -91,9 +98,28 @@ public abstract class BaseCliPlugin implements Plugin<Project> {
         );
     }
 
-    public static File getExecutable(Project target, String artefactName) {
-        final Project rootProject = target.getRootProject();
-        return getPathToSyncedBinary(rootProject, artefactName).toFile();
+    public static File getExecutable(
+            Project target,
+            String artefactName,
+            OS os,
+            Architecture architecture
+    ) {
+        return getPathToSyncedBinary(
+                target.getRootProject(),
+                artefactName +
+                "-" + os.name().toLowerCase(Locale.ROOT) +
+                "-" + architecture.name().toLowerCase(Locale.ROOT)
+        ).toFile();
     }
+
+
+    public static File getExecutable(Project target, String artefactName) {
+        return getPathToSyncedBinary(
+                target.getRootProject(),
+                artefactName
+        ).toFile();
+    }
+
+
 
 }

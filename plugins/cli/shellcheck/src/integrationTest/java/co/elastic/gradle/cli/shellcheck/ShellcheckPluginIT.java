@@ -16,8 +16,8 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
     void runShellcheck() {
         helper.writeFile("src/sample.sh", """
                 #!/bin/bash
-                
-                if [[ "$$(uname)" == "Linux" ]]
+                echo $A
+                if [[ $$(uname)  == "Linux" ]]
                                            then
                                              echo "Using Linux"
                                            fi
@@ -48,9 +48,12 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 """
         );
 
-        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "check").buildAndFail();
-        assertEquals(TaskOutcome.FAILED, Objects.requireNonNull(result.task(":shellcheck")).getOutcome());
+        final BuildResult result = gradleRunner
+                .withArguments("--warning-mode", "fail", "-s", "check")
+                .buildAndFail();
+        System.out.println(result.getOutput());
         assertPathExists(helper.projectDir().resolve("gradle/bin/shellcheck"));
+        assertEquals(TaskOutcome.FAILED, Objects.requireNonNull(result.task(":shellcheck")).getOutcome());
     }
 
     @Test
@@ -91,6 +94,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
         final BuildResult result = gradleRunner
                 .withArguments("--warning-mode", "fail", "-s", "shellcheck")
                 .build();
+        System.out.println(result.getOutput());
         assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":shellcheck")).getOutcome());
         assertPathExists(helper.projectDir().resolve("gradle/bin/shellcheck"));
 

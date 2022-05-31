@@ -13,6 +13,8 @@ import org.gradle.api.file.FileCollection;
 import org.gradle.api.tasks.TaskProvider;
 
 import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.Locale;
 
 @SuppressWarnings("unused")
 public class ShellcheckPlugin implements Plugin<Project> {
@@ -22,23 +24,27 @@ public class ShellcheckPlugin implements Plugin<Project> {
         target.getPluginManager().apply(BaseCliPlugin.class);
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("shellcheck", BaseCLiExtension.class);
+                .create("shellcheck", BaseCLiExtension.class, "shellcheck");
         extension.getVersion().convention("v0.8.0");
+
+        extension.getPattern()
+                .convention("[organisation]/releases/download/[revision]/[module]-[revision].[classifier]");
 
         target.afterEvaluate(p -> {
             BaseCliPlugin.addDownloadRepo(target, extension);
-            BaseCliPlugin.addDependency(
-                    target,
-                    "koalaman/shellcheck:shellcheck:" + extension.getVersion().get() + ":" +
-                    extension.getVersion().get() + "." + (
-                            OS.current().toString().toLowerCase() + "." +
-                            // No native release on arm64 for darvin, rely on emulation instead
-                            (
-                                    OS.current().equals(OS.DARWIN) ?
-                                            "x86_64" :
-                                            Architecture.current().toString().toLowerCase()
+            Arrays.stream(OS.values()).forEach(os ->
+                    Arrays.stream(Architecture.values())
+                            .filter(arch -> !(OS.current().equals(OS.DARWIN) && arch.equals(Architecture.AARCH64)))
+                            .forEach(arch -> {
+                                        BaseCliPlugin.addDependency(
+                                                target,
+                                                "koalaman/shellcheck:shellcheck:" +
+                                                extension.getVersion().get() + ":" +
+                                                os.name().toLowerCase() + "." +
+                                                arch.name().toLowerCase(Locale.ROOT) + ".tar.xz"
+                                        );
+                                    }
                             )
-                    ) + ".tar.xz"
             );
         });
 

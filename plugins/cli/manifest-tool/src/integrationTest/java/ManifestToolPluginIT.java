@@ -32,20 +32,22 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
                        password.set(credentials["plaintext"])
                     }
                 }
-                
+                                
                 tasks.register<ManifestToolExecTask>("manifestTool")
                 """, ManifestToolExecTask.class.getName())
         );
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "manifestTool").build();
 
-        assertContains(result.getOutput(), "[manifest-tool]    1.0.3 (commit: 505479b95ee682b7302a76e86f3b913d506ab3fc)");
+        assertContains(result.getOutput(), "[manifest-tool]    2.0.3 (commit: 65590ecce1d4af199724d235dbb5453e10cad420)");
 
         assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test
-    void runWithExplicitParams() {
+    void runWithExplicitVersion() {
         helper.buildScript(String.format("""
                 import %s
                 plugins {
@@ -70,7 +72,7 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
                        password.set(credentials["plaintext"])
                     }
                 }
-                
+                                
                 tasks.register<ManifestToolExecTask>("manifestTool")
                 """, ManifestToolExecTask.class.getName())
         );

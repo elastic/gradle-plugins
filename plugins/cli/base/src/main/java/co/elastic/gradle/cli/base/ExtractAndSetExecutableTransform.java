@@ -2,6 +2,7 @@ package co.elastic.gradle.cli.base;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream;
 import org.apache.commons.io.IOUtils;
 import org.gradle.api.GradleException;
@@ -14,6 +15,7 @@ import org.gradle.api.provider.Provider;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.util.List;
 
 public abstract class ExtractAndSetExecutableTransform implements TransformAction<TransformParameters.None> {
 
@@ -22,39 +24,61 @@ public abstract class ExtractAndSetExecutableTransform implements TransformActio
 
     @Override
     public void transform(TransformOutputs outputs) {
+        try {
+            doTransform(outputs);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void doTransform(TransformOutputs outputs) throws IOException {
         File inputFile = getInputArtifact().get().getAsFile();
-        String executableName = inputFile.getName().split("-v")[0];
-        File outputFile = outputs.file(executableName);
+        String executableName = inputFile.getName()
+                .split("\\.transform")[0]
+                .replace(".tar.xz", "");
 
         if (inputFile.getName().contains("tar.xz")) {
-            try {
-                try (TarArchiveInputStream archive = new TarArchiveInputStream(
-                        new XZCompressorInputStream(
-                                new BufferedInputStream(new FileInputStream(inputFile))
-                        ));
-                     OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))
-                ) {
-                    TarArchiveEntry entry;
-                    while ((entry = archive.getNextTarEntry()) != null) {
-                        if (entry.isFile() && entry.getName().endsWith(executableName)) {
+            try (TarArchiveInputStream archive = new TarArchiveInputStream(
+                    new XZCompressorInputStream(
+                            new BufferedInputStream(new FileInputStream(inputFile))
+                    ))
+            ) {
+                TarArchiveEntry entry;
+                while ((entry = archive.getNextTarEntry()) != null) {
+                    if (entry.isFile() && !List.of("README.txt", "LICENSE.txt").contains(entry.getName())) {
+                        final File outputFile = outputs.file(executableName);
+                        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))) {
                             out.write(IOUtils.toByteArray(archive, entry.getSize()));
-                            break;
-                        } else {
-                            IOUtils.skip(archive, entry.getSize());
+                            setExecutableBit(outputFile);
                         }
+                    } else {
+                        IOUtils.skip(archive, entry.getSize());
                     }
                 }
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+            }
+        } else if (inputFile.getName().contains("manifest-tool") && !inputFile.getName().contains("v1")) {
+            try (TarArchiveInputStream archive = new TarArchiveInputStream(
+                    new GzipCompressorInputStream(
+                            new BufferedInputStream(new FileInputStream(inputFile))
+                    ))
+            ) {
+                TarArchiveEntry entry;
+                while ((entry = archive.getNextTarEntry()) != null) {
+                    final File outputFile = outputs.file(entry.getName());
+                    try (OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))) {
+                        out.write(IOUtils.toByteArray(archive, entry.getSize()));
+                    }
+                    setExecutableBit(outputFile);
+                }
             }
         } else {
-            try {
-                Files.copy(inputFile.toPath(), outputFile.toPath());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            File outputFile = outputs.file(executableName);
+            Files.copy(inputFile.toPath(), outputFile.toPath());
+            setExecutableBit(outputFile);
         }
+    }
 
+    private void setExecutableBit(File outputFile) {
         if (!outputFile.setExecutable(true)) {
             throw new GradleException("Failed to set execute bit on " + outputFile);
         }

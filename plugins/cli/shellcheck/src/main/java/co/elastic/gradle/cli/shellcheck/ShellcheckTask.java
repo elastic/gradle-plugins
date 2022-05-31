@@ -56,6 +56,7 @@ public abstract class ShellcheckTask extends DefaultTask {
             spec.setStandardOutput(new PrefixingOutputStream("[shellcheck] ", System.out));
             spec.setErrorOutput(new PrefixingOutputStream("[shellcheck] ", System.err));
             spec.workingDir(getProject().getProjectDir());
+            spec.setIgnoreExitValue(false);
             Path projectDir = getProject().getProjectDir().toPath();
             List<String> args = new ArrayList<>();
             // Don't read rc so we don't depend on local configuration
