@@ -31,13 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
-
-    // Todo: When we are sure Artifactory is reliable, e.g.  we do our own publishing as part of lockfile generation we
-    //      should add a test an additional validation, with a checked in lockfile that in time will prove that
-    //      packages are not updated and still awaitable as time goes by
-
+    
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04"/*, "centos:7"*/, "debian:11"}) // FIXME: re-enable once performance issues are fixed
+    @ValueSource(strings = {"centos:7", "ubuntu:20.04", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
@@ -162,14 +158,14 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 dockerBaseImage {
                   from(project(":s1"))
                   run("patch --version")
-                  install("jq")
+                  install("curl")
                 }
                 """
         );
         helper.buildScript("s3", """
                 dockerBaseImage {
                   from(project(":s2"))
-                  run("jq --version")
+                  run("curl --version")
                 }
                 """
         );
@@ -343,7 +339,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         "chmod -R 777 /home"
                     ))
                     setUser("foobar")
-                    install("jq", "sudo")
+                    install("patch", "sudo")
                     if ("%s" == "centos") {
                        install("which")
                     }

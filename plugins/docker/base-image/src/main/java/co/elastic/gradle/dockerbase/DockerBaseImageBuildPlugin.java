@@ -158,7 +158,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                         throw new IllegalStateException(e);
                     }
                     // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
-                    repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision]-[classifier].[ext]"));
+                    repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision].[ext]"));
                     repo.content(content -> content.onlyForConfigurations(osPackageConfiguration.getName()));
                     if (credentialsAction != null) {
                         repo.credentials(credentialsAction);
@@ -183,13 +183,17 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                                 "name", pkg.name(),
                                                 // Gradle has trouble dealing with : in the version, so we rename the
                                                 // packages to have . instead and use the same here
-                                                "version", pkg.version().replace(":", "."),
-                                                "classifier", pkg.architecture(),
-                                                "ext",  pkg.name().startsWith("__META__") ? "gz" :
-                                                        switch (extension.getOSDistribution().get()) {
-                                                            case DEBIAN, UBUNTU -> "deb";
-                                                            case CENTOS -> "rpm";
-                                                        }
+                                                "version", switch (extension.getOSDistribution().get()) {
+                                                    case DEBIAN, UBUNTU -> pkg.version().replace(":", ".") +
+                                                                           "-" + pkg.architecture();
+                                                    case CENTOS -> pkg.version() + "-" +
+                                                                   pkg.release() + "." +
+                                                                   pkg.architecture();
+                                                },
+                                                "ext", switch (extension.getOSDistribution().get()) {
+                                                    case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
+                                                    case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
+                                                }
                                         );
                                         target.getDependencies().add(
                                                 osPackageConfiguration.getName(),

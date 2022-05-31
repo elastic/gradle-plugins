@@ -36,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -115,29 +116,37 @@ public abstract class DockerDaemonActions {
                                     "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/apt.conf.d/90sslConfig"
                             ).filter(s -> requiresCleanLayers)
                     ).flatMap(s -> s).collect(Collectors.toList());
-                    case CENTOS -> List.of(
-                            command,
-                            "yum clean all",
-                            "rm -rf /var/cache/yum /tmp/* /var/tmp/*"
-                    );
+                    case CENTOS -> Stream.of(
+                            Stream.of(
+                                    "cd /var/packages-from-gradle/",
+                                    "tar -xf __META__repodata*"
+                            ).filter(s -> requiresCleanLayers),
+                            Stream.of(command),
+                            Stream.of(
+                                    "yum clean all",
+                                    "rm -rf /var/cache/yum /tmp/* /var/tmp/*"
+                            ).filter(s -> requiresCleanLayers)
+                    ).flatMap(
+                            Function.identity()
+                    ).collect(Collectors.toList());
                 }
         );
     }
 
     private Stream<? extends ContainerImageBuildInstruction> convertInstallToRun(ContainerImageBuildInstruction instruction) {
         if (instruction instanceof Install install) {
+            final String packagesToInstall = install.getPackages().stream()
+                    .filter(p -> !p.contains("__META__"))
+                    .collect(Collectors.joining(" "));
             return Stream.of(
                     // Install instructions need to be run with root
                     new SetUser("root"),
                     wrapInstallCommand(
                             buildable,
                             switch (buildable.getOSDistribution().get()) {
-                                case UBUNTU, DEBIAN -> "apt-get install -y " +
-                                                       install.getPackages().stream()
-                                                               .filter(p -> !p.contains("__META__"))
-                                                               .collect(Collectors.joining(" "))
-                                ;
-                                case CENTOS -> "yum install -y " + String.join(" ", install.getPackages());
+                                case UBUNTU, DEBIAN -> "apt-get install -y " + packagesToInstall;
+                                case CENTOS -> "yum install --setopt=skip_missing_names_on_install=False -y " +
+                                                packagesToInstall;
                             }
                     ),
                     // And we restore the user after that
@@ -201,16 +210,19 @@ public abstract class DockerDaemonActions {
     public Map<String, Path> getBindMounts() {
         final HashMap<String, Path> result = new HashMap<>();
 
-        String reposPath = switch (buildable.getOSDistribution().get()) {
-            case DEBIAN, UBUNTU -> "/etc/apt/sources.list";
-            case CENTOS -> "/etc/yum.repos.d";
-        };
-
         result.put(
                 "readonly=true,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir()
         );
         if (buildable.getRequiresCleanLayers().get()) {
-            result.put("readonly=true,target=" + reposPath, getRepositoryEphemeralDir().resolve("sources.list"));
+            result.put("readonly=true,target=" + switch (buildable.getOSDistribution().get()) {
+                        case DEBIAN, UBUNTU -> "/etc/apt/sources.list";
+                        case CENTOS -> "/etc/yum.repos.d";
+                    },
+                    switch (buildable.getOSDistribution().get()) {
+                        case DEBIAN, UBUNTU -> getRepositoryEphemeralDir().resolve("sources.list");
+                        case CENTOS -> getRepositoryEphemeralDir();
+                    }
+            );
             result.put("readonly=false,target=/var/packages-from-gradle", getOSPackagesDir());
         }
         return result;
@@ -251,15 +263,13 @@ public abstract class DockerDaemonActions {
                                 case DEBIAN, UBUNTU -> "sources.list";
                             }),
                     switch (buildable.getOSDistribution().get()) {
-                        case CENTOS -> {
-                            yield List.of(
-                                    "[" + name + "]",
-                                    "name=" + name,
-                                    "baseurl=" + url,
-                                    "enabled=1",
-                                    "gpgcheck=0"
-                            );
-                        }
+                        case CENTOS -> List.of(
+                                "[" + name + "]",
+                                "name=" + name,
+                                "baseurl=" + url,
+                                "enabled=1",
+                                "gpgcheck=0"
+                        );
                         case DEBIAN, UBUNTU -> List.of(
                                 "deb [trusted=yes] " + url + " /"
                         );
