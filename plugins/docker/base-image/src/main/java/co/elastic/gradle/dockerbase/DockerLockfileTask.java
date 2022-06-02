@@ -58,7 +58,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         getWorkingDirectory().convention(
                 getProjectLayout().getBuildDirectory().dir(getName())
         );
-        getOnlyUseMirrorRepositories().convention(false);
         getRequiresCleanLayers().convention(false);
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));

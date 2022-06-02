@@ -65,8 +65,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         getCreatedAtFile().convention(
                 getProjectLayout().getBuildDirectory().file(baseFileName + ".createdAt")
         );
-        // TODO: Change to true once packages are archived properly
-        getOnlyUseMirrorRepositories().convention(false);
         getRequiresCleanLayers().convention(true);
 
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);

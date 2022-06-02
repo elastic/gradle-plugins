@@ -96,7 +96,6 @@ public abstract class DockerDaemonActions {
 
     public static Run wrapInstallCommand(ImageBuildable buildable, String command) {
         final OSDistribution distribution = buildable.getOSDistribution().get();
-        final boolean onlyUseMirrorRepositories = buildable.getOnlyUseMirrorRepositories().get();
         final boolean requiresCleanLayers = buildable.getRequiresCleanLayers().get();
         return new Run(
                 switch (distribution) {
@@ -207,7 +206,7 @@ public abstract class DockerDaemonActions {
         }
     }
 
-    public Map<String, Path> getBindMounts() {
+    public Map<String, Path> 1getBindMounts() {
         final HashMap<String, Path> result = new HashMap<>();
 
         result.put(
