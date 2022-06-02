@@ -154,15 +154,18 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                       }
                 }
                 cli {
+                    val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()                      
                     manifestTool {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
                     snyk {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
+                    }
+                    jfrog {
+                        username.set(credentials["username"])
+                        password.set(credentials["plaintext"])
                     }
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
@@ -180,7 +183,10 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 """, Architecture.class.getName(), ghHandle, ghHandle
         ));
 
-        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImageLockfile", "dockerBaseImagePush")
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImageLockfile")
+                .build();
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImagePush")
                 .build();
 
         gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerComponentImageBuild")

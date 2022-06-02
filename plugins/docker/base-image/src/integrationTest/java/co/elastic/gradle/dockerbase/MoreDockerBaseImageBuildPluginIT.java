@@ -124,14 +124,24 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
                 helper.projectDir().resolve("docker-base-image.lock")
         );
+
+        Assertions.assertEquals(
+                TaskOutcome.SKIPPED,
+                Objects.requireNonNull(
+                        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImageLockfile")
+                                .build()
+                                .task(":dockerBaseImageLockfile")
+                ).getOutcome(),
+                "Expected dockerBaseImageLockfile to be skipped but it was not "
+        );
+
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s",
                 "dockerBasePull",
-                "dockerBaseImageLockfile",
                 "dockerBaseImageBuild",
                 "dockerBaseImagePush"
         ).build();
         List.of(
-                ":dockerBasePull", ":dockerBaseImageLockfile", ":dockerBaseImageBuild", ":dockerBaseImagePush"
+                ":dockerBasePull", ":dockerBaseImageBuild", ":dockerBaseImagePush"
         ).forEach(task -> {
             Assertions.assertEquals(
                     TaskOutcome.SKIPPED,
@@ -208,10 +218,12 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                        }   
                     }
                 }
-                
+                                
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))                   
+                    osPackageRepository.set(
+                        URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
+                    )                   
                     fromUbuntu("ubuntu", "20.04")
                     copySpec {
                         from(archive)

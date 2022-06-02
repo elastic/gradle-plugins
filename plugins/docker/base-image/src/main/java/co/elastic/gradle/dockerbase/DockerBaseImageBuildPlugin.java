@@ -31,6 +31,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -113,6 +114,19 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         GradleUtils.registerOrGet(target, "dockerLocalImport").configure(task -> {
             task.dependsOn(dockerBaseImageLocalImport);
             task.setGroup("containers");
+        });
+
+        target.getGradle().getTaskGraph().whenReady(graph -> {
+            final String separator = target.getPath().endsWith(":") ? "" : ":";
+            final String lockfileTaskPath = target.getPath() + separator + LOCKFILE_TASK_NAME;
+            final String buildTaskPath = target.getPath() + separator + BUILD_TASK_NAME;
+            if (graph.hasTask(lockfileTaskPath) && graph.hasTask(buildTaskPath)
+            ) {
+                throw new GradleException("Generating the lockfile and building an image using it in the same invocation" +
+                                          " is not supported. The lockfile should be generated and checked in. It can be " +
+                                          "re-generated periodically to update dependencies, but doing at the same time" +
+                                          "defeats the purpose of having a lockfile.");
+            }
         });
 
         target.afterEvaluate(p -> {

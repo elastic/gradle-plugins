@@ -102,7 +102,7 @@ public abstract class DockerDaemonActions {
                 switch (distribution) {
                     case UBUNTU, DEBIAN -> Stream.of(
                             Stream.of(
-                                    "mv /var/packages-from-gradle/__META__Packages* /var/packages-from-gradle/Packages.gz"
+                                    "cp /var/packages-from-gradle/__META__Packages* /var/packages-from-gradle/Packages.gz"
                             ).filter(s -> requiresCleanLayers),
                             Stream.of(
                                     "rm -f /etc/apt/apt.conf.d/docker-clean",
