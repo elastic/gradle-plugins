@@ -47,7 +47,6 @@ import java.util.stream.Stream;
 public abstract class DockerLockfileTask extends DefaultTask implements ImageBuildable, JFrogCliUsingTask {
 
     private static final String ARCHIVE_PACKAGES_NAME = "archive-packages.sh";
-    private static final String PRINT_INSTALLED_PACKAGES_NAME = "print-installed-packages.sh";
     private final DefaultCopySpec rootCopySpec;
     private String manifestDigest = null;
 
@@ -184,7 +183,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
         final UUID uuid = daemonActions.build();
 
-        final Path csvGenScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), PRINT_INSTALLED_PACKAGES_NAME);
         final Path archiveScript = writeScript(RegularFileUtils.toPath(getWorkingDirectory()), ARCHIVE_PACKAGES_NAME);
 
         getLogger().lifecycle(
@@ -207,7 +205,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                 spec.setErrorOutput(System.err);
                 spec.commandLine(
                         "docker", "run", "--rm",
-                        "-v", csvGenScript + ":/mnt/" + PRINT_INSTALLED_PACKAGES_NAME,
                         "-v", archiveScript + ":/mnt/" + ARCHIVE_PACKAGES_NAME,
                         "-v", getJFrogCli().get().getAsFile().toPath() + ":/mnt/jfrog-cli",
                         "--entrypoint", "/bin/bash",
