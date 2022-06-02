@@ -7,10 +7,11 @@ About
 The scope of the plugin is to generate low level "base" container images that implements the OS level support required
 for an application to run. It provides a convenience wrapper around building docker images with `Dockerfile`s. The
 plugin generates such a file and calls docker commands to build and export an image with caching enabled, in a slightly
-opinionated way and with support for additional features than what plain Dockerfiles support.
+opinionated way and with support for additional features as compared to plain Dockerfiles and with deep 
+OS level integration.
 
 The configuration of the resulting image is specified using a custom DSL inside the build script. This approach allows
-us to provide additional convenience wrappers around installing packages, creating users and managing repositories being
+us to provide additional features around installing packages, creating users and managing repositories being
 used to install packages.
 
 Most importantly the plugin offers a way to do OS package installation in a way similar to nodejs using a lockfile of
@@ -31,7 +32,7 @@ Limitations
 Multi project builds depend on the import task and the tag it creates, so multiple concurrent builds e.g. building
 different branches might result in crosstalk.
 
-A caching mirror, e.g. Artifactory setup is required to make the plugin work. Public mirrors typically remove package
+A generic Artifactory repository is required to make the plugin work. Public mirrors typically remove package
 versions eagerly as newer versions become available, so there's no guarantee that the versions in the lockfile are still
 installable. On the bright side this setup also shields the builds from failures or connectivity issues with the public
 infrastructure.
@@ -113,6 +114,10 @@ updated. Running the command again will always get the latest repo digests point
 better with build avoidance and is more predictable as one can control when updates are picked up as opposed to maybe
 getting them right before or while preparing for a release. For convenience and to make sure it's not forgotten, this
 functionality can be used in automation that will re-generate the lock-file and open a PR with the result.
+
+As part of generating the lockfile, OS packages used to build the image will also be uploaded to the configured 
+repository. When building the image these are pulled using a Gradle Configuration, so they will get cached locally 
+and only downloaded once, making it much faster to iterate on image builds.
 
 One can then build and optionally push the resulting image:
 
