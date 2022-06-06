@@ -58,7 +58,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         getWorkingDirectory().convention(
                 getProjectLayout().getBuildDirectory().dir(getName())
         );
-        getRequiresCleanLayers().convention(false);
+        getIsolateFromExternalRepos().convention(false);
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
@@ -109,11 +109,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
 
     @Override
     @Input
-    public abstract Property<Boolean> getRequiresCleanLayers();
-
-    @Override
-    @Input
-    public abstract Property<Boolean> getOnlyUseMirrorRepositories();
+    public abstract Property<Boolean> getIsolateFromExternalRepos();
 
     @Nested
     public abstract ListProperty<ContainerImageBuildInstruction> getInputInstructions();

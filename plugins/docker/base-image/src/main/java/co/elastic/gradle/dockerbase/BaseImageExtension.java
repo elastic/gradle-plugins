@@ -140,6 +140,15 @@ public abstract class BaseImageExtension implements ExtensionAware {
         run(Arrays.asList(commands));
     }
 
+    public void repoConfig(List<String> commands) {
+        instructions.add(new RepoConfigRun(commands));
+    }
+
+    @SuppressWarnings("unused")
+    public void repoConfig(String... commands) {
+        repoConfig(Arrays.asList(commands));
+    }
+
     @SuppressWarnings("unused")
     public void createUser(String username, Integer userId, String group, Integer groupId) {
         instructions.add(new CreateUser(username, group, userId, groupId));
