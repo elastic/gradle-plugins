@@ -46,7 +46,7 @@ import java.util.stream.Stream;
 
 public abstract class DockerLockfileTask extends DefaultTask implements ImageBuildable, JFrogCliUsingTask {
 
-    private static final String ARCHIVE_PACKAGES_NAME = "archive-packages.sh";
+    public static final String ARCHIVE_PACKAGES_NAME = "archive-packages.sh";
     private final DefaultCopySpec rootCopySpec;
     private String manifestDigest = null;
 
@@ -110,10 +110,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     @Override
     @Input
     public abstract Property<Boolean> getRequiresCleanLayers();
-
-    @Override
-    @Input
-    public abstract Property<Boolean> getOnlyUseMirrorRepositories();
 
     @Nested
     public abstract ListProperty<ContainerImageBuildInstruction> getInputInstructions();
@@ -241,7 +237,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         try (Reader reader = new StringReader(csvString)) {
             CSVParser parser = CSVParser.parse(reader, CSVFormat.DEFAULT);
             packages.put(
-                    Architecture.current(),
+                    getArchitecture().get(),
                     new Packages(
                             // Keep the latest version only. CentOS can keep multiple versions installed, e.g. kernel-core
                             Packages.getUniquePackagesWithMaxVersion(parser.getRecords().stream()
@@ -276,7 +272,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
             if (image == null) {
                 image = new HashMap<>();
             }
-            image.put(Architecture.current(), newImage.get());
+            image.put(getArchitecture().get(), newImage.get());
         } else {
             image = null;
         }
@@ -310,7 +306,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                             Iterator<JsonNode> manifests = root.path("manifests").elements();
                             while (manifests.hasNext()) {
                                 JsonNode manifest = manifests.next();
-                                if (Architecture.current().dockerName().equals(manifest.path("platform").path("architecture").asText())) {
+                                if (getArchitecture().get().dockerName().equals(manifest.path("platform").path("architecture").asText())) {
                                     digest = manifest.path("digest").asText(null);
                                     break;
                                 }

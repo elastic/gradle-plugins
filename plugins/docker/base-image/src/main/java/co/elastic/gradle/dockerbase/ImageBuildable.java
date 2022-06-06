@@ -1,5 +1,6 @@
 package co.elastic.gradle.dockerbase;
 
+import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.docker.instruction.ContainerImageBuildInstruction;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.DirectoryProperty;
@@ -8,10 +9,7 @@ import org.gradle.api.internal.file.copy.DefaultCopySpec;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
-import org.gradle.api.tasks.InputFiles;
-import org.gradle.api.tasks.Internal;
-import org.gradle.api.tasks.PathSensitive;
-import org.gradle.api.tasks.PathSensitivity;
+import org.gradle.api.tasks.*;
 
 import java.util.List;
 
@@ -42,4 +40,7 @@ public interface ImageBuildable {
     Property<String> getDockerEphemeralMount();
 
     Property<Boolean> getRequiresCleanLayers();
+
+    @Input
+    Property<Architecture> getArchitecture();
 }

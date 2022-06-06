@@ -19,7 +19,6 @@
 
 package co.elastic.gradle.dockerbase;
 
-import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.instruction.*;
@@ -206,7 +205,7 @@ public abstract class DockerDaemonActions {
         }
     }
 
-    public Map<String, Path> 1getBindMounts() {
+    public Map<String, Path> getBindMounts() {
         final HashMap<String, Path> result = new HashMap<>();
 
         result.put(
@@ -325,14 +324,14 @@ public abstract class DockerDaemonActions {
             if (System.getProperty("co.elastic.unsafe.use-docker-cache", "false").equals("true")) {
                 // This is usefull for development when we don't care about image corectness, but otherwhise dagerous,
                 //   e.g. dockerEphemeral content in run commands could lead to incorrect results
-                spec.commandLine("docker", "image", "build", "--platform", "linux/" + Architecture.current().dockerName(),
+                spec.commandLine("docker", "image", "build", "--platform", "linux/" + buildable.getArchitecture().get().dockerName(),
                         "--quiet=false",
                         "--progress=plain",
                         "--iidfile=" + buildable.getImageIdFile().get().getAsFile(), ".", "-t",
                         uuid
                 );
             } else {
-                spec.commandLine("docker", "image", "build", "--platform", "linux/" + Architecture.current().dockerName(),
+                spec.commandLine("docker", "image", "build", "--platform", "linux/" + buildable.getArchitecture().get().dockerName(),
                         "--quiet=false",
                         "--no-cache",
                         "--progress=plain",

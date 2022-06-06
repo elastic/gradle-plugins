@@ -67,6 +67,8 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         );
         getRequiresCleanLayers().convention(true);
 
+        getArchitecture().convention(Architecture.current());
+
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
@@ -216,11 +218,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
     }
 
     @Input
-    public Architecture getArchitecture() {
-        return Architecture.current();
-    }
-
-    @Input
     public abstract Property<Long> getMaxOutputSizeMB();
 
     @LocalState
@@ -234,10 +231,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
     @Override
     @Input
     public abstract Property<Boolean> getRequiresCleanLayers();
-
-    @Override
-    @Input
-    public abstract Property<Boolean> getOnlyUseMirrorRepositories();
 
     private void buildDockerImage() {
         DockerDaemonActions daemonActions = getObjectFactory().newInstance(DockerDaemonActions.class, this);
