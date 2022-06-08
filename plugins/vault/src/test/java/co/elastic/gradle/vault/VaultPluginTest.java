@@ -22,7 +22,7 @@ class VaultPluginTest {
     @SuppressWarnings("unchecked")
     @Test
     void pluginCanBeAppliedOnSettings() {
-        testProject.getGradle().settingsEvaluated( settings -> settings.getPluginManager().apply(VaultSettingsPlugin.class));
+        testProject.getGradle().settingsEvaluated( settings -> settings.getPluginManager().apply(VaultPlugin.class));
     }
 
     @Test

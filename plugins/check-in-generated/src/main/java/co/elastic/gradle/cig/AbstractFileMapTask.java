@@ -1,4 +1,4 @@
-package co.elatic.gradle.cig;
+package co.elastic.gradle.cig;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.FileCollection;

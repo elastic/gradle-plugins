@@ -1,4 +1,4 @@
-package co.elatic.gradle.cig;
+package co.elastic.gradle.cig;
 
 import org.apache.commons.io.FileUtils;
 import org.gradle.api.GradleException;

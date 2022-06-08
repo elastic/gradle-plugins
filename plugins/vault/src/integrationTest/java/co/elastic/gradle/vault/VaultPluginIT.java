@@ -49,7 +49,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
                       engineVersion.set(2)
@@ -90,7 +90,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
                       engineVersion.set(2)
@@ -119,7 +119,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                            import %s
                            include("subproject")
                            plugins {
-                               id("co.elastic.vault-settings")
+                               id("co.elastic.vault")
                            }
                            configure<VaultExtension> {
                               engineVersion.set(2)
@@ -270,7 +270,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
                       engineVersion.set(2)
@@ -319,7 +319,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
                       engineVersion.set(2)
@@ -375,7 +375,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    val vault = the<VaultExtension>()
                    logger.lifecycle("top_secret is {}", vault.readSecret("secret/testing").get()["top_secret"])                  
@@ -399,7 +399,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                    import %s
                    rootProject.name = "integration-test"
                    plugins {
-                       id("co.elastic.vault-settings")
+                       id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
                       address.set("https://secrets.elastic.co:8200")

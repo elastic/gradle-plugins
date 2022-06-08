@@ -26,7 +26,7 @@ Usage
 From `settings.gradle.kts`
 ```kotlin
 plugins {
-   id("co.elastic.vault-settings")
+   id("co.elastic.vault")
 }
 configure<VaultExtension> {
   address.set("http://example.com/")

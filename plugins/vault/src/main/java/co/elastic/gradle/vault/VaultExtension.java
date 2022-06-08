@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.*;
 
-abstract public class VaultExtension {
+abstract public class VaultExtension implements ExtensionAware {
 
     private static final Logger logger = Logging.getLogger(VaultExtension.class);
     public static final long EXPIRATION_BUFFER = MILLISECONDS.convert(2, SECONDS);

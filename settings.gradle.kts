@@ -17,6 +17,7 @@ include("plugins:sandbox")
 include("plugins:docker:base-image")
 include("plugins:docker:component-image")
 include("plugins:docker:base")
+include("plugins:elastic-conventions")
 include("plugins:license-headers")
 include("plugins:build-scan-xunit")
 include("plugins:lifecycle")
@@ -37,13 +38,18 @@ gradleEnterprise {
     // Don't upload a build scan for IDEA model updates, there will be a lot of these, especially with auto config turned on
     if (gradle.startParameter.taskNames != listOf("prepareKotlinBuildScriptModel")) {
         buildScan {
+
+            // Not covered by the conventions plugin
             buildScanPublished {
                 file(".build-scan.url").writeText("$buildScanUri")
             }
+
             publishAlways()
             isUploadInBackground = !isRunningInCI
 
             server = "https://gradle-enterprise.elastic.co"
+
+            // Not covered by the conventions plugin
             capture.isTaskInputFiles = true
 
             obfuscation {
@@ -113,7 +119,7 @@ gradleEnterprise {
             } else {
                 tag("CI")
                 link("Jenkins Build", buildUrl)
-                link("Re-build in Jenkins", buildUrl + "/rebuild/parameterized")
+
                 if (buildNumber != null) {
                     value("Job Number", buildNumber)
                 }
