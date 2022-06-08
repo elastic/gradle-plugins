@@ -1,6 +1,12 @@
 package co.elastic.gradle.elastic_conventions;
 
+import co.elastic.gradle.cli.base.BaseCLiExtension;
+import co.elastic.gradle.cli.base.BaseCliPlugin;
+import co.elastic.gradle.cli.base.CliExtension;
+import co.elastic.gradle.dockerbase.BaseImageExtension;
+import co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
+import co.elastic.gradle.snyk.SnykCLIExecTask;
 import co.elastic.gradle.vault.VaultAuthenticationExtension;
 import co.elastic.gradle.vault.VaultExtension;
 import co.elastic.gradle.vault.VaultPlugin;
@@ -11,28 +17,31 @@ import com.gradle.scan.plugin.BuildResult;
 import com.gradle.scan.plugin.BuildScanDataObfuscation;
 import com.gradle.scan.plugin.BuildScanExtension;
 import org.gradle.api.Action;
+import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.initialization.Settings;
+import org.gradle.api.plugins.ExtensionsSchema;
 import org.gradle.api.plugins.PluginAware;
+import org.gradle.api.plugins.PluginContainer;
 import org.gradle.internal.jvm.Jvm;
 
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     public static final int OBSERVABILITY_TIME_FRAME_MINUTES = 5;
+    public static final String VAULT_ARTIFACTORY_PATH = "secret/cloud-team/cloud-ci/artifactory_creds";
 
     @Override
     public void apply(PluginAware target) {
@@ -44,9 +53,57 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     }
 
     public void applyToProject(Project target) {
-        target.getPluginManager().apply(LifecyclePlugin.class);
-        target.getPlugins().withType(VaultPlugin.class, unused -> {
-            configureVaultPlugin(target.getExtensions().getByType(VaultExtension.class));
+        final PluginContainer plugins = target.getPlugins();
+        plugins.apply(LifecyclePlugin.class);
+        plugins.withType(VaultPlugin.class, unused ->
+                configureVaultPlugin(target.getExtensions().getByType(VaultExtension.class))
+        );
+
+        configureCliPlugins(target, plugins);
+
+
+
+        target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
+            plugins.apply(VaultPlugin.class);
+            final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
+            final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+
+            target.getTasks().withType(SnykCLIExecTask.class, task ->
+                    task.environment(
+                            "SNYK_TOKEN",
+                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get().get("plaintext")
+                    )
+            );
+
+            var creds = vault.readAndCacheSecret(VAULT_ARTIFACTORY_PATH).get();
+            try {
+                extension.getOsPackageRepository().set(new URL(
+                        "https://" + creds.get("username") + ":" + creds.get("plaintext") +
+                        "@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"
+                ));
+            } catch (MalformedURLException e) {
+                throw new GradleException("Can't configure os package repository", e);
+            }
+        });
+    }
+
+    private void configureCliPlugins(Project target, PluginContainer plugins) {
+        plugins.withType(BaseCliPlugin.class, unused -> {
+            plugins.apply(VaultPlugin.class);
+            final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+            final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);
+            var listOfNames = new ArrayList<String>();
+            for (ExtensionsSchema.ExtensionSchema extensionSchema : cliExtension.getExtensions().getExtensionsSchema()) {
+                if (extensionSchema.getPublicType().isAssignableFrom(BaseCLiExtension.class)) {
+                    listOfNames.add(extensionSchema.getName());
+                }
+            }
+            var creds = vault.readAndCacheSecret(VAULT_ARTIFACTORY_PATH).get();
+            for (String name : listOfNames) {
+                final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
+                extension.getUsername().set(creds.get("username"));
+                extension.getPassword().set(creds.get("plaintext"));
+            }
         });
     }
 
@@ -84,9 +141,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         var nodeName = getFirsEnvVar("NODE_NAME", "BUILDKITE_AGENT_NAME");
 
         var startTime = OffsetDateTime.now(ZoneOffset.UTC);
-        if (nodeName.isPresent()) {
-            buildScan.buildFinished(result -> linkToObservability(buildScan, startTime));
-        }
+        nodeName.ifPresent(s -> buildScan.buildFinished(result -> linkToObservability(buildScan, startTime, s)));
 
         if (isCI) {
             buildScan.tag("CI");

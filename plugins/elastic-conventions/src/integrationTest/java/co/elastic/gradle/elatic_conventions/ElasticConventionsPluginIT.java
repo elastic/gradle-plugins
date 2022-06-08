@@ -1,31 +1,33 @@
 package co.elastic.gradle.elatic_conventions;
 
 import co.elastic.gradle.TestkitIntegrationTest;
+import co.elastic.gradle.cli.jfrog.JFrogCliExecTask;
+import co.elastic.gradle.cli.manifest.ManifestToolExecTask;
 import co.elastic.gradle.vault.VaultExtension;
 import org.gradle.testkit.runner.BuildResult;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.Objects;
 
 import static co.elastic.gradle.AssertContains.assertContains;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static co.elastic.gradle.AssertFiles.assertPathExists;
 
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void withLifecycle() {
         helper.settings("""
-        plugins {
-            id("co.elastic.elastic-conventions")
-        }    
-        """);
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }    
+                """);
         helper.buildScript("""
-        plugins {
-            id("co.elastic.elastic-conventions")
-        }    
-        """);
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }    
+                """);
 
         final BuildResult result = gradleRunner
                 .withArguments("--warning-mode", "fail", "-s", "check")
@@ -35,11 +37,6 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void withVault() {
-        final Path ghTokenPath = Paths.get(System.getProperty("user.home") + "/.elastic/github.token");
-        assumeTrue(
-                Files.exists(ghTokenPath),
-                "Test will be skipped unless a GH token is present at " + ghTokenPath
-        );
         helper.settings(String.format("""
                    import %s
                    plugins {
@@ -74,7 +71,73 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         System.out.println(result.getOutput());
     }
 
+    @Test
+    public void withCli() {
+        helper.buildScript(String.format("""
+                   import %s
+                   import %s
+                   plugins {
+                       id("co.elastic.cli.jfrog")
+                       id("co.elastic.cli.manifest-tool")
+                       id("co.elastic.elastic-conventions")
+                   }
+                                  
+                   val jfrog by tasks.registering(JFrogCliExecTask::class)
+                   val manifestTool by tasks.registering(ManifestToolExecTask::class)
+                   
+                   tasks.check {
+                      dependsOn(jfrog, manifestTool)
+                   }
+                 
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName())
+        );
 
+        final BuildResult result = gradleRunner
+                .withArguments("--warning-mode", "fail", "-s", "check")
+                .build();
+
+        System.out.println(result.getOutput());
+
+        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-aarch64"));
+
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-linux-x86_64"));
+    }
+
+    @Test
+    public void withImageBuild() throws IOException {
+        Files.copy(
+                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
+                helper.projectDir().resolve("docker-base-image.lock")
+        );
+
+        helper.buildScript("""
+                   plugins {
+                       id("co.elastic.docker-base")
+                       id("co.elastic.docker-component")
+                       id("co.elastic.elastic-conventions")
+                   }
+                   
+                   dockerBaseImage {
+                       fromUbuntu("ubuntu", "20.04")
+                   }
+                   dockerComponentImage {
+                       buildAll {
+                            from(project)
+                       }
+                   }
+                """
+        );
+
+        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal")
+                .buildAndFail();
+
+        assertContains(scanResult.getOutput(), "Tested 98 dependencies for known issues,");
+    }
 
 
 }

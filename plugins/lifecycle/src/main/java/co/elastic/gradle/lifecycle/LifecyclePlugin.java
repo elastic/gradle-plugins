@@ -54,11 +54,16 @@ public class LifecyclePlugin implements Plugin<Project> {
            task.setGroup("automation");
            task.setDescription("Automatically fix some problems, e.g. run linters with the --fix option");
         });
+
+        tasks.register(SECURITY_SCAN_TASK_NAME, task -> {
+            task.setGroup("security");
+            task.setDescription("Run all security scans");
+        });
     }
 
-    private static void whenPluginAddedAddDependency(Project target, TaskProvider<? extends Task> dependency, String resolveAllDependenciesTaskName) {
+    private static void whenPluginAddedAddDependency(Project target, TaskProvider<? extends Task> dependency, String taskName) {
         target.getPluginManager().withPlugin("co.elastic.lifecycle", p -> {
-            target.getTasks().named(resolveAllDependenciesTaskName, task -> {
+            target.getTasks().named(taskName, task -> {
                 task.dependsOn(dependency);
             });
         });

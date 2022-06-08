@@ -19,5 +19,15 @@ dependencies {
     implementation(project(":libs:utils"))
     implementation(project(":plugins:lifecycle"))
     implementation(project(":plugins:vault"))
+    implementation(project(":plugins:cli:base"))
+    implementation(project(":plugins:cli:snyk"))
+    implementation(project(":plugins:docker:base-image"))
+
     integrationTestImplementation(project(":plugins:vault"))
+    // for integration testing only
+    implementation(project(":plugins:cli:jfrog"))
+    integrationTestImplementation(project(":plugins:cli:jfrog"))
+    implementation(project(":plugins:cli:manifest-tool"))
+    integrationTestImplementation(project(":plugins:cli:manifest-tool"))
+    implementation(project(":plugins:docker:component-image"))
 }
