@@ -65,7 +65,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         getCreatedAtFile().convention(
                 getProjectLayout().getBuildDirectory().file(baseFileName + ".createdAt")
         );
-        getRequiresCleanLayers().convention(true);
+        getIsolateFromExternalRepos().convention(true);
 
         getArchitecture().convention(Architecture.current());
 
@@ -230,7 +230,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
 
     @Override
     @Input
-    public abstract Property<Boolean> getRequiresCleanLayers();
+    public abstract Property<Boolean> getIsolateFromExternalRepos();
 
     private void buildDockerImage() {
         DockerDaemonActions daemonActions = getObjectFactory().newInstance(DockerDaemonActions.class, this);

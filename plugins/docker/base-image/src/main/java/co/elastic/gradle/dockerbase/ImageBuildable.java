@@ -39,7 +39,7 @@ public interface ImageBuildable {
 
     Property<String> getDockerEphemeralMount();
 
-    Property<Boolean> getRequiresCleanLayers();
+    Property<Boolean> getIsolateFromExternalRepos();
 
     @Input
     Property<Architecture> getArchitecture();

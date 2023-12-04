@@ -142,6 +142,29 @@ Note that building the image only stores an archive of it, to also have it avail
 See the source of [BaseImageExtension](src/main/java/co/elastic/gradle/dockerbase/BaseImageExtension.java)  
 for all configuration options of the image.
 
+### Configuring additional package repositories 
+
+When building the docker images all the default package repositories are replaced with the local repository from Gradle
+created based on the lockfile.  This repository has content from the lockfile and nothing else guaranteeing that the 
+image build will be hermetic. When using custom repositories, these need to be configured only 
+when generating the lockfile, as they might fail and are not needed when the image is built, so
+commands that configure an additional repository have to be wrapped with special syntax:
+
+```kotlin
+dockerBaseImage {
+    fromCentos("centos", "7")
+    repoConfig("yum -y install epel-release")
+    install("jq")
+    run("jq --version")
+}
+```
+
+This example runs a `yum` command to install the EPEL repository that hosts the `jq` tool. 
+
+**NOTE**: Because the repo config instructions are only taken into account when the lockfile is generated, none of the 
+effects will be visible in the built image. In this case the resulting image _will_ have `jq` installed, but will not 
+have EPEL configured.
+
 ### Cleaning up
 
 Running

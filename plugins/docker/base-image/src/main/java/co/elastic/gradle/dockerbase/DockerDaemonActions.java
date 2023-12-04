@@ -84,7 +84,7 @@ public abstract class DockerDaemonActions {
                "#                Auto generated Dockerfile               #\n" +
                "#                                                        #\n" +
                "##########################################################\n" +
-               "# syntax = docker/dockerfile:experimental\n" +
+               "# syntax = docker/dockerfile:1.3\n" +
                "# Internal UUID: " + uuid + "\n" +
                "# Building " + buildable + "\n\n" +
                buildable.getActualInstructions().stream()
@@ -95,7 +95,7 @@ public abstract class DockerDaemonActions {
 
     public static Run wrapInstallCommand(ImageBuildable buildable, String command) {
         final OSDistribution distribution = buildable.getOSDistribution().get();
-        final boolean requiresCleanLayers = buildable.getRequiresCleanLayers().get();
+        final boolean requiresCleanLayers = buildable.getIsolateFromExternalRepos().get();
         return new Run(
                 switch (distribution) {
                     case UBUNTU, DEBIAN -> Stream.of(
@@ -172,7 +172,14 @@ public abstract class DockerDaemonActions {
                     }).collect(Collectors.joining(" "));
             return "RUN " + mountOptions + "\\\n " +
                    String.join(" && \\ \n\t", run.getCommands());
-        } else if (instruction instanceof CreateUser createUser) {
+        } else if (instruction instanceof RepoConfigRun repoConfig) {
+            if (buildable.getIsolateFromExternalRepos().get()) {
+                return "";
+            } else {
+                return "RUN " + String.join(" && \\ \n\t", repoConfig.getCommands());
+            }
+        }
+        else if (instruction instanceof CreateUser createUser) {
             // Specific case for Alpine and Busybox
             return String.format(
                     """
@@ -209,10 +216,10 @@ public abstract class DockerDaemonActions {
         final HashMap<String, Path> result = new HashMap<>();
 
         result.put(
-                "readonly=true,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir()
+                "readonly,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir()
         );
-        if (buildable.getRequiresCleanLayers().get()) {
-            result.put("readonly=true,target=" + switch (buildable.getOSDistribution().get()) {
+        if (buildable.getIsolateFromExternalRepos().get()) {
+            result.put("readonly,target=" + switch (buildable.getOSDistribution().get()) {
                         case DEBIAN, UBUNTU -> "/etc/apt/sources.list";
                         case CENTOS -> "/etc/yum.repos.d";
                     },
@@ -221,7 +228,7 @@ public abstract class DockerDaemonActions {
                         case CENTOS -> getRepositoryEphemeralDir();
                     }
             );
-            result.put("readonly=false,target=/var/packages-from-gradle", getOSPackagesDir());
+            result.put("readwrite,target=/var/packages-from-gradle", getOSPackagesDir());
         }
         return result;
     }

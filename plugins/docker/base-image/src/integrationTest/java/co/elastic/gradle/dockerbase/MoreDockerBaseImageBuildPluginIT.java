@@ -246,6 +246,45 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    public void testAdditionalRepoConfig() {
+        helper.buildScript("""
+                import java.net.URL
+                plugins {
+                   id("co.elastic.docker-base")
+                   id("co.elastic.vault")
+                }
+                vault {
+                      address.set("https://secrets.elastic.co:8200")
+                      auth {
+                        ghTokenFile()
+                        ghTokenEnv()
+                        tokenEnv()
+                        roleAndSecretEnv()
+                      }
+                }
+                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                dockerBaseImage {
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                    fromCentos("centos", "7")
+                    repoConfig("yum -y install epel-release")
+                    install("jq")
+                    run("jq --version")
+                }
+                """
+        );
+
+        final BuildResult Lockfileresult = gradleRunner.withArguments("--warning-mode", "fail", "-s",
+                "dockerBaseImageLockfile"
+        ).build();
+        System.out.println(Lockfileresult.getOutput());
+
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s",
+                "dockerBaseImageBuild"
+        ).build();
+
+    }
+
+    @Test
     public void testSandboxIntegration() throws IOException {
         helper.buildScript(String.format("""
                         import java.net.URL
@@ -291,4 +330,6 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         assertContains(result.getOutput(), "tasks.register<SandboxDockerExecTask>(\"test\")");
     }
+
+
 }
