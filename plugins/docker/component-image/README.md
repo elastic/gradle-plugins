@@ -137,7 +137,7 @@ cli {
 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
 dockerBaseImage {
     dockerTagPrefix.set("docker.elastic.co/employees/alpar-t")
-    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
     fromUbuntu("ubuntu", "20.04")
     install("patch")
 }

@@ -21,7 +21,6 @@ package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
-import co.elastic.gradle.utils.SSLCAChainExtractor;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.instruction.*;
 import org.gradle.api.GradleException;
@@ -32,13 +31,12 @@ import javax.inject.Inject;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.cert.CertificateEncodingException;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -96,42 +94,59 @@ public abstract class DockerDaemonActions {
                        .collect(Collectors.joining("\n"));
     }
 
-    public static Run wrapInstallCommand(OSDistribution distribution, String command) {
+    public static Run wrapInstallCommand(ImageBuildable buildable, String command) {
+        final OSDistribution distribution = buildable.getOSDistribution().get();
+        final boolean onlyUseMirrorRepositories = buildable.getOnlyUseMirrorRepositories().get();
+        final boolean requiresCleanLayers = buildable.getRequiresCleanLayers().get();
         return new Run(
                 switch (distribution) {
-                    case UBUNTU, DEBIAN -> List.of(
-                            ". /etc/os-release",
-                            "cp /etc/apt/sources.list.d/certs/90sslConfig /etc/apt/apt.conf.d/",
-                            "mv /etc/apt/sources.list /etc/apt/sources.list.bak",
-                            """
-                                    sed -i -e "s#\\$releasever#\\"$VERSION_CODENAME\\"#" /etc/apt/sources.list.d/*.list
-                                    """.trim(),
-                            "export DEBIAN_FRONTEND=noninteractive",
-                            "apt-get update",
-                            command,
-                            "apt-get clean",
-                            "mv /etc/apt/sources.list.bak /etc/apt/sources.list",
-                            "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/apt.conf.d/90sslConfig"
-                    );
-                    case CENTOS -> List.of(
-                            command,
-                            "yum clean all",
-                            "rm -rf /var/cache/yum /tmp/* /var/tmp/*"
-                    );
+                    case UBUNTU, DEBIAN -> Stream.of(
+                            Stream.of(
+                                    "cp /var/packages-from-gradle/__META__Packages* /var/packages-from-gradle/Packages.gz"
+                            ).filter(s -> requiresCleanLayers),
+                            Stream.of(
+                                    "rm -f /etc/apt/apt.conf.d/docker-clean",
+                                    """
+                                                echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/docker-dirty
+                                            """.trim()
+                            ).filter(s -> !requiresCleanLayers),
+                            Stream.of("apt-get update", command),
+                            Stream.of(
+                                    "apt-get clean",
+                                    "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /etc/apt/apt.conf.d/90sslConfig"
+                            ).filter(s -> requiresCleanLayers)
+                    ).flatMap(s -> s).collect(Collectors.toList());
+                    case CENTOS -> Stream.of(
+                            Stream.of(
+                                    "cd /var/packages-from-gradle/",
+                                    "tar -xf __META__repodata*"
+                            ).filter(s -> requiresCleanLayers),
+                            Stream.of(command),
+                            Stream.of(
+                                    "yum clean all",
+                                    "rm -rf /var/cache/yum /tmp/* /var/tmp/*"
+                            ).filter(s -> requiresCleanLayers)
+                    ).flatMap(
+                            Function.identity()
+                    ).collect(Collectors.toList());
                 }
         );
     }
 
     private Stream<? extends ContainerImageBuildInstruction> convertInstallToRun(ContainerImageBuildInstruction instruction) {
         if (instruction instanceof Install install) {
+            final String packagesToInstall = install.getPackages().stream()
+                    .filter(p -> !p.contains("__META__"))
+                    .collect(Collectors.joining(" "));
             return Stream.of(
                     // Install instructions need to be run with root
                     new SetUser("root"),
                     wrapInstallCommand(
-                            buildable.getOSDistribution().get(),
+                            buildable,
                             switch (buildable.getOSDistribution().get()) {
-                                case UBUNTU, DEBIAN -> "apt-get install -y " + String.join(" ", install.getPackages());
-                                case CENTOS -> "yum install -y " + String.join(" ", install.getPackages());
+                                case UBUNTU, DEBIAN -> "apt-get install -y " + packagesToInstall;
+                                case CENTOS -> "yum install --setopt=skip_missing_names_on_install=False -y " +
+                                                packagesToInstall;
                             }
                     ),
                     // And we restore the user after that
@@ -192,32 +207,41 @@ public abstract class DockerDaemonActions {
         }
     }
 
-    private Map<String, Path> getBindMounts() {
-        String reposPath = switch (buildable.getOSDistribution().get()) {
-            case DEBIAN, UBUNTU -> "/etc/apt/sources.list.d";
-            case CENTOS -> "/etc/yum.repos.d";
-        };
-        String authPath = switch (buildable.getOSDistribution().get()) {
-            case DEBIAN, UBUNTU -> "/etc/apt/auth.conf.d";
-            case CENTOS -> "/etc/auth";
-        };
-        return Map.of(
-                "readwrite,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir(),
-                "readonly,target=" + reposPath, getRepositoryEphemeralDir(),
-                "readonly,target=" + authPath, getAuthEphemeralDir()
+    public Map<String, Path> getBindMounts() {
+        final HashMap<String, Path> result = new HashMap<>();
+
+        result.put(
+                "readonly=true,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir()
         );
+        if (buildable.getRequiresCleanLayers().get()) {
+            result.put("readonly=true,target=" + switch (buildable.getOSDistribution().get()) {
+                        case DEBIAN, UBUNTU -> "/etc/apt/sources.list";
+                        case CENTOS -> "/etc/yum.repos.d";
+                    },
+                    switch (buildable.getOSDistribution().get()) {
+                        case DEBIAN, UBUNTU -> getRepositoryEphemeralDir().resolve("sources.list");
+                        case CENTOS -> getRepositoryEphemeralDir();
+                    }
+            );
+            result.put("readonly=false,target=/var/packages-from-gradle", getOSPackagesDir());
+        }
+        return result;
+    }
+
+    public Path getWorkingDir() {
+        return workingDir;
     }
 
     public Path getDockerEphemeralDir() {
         return workingDir.resolve("ephemeral/docker");
     }
 
-    public Path getRepositoryEphemeralDir() {
-        return workingDir.resolve("ephemeral/repos");
+    public Path getOSPackagesDir() {
+        return workingDir.resolve("ephemeral/packages");
     }
 
-    public Path getAuthEphemeralDir() {
-        return workingDir.resolve("ephemeral/auth");
+    public Path getRepositoryEphemeralDir() {
+        return workingDir.resolve("ephemeral/repos");
     }
 
     public Path getContextDir() {
@@ -226,133 +250,41 @@ public abstract class DockerDaemonActions {
 
     private void generateEphemeralRepositories() throws IOException {
         final Path listsEphemeralDir = getRepositoryEphemeralDir();
-        final Path authEphemeralDir = getAuthEphemeralDir();
 
         Files.createDirectories(listsEphemeralDir);
-        Files.createDirectories(authEphemeralDir);
 
-        switch (buildable.getOSDistribution().get()) {
-            case UBUNTU, DEBIAN -> {
-                writeAPTMirrorConfig(listsEphemeralDir, authEphemeralDir);
-            }
-            case CENTOS -> {
-                // CentOS has this in the repo file
-            }
-        }
-
-        buildable.getMirrorRepositories().get()
-                .forEach(repo -> {
-                    final URL url = repo.getUrl().get();
-                    final URL safeUrl;
-                    try {
-                        safeUrl = new URL(url.toString().replace(url.getUserInfo() + "@", ""));
-                    } catch (MalformedURLException e) {
-                        throw new IllegalStateException("Invalid url", e);
-                    }
-                    try {
-                        Files.write(
-                                listsEphemeralDir.resolve(
-                                        switch (buildable.getOSDistribution().get()) {
-                                            case CENTOS -> repo.getName() + ".repo";
-                                            case DEBIAN, UBUNTU -> repo.getName() + ".list";
-                                        }),
-                                switch (buildable.getOSDistribution().get()) {
-                                    case CENTOS -> {
-                                        final Optional<String[]> credentials = Optional.ofNullable(
-                                                repo.getUrl().get().getUserInfo()
-                                        ).map(each -> each.split(":"));
-                                        @SuppressWarnings("OptionalGetWithoutIsPresent") final String username =
-                                                credentials.isPresent() ?
-                                                        ("username=" + credentials.map(cred -> cred[0]).get() + "\n") :
-                                                        "";
-                                        @SuppressWarnings("OptionalGetWithoutIsPresent") final String password =
-                                                credentials.isPresent() ?
-                                                        "password=" + credentials.map(cred -> cred[1]).get() + "\n" :
-                                                        "";
-                                        yield List.of(
-                                                "[" + repo.getName() + "]",
-                                                "name=" + repo.getName(),
-                                                username +
-                                                password +
-                                                "baseurl=" + safeUrl,
-                                                "enabled=1",
-                                                "gpgcheck=0"
-                                        );
-                                    }
-                                    case DEBIAN, UBUNTU -> List.of(
-                                            "deb [trusted=yes] " + safeUrl
-                                    );
-                                }
+        final URL url = new URL("file:///var/packages-from-gradle");
+        final String name = "gradle-configuration";
+        try {
+            Files.write(
+                    listsEphemeralDir.resolve(
+                            switch (buildable.getOSDistribution().get()) {
+                                case CENTOS -> name + ".repo";
+                                case DEBIAN, UBUNTU -> "sources.list";
+                            }),
+                    switch (buildable.getOSDistribution().get()) {
+                        case CENTOS -> List.of(
+                                "[" + name + "]",
+                                "name=" + name,
+                                "baseurl=" + url,
+                                "enabled=1",
+                                "gpgcheck=0"
                         );
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
+                        case DEBIAN, UBUNTU -> List.of(
+                                "deb [trusted=yes] " + url + " /"
+                        );
                     }
-                });
-    }
-
-    private void writeAPTMirrorConfig(Path listsEphemeralDir, final Path authEphemeralDir) throws IOException {
-        final Set<List<String>> hosts = buildable.getMirrorRepositories().get().stream()
-                .map(each -> List.of(each.getUrl().get().getHost(), each.getUrl().get().getUserInfo()))
-                .collect(Collectors.toSet());
-
-        if (hosts.size() != 1) {
-            throw new IllegalStateException("Only one mirror host is supported: " + hosts);
-        }
-        List<String> mirrorUrl = hosts.iterator().next();
-
-        final String[] userinfo = mirrorUrl.get(1).split(":");
-        Files.writeString(
-                authEphemeralDir.resolve("mirror.conf"),
-                String.format(
-                        """
-                                machine %s
-                                login %s
-                                password %s
-                                """, mirrorUrl.get(0), userinfo[0], userinfo[1]
-                )
-        );
-
-
-        Files.createDirectories(listsEphemeralDir.resolve("certs"));
-
-        final URL anyUrl = buildable.getMirrorRepositories().get().iterator().next().getUrl().get();
-        if (anyUrl.getProtocol().toLowerCase(Locale.ROOT).equals("https")) {
-            // Pass in the CA chain to apt so it can still access https repos, even without ca-certificates installed
-            // The CA chain is validated on the host, so it's ok to trust it in the container.
-            Files.writeString(listsEphemeralDir.resolve("certs/90sslConfig"), String.format("""
-                                    Acquire::https::%s {
-                                      CaInfo      "/etc/apt/sources.list.d/certs/mirror.pem";
-                                    }
-                                    """,
-                            mirrorUrl.get(0)
-                    )
             );
-
-            Files.writeString(
-                    listsEphemeralDir.resolve("certs/mirror.pem"),
-                    SSLCAChainExtractor.extract(
-                                    anyUrl.getHost(), anyUrl.getPort() == -1 ? anyUrl.getDefaultPort() : anyUrl.getPort()
-                            ).stream()
-                            .map(each -> {
-                                try {
-                                    return "-----BEGIN CERTIFICATE-----\n" +
-                                           Base64.getEncoder().encodeToString(each.getEncoded()) +
-                                           "\n-----END CERTIFICATE-----";
-                                } catch (CertificateEncodingException e1) {
-                                    throw new GradleException("Can't ecnode certificates", e1);
-                                }
-                            })
-                            .collect(Collectors.joining("\n"))
-            );
-        } else {
-            Files.writeString(listsEphemeralDir.resolve("certs/90sslConfig"), "");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
+
     }
 
     public UUID build() throws IOException {
         checkVersion();
         Files.createDirectories(workingDir);
-        synchronizeLayersAndEphemeralConfiguration();
+        synchronizeFiles();
         generateEphemeralRepositories();
 
         {
@@ -418,7 +350,7 @@ public abstract class DockerDaemonActions {
         return uuid;
     }
 
-    private void synchronizeLayersAndEphemeralConfiguration() throws IOException {
+    private void synchronizeFiles() throws IOException {
         Files.createDirectories(getContextDir());
         getFilesystemOperations().sync(spec -> {
                     spec.into(getContextDir());
@@ -429,8 +361,15 @@ public abstract class DockerDaemonActions {
         final Path dockerEphemeralDir = getDockerEphemeralDir();
         Files.createDirectories(dockerEphemeralDir);
         getFilesystemOperations().sync(copySpec -> {
-            copySpec.from(buildable.getDockerEphemeralConfiguration());
+            copySpec.from(buildable.getDockerEphemeralConfiguration().get());
             copySpec.into(dockerEphemeralDir);
+        });
+
+        final Path osPackagesDir = getOSPackagesDir();
+        Files.createDirectories(osPackagesDir);
+        getFilesystemOperations().sync(copySpec -> {
+            copySpec.from(buildable.getOSPackagesConfiguration().get());
+            copySpec.into(osPackagesDir);
         });
     }
 

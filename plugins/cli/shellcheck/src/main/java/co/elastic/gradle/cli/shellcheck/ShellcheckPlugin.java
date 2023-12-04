@@ -24,7 +24,7 @@ public class ShellcheckPlugin implements Plugin<Project> {
         target.getPluginManager().apply(BaseCliPlugin.class);
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("shellcheck", BaseCLiExtension.class, "shellcheck");
+                .create("shellcheck", BaseCLiExtension.class);
         extension.getVersion().convention("v0.8.0");
 
         extension.getPattern()

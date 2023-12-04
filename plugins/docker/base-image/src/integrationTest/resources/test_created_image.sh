@@ -86,7 +86,7 @@ if [[ "$RUNNING_INSIDE_DOCKER" == "true" ]]; then
       echo "Expected /home/foobar/run.listOf.1 to exist but it did not"
       exit 2
     fi
-    if ! which jq; then
+    if ! which patch; then
       echo "expected to have patch installed but it was not"
       exit 2
     fi

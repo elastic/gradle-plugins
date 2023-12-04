@@ -1,5 +1,6 @@
-package co.elastic.gradle.dockerbase;
+package co.elastic.gradle.cli.jfrog;
 
+import co.elastic.gradle.cli.base.CliExtension;
 import org.gradle.api.Project;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +9,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 
-class DockerBaseImageBuildPluginTest {
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+class JFrogPluginTest {
 
     private Project testProject;
 
@@ -20,8 +23,11 @@ class DockerBaseImageBuildPluginTest {
     }
 
     @Test
-    void extensionCreated() {
-        testProject.getPluginManager().apply(DockerBaseImageBuildPlugin.class);
-        final BaseImageExtension extension = testProject.getExtensions().getByType(BaseImageExtension.class);
+    public void testApply() {
+        testProject.getPluginManager().apply(JFrogPlugin.class);
+        final CliExtension cli = (CliExtension) testProject.getExtensions().findByName("cli");
+        assertNotNull(cli);
+        assertNotNull(cli.getExtensions().findByName("jfrog"));
     }
+
 }

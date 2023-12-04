@@ -63,7 +63,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
                     dockerTagPrefix.set("docker.elastic.co/employees/%s")
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                 }
                 """, ghUsername
@@ -111,10 +111,10 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 }
                 repositories {
                     mavenCentral()
-                }             
+                }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                     platforms.add(%s)
                 }
@@ -124,16 +124,30 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
                 helper.projectDir().resolve("docker-base-image.lock")
         );
+
+        Assertions.assertEquals(
+                TaskOutcome.SKIPPED,
+                Objects.requireNonNull(
+                        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImageLockfile")
+                                .build()
+                                .task(":dockerBaseImageLockfile")
+                ).getOutcome(),
+                "Expected dockerBaseImageLockfile to be skipped but it was not "
+        );
+
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s",
                 "dockerBasePull",
-                "dockerBaseImageLockfile",
                 "dockerBaseImageBuild",
                 "dockerBaseImagePush"
         ).build();
         List.of(
-                ":dockerBasePull", ":dockerBaseImageLockfile", ":dockerBaseImageBuild", ":dockerBaseImagePush"
+                ":dockerBasePull", ":dockerBaseImageBuild", ":dockerBaseImagePush"
         ).forEach(task -> {
-            Assertions.assertEquals(TaskOutcome.SKIPPED, Objects.requireNonNull(result.task(task)).getOutcome());
+            Assertions.assertEquals(
+                    TaskOutcome.SKIPPED,
+                    Objects.requireNonNull(result.task(task)).getOutcome(),
+                    "Expected " + task + " to be skipped but it was not "
+            );
         });
     }
 
@@ -156,7 +170,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                     maxOutputSizeMB.set(10)
                 }
@@ -204,10 +218,12 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                        }   
                     }
                 }
-                
+                                
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(
+                        URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
+                    )                   
                     fromUbuntu("ubuntu", "20.04")
                     copySpec {
                         from(archive)
@@ -232,37 +248,37 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     @Test
     public void testSandboxIntegration() throws IOException {
         helper.buildScript(String.format("""
-                import java.net.URL
-                import %s
-                plugins {
-                   id("co.elastic.docker-base")
-                   id("co.elastic.vault")
-                   id("co.elastic.sandbox")
-                }
-                vault {
-                      address.set("https://secrets.elastic.co:8200")
-                      auth {
-                        ghTokenFile()
-                        ghTokenEnv()
-                        tokenEnv()
-                        roleAndSecretEnv()
-                      }
-                }              
-                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
-                dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
-                    fromUbuntu("ubuntu", "20.04")
-                    copySpec {
-                       from(projectDir) {
-                          include("build.gradle.kts")
-                       }
-                    }
-                }
-                tasks.register<SandboxDockerExecTask>("test") {
-                   image(project)
-                   setCommandLine(listOf("grep", "SandboxDockerExecTask", "/build.gradle.kts"))
-                }
-                """,
+                        import java.net.URL
+                        import %s
+                        plugins {
+                           id("co.elastic.docker-base")
+                           id("co.elastic.vault")
+                           id("co.elastic.sandbox")
+                        }
+                        vault {
+                              address.set("https://secrets.elastic.co:8200")
+                              auth {
+                                ghTokenFile()
+                                ghTokenEnv()
+                                tokenEnv()
+                                roleAndSecretEnv()
+                              }
+                        }             
+                        val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                        dockerBaseImage {
+                            osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                            fromUbuntu("ubuntu", "20.04")
+                            copySpec {
+                               from(projectDir) {
+                                  include("build.gradle.kts")
+                               }
+                            }
+                        }
+                        tasks.register<SandboxDockerExecTask>("test") {
+                           image(project)
+                           setCommandLine(listOf("grep", "SandboxDockerExecTask", "/build.gradle.kts"))
+                        }
+                        """,
                 SandboxDockerExecTask.class.getName()
         ));
         Files.copy(

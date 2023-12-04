@@ -14,12 +14,10 @@ import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.provider.*;
 import org.gradle.api.tasks.TaskProvider;
-import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -35,10 +33,6 @@ public abstract class BaseImageExtension implements ExtensionAware {
         getLockFileLocation().convention(
                 getProjectLayout().getProjectDirectory()
                         .file("docker-base-image.lock")
-        );
-
-        getMirrorRepositories().convention(
-                getDefaultRepos()
         );
 
         getPlatforms().convention(
@@ -74,13 +68,13 @@ public abstract class BaseImageExtension implements ExtensionAware {
 
     public abstract Property<Long> getMaxOutputSizeMB();
 
-    public abstract Property<URL> getMirrorBaseURL();
-
     public abstract Property<String> getDockerTagPrefix();
 
     public abstract Property<String> getDockerTagLocalPrefix();
 
     public abstract ListProperty<OsPackageRepository> getMirrorRepositories();
+
+    public abstract Property<URL> getOsPackageRepository();
 
     @Inject
     protected abstract ProviderFactory getProviderFactory();
@@ -88,61 +82,9 @@ public abstract class BaseImageExtension implements ExtensionAware {
     @Inject
     protected abstract ProjectLayout getProjectLayout();
 
-    @NotNull
-    private Provider<List<OsPackageRepository>> getDefaultRepos() {
-        return getOSDistribution().map(osDistribution -> {
-                    switch (osDistribution) {
-                        case CENTOS:
-                            return List.of(
-                                    repo("os", "cloud-rpm/$releasever/os/$basearch"),
-                                    repo("updates", "cloud-rpm/$releasever/updates/$basearch"),
-                                    repo("extras", "cloud-rpm/$releasever/extras/$basearch"),
-                                    repo("centosplus", "cloud-rpm/$releasever/centosplus/$basearch"),
-                                    repo("infra", "cloud-rpm/$releasever/infra/$basearch/infra-common")
-                            );
-                        case UBUNTU:
-                            return List.of(
-                                    repo("main", "cloud-deb $releasever main restricted universe multiverse"),
-                                    repo("updates", "cloud-deb $releasever-updates main restricted universe multiverse"),
-                                    repo("security", "cloud-deb $releasever-security main restricted universe multiverse"),
-                                    repo("backports", "cloud-deb $releasever-backports main restricted universe multiverse")
-                            );
-                        case DEBIAN:
-                            return List.of(
-                                    repo("main", "cloud-debian $releasever main"),
-                                    repo("updates", "cloud-debian $releasever-updates main"),
-                                    repo("security", "cloud-debian $releasever/updates main")
-                            );
-                        default:
-                            throw new IllegalStateException("Can't configure default repositories " +
-                                                            "for " + osDistribution + ". This is a bug."
-                            );
-                    }
-                }
-        );
-    }
-
     //----------------\\
     //  DSL Methods   \\
     //----------------\\
-
-    public void artifactoryRepo(String name, String remotePath) {
-        getMirrorRepositories().add(repo(name, remotePath));
-    }
-
-    private OsPackageRepository repo(String name, String remotePath) {
-        return new OsPackageRepository(name, getMirrorBaseURL().map(baseUrl -> {
-            try {
-                if (baseUrl.toString().endsWith("/")) {
-                    return new URL(baseUrl + remotePath);
-                } else {
-                    return new URL(baseUrl + "/" + remotePath);
-                }
-            } catch (MalformedURLException e) {
-                throw new UncheckedIOException(e);
-            }
-        }));
-    }
 
     @SuppressWarnings("unused")
     public String getDockerEphemeral() {
@@ -246,7 +188,4 @@ public abstract class BaseImageExtension implements ExtensionAware {
         return instructions;
     }
 
-    public void useDefaultRepos() {
-        getMirrorRepositories().addAll(getDefaultRepos());
-    }
 }

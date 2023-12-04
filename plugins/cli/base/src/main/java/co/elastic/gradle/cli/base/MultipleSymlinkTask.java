@@ -64,8 +64,11 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     .replace(version, "");
         }
         for (Architecture value : Architecture.values()) {
-            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT));
+            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT))
+                    .replace(value.name(), value.name().toLowerCase(Locale.ROOT));
         }
+        targetName = targetName.replace("macos", "darwin")
+                .replace("mac-386", "darwin-x86_64");
         return targetName;
     }
 
@@ -77,13 +80,13 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                         value.getName().toLowerCase(Locale.ROOT)
                                 .contains(arch.dockerName().toLowerCase(Locale.ROOT)) ||
                         value.getName().contains(OS.current().map(
-                                Map.of(OS.DARWIN, "macos")
+                                Map.of(OS.DARWIN, "mac")
                         ))
                 )
                 .filter(value -> value.getName().contains(OS.current().name()) ||
                                  value.getName().contains(OS.current().name().toLowerCase(Locale.ROOT)) ||
                                  value.getName().contains(OS.current().map(
-                                         Map.of(OS.DARWIN, "macos")
+                                         Map.of(OS.DARWIN, "mac")
                                  ))
                 )
                 .collect(Collectors.toMap(
@@ -99,7 +102,8 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                                             .replace(separator + arch.dockerName(), "")
                                             .replace(separator + arch.dockerName().toUpperCase(Locale.ROOT), "")
                                             .replace(separator + "macos", "")
-                                            .replace(separator + "osx", "");
+                                            .replace(separator + "osx", "")
+                                            .replace(separator + "mac-386", "");
                                 }
                             }
                             return BaseCliPlugin.getExecutable(

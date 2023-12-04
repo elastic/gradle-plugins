@@ -31,13 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
-
-    // Todo: When we are sure Artifactory is reliable, e.g.  we do our own publishing as part of lockfile generation we
-    //      should add a test an additional validation, with a checked in lockfile that in time will prove that
-    //      packages are not updated and still awaitable as time goes by
-
+    
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04", "centos:7"/*, "debian:11"*/}) // FIXME: re-enable once performance issues are fixed
+    @ValueSource(strings = {"centos:7", "ubuntu:20.04", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
@@ -46,7 +42,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         helper.writeFile("image_content/foo.txt", "sample content");
         writeSimpleBuildScript(helper, baseImages);
-        runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        final BuildResult lockfileResult = runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        System.out.println(lockfileResult.getOutput());
         runGradleTask(gradleRunner, "dockerLocalImport");
 
         System.out.println("Running verification script...");
@@ -124,10 +121,10 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 import java.net.URL
                 import %s
                                 
-                evaluationDependsOnChildren()
-                                
+                                                            
                 plugins {
                    id("co.elastic.vault")
+                   id("co.elastic.docker-base").apply(false)
                 }
                 vault {
                       address.set("https://secrets.elastic.co:8200")
@@ -141,18 +138,16 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                                 
                 subprojects {
+                    apply(plugin = "co.elastic.docker-base")
                     print(project.name)
                     configure<BaseImageExtension> {
-                        mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                        osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))  
                     }
                 }
                 """, BaseImageExtension.class.getName()
         ));
 
-        helper.buildScript("s1", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
+        helper.buildScript("s1", """             
                 dockerBaseImage {
                   fromUbuntu("ubuntu", "20.04")
                   install("patch")
@@ -160,28 +155,24 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
         helper.buildScript("s2", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
                 dockerBaseImage {
                   from(project(":s1"))
                   run("patch --version")
-                  install("jq")
+                  install("curl")
                 }
                 """
         );
         helper.buildScript("s3", """
-                plugins {
-                   id("co.elastic.docker-base")
-                }
                 dockerBaseImage {
                   from(project(":s2"))
-                  run("jq --version")
+                  run("curl --version")
                 }
                 """
         );
 
-        runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s1:dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s2:dockerBaseImageLockfile");
+        runGradleTask(gradleRunner, ":s3:dockerBaseImageLockfile");
         runGradleTask(gradleRunner, "dockerLocalImport");
     }
 
@@ -252,7 +243,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
                     run(
                         "ls $dockerEphemeral/slf4j-api-1.7.36.jar",
@@ -273,7 +264,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
             return gradleRunner.withArguments("--warning-mode", "fail", "-s", task).build();
         } finally {
             System.out.println("Listing of project dir:");
-            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore");
+            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore", "gradle-configuration.list");
             try (Stream<Path> s = Files.walk(helper.projectDir()).filter(each -> !each.toString().contains(".gradle"))) {
                 s.forEach(each -> {
                     if (fileNamesOfInterest.contains(each.getFileName().toString())) {
@@ -283,12 +274,13 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         } catch (IOException e) {
                             throw new UncheckedIOException(e);
                         }
-                        System.out.println("\n");
+                        System.out.println("\n----\n");
                     } else {
                         System.out.println(helper.projectDir().relativize(each));
                     }
                 });
             }
+            System.out.println("Done Listing of project dir");
         }
     }
 
@@ -299,6 +291,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 import java.net.URL
                 plugins {
                    id("co.elastic.docker-base")
+                   id("co.elastic.cli.jfrog")
                    id("co.elastic.vault")
                 }
                 vault {
@@ -311,9 +304,15 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                       }
                 }
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
                 dockerBaseImage {
                     dockerTagLocalPrefix.set("gradle-test-local")
-                    mirrorBaseURL.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/"))
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     from%s("%s", "%s")
                     install("patch")
                     copySpec("1234:1234") {
@@ -340,7 +339,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         "chmod -R 777 /home"
                     ))
                     setUser("foobar")
-                    install("jq", "sudo")
+                    install("patch", "sudo")
                     if ("%s" == "centos") {
                        install("which")
                     }
