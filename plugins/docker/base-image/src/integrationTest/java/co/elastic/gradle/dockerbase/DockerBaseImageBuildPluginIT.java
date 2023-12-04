@@ -27,8 +27,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static co.elastic.gradle.AssertContains.assertContains;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     
@@ -281,6 +280,50 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 });
             }
             System.out.println("Done Listing of project dir");
+        }
+    }
+
+    @Test
+    public void testLockfileWithEmulation() throws IOException {
+        helper.buildScript("""
+        import java.net.URL
+            plugins {
+               id("co.elastic.docker-base")
+               id("co.elastic.cli.jfrog")
+               id("co.elastic.vault")
+            }
+            vault {
+                  address.set("https://secrets.elastic.co:8200")
+                  auth {
+                    ghTokenFile()
+                    ghTokenEnv()
+                    tokenEnv()
+                    roleAndSecretEnv()
+                  }
+            }
+            val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+            cli {
+                jfrog {
+                    username.set(creds["username"])
+                    password.set(creds["plaintext"])
+                }
+            }
+            dockerBaseImage {
+                osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                fromUbuntu("ubuntu", "20.04")
+                install("patch")
+            }
+        """);
+        final BuildResult result = runGradleTask(gradleRunner, "dockerBaseImageLockfileAllWithEmulation");
+        System.out.println(result.getOutput());
+        assertNotNull(result.task(":dockerBaseImageLockfile"), "Expected task dockerBaseImageLockfile to have run");
+        switch (Architecture.current()) {
+            case X86_64 -> {
+                assertNotNull(result.task(":dockerBaseImageLockfilearm64"), "Expected task dockerBaseImageLockfilearm64 to have run.");
+            }
+            case AARCH64 -> {
+                assertNotNull(result.task(":dockerBaseImageLockfileamd64"), "Expected task dockerBaseImageLockfileamd64 to have run.");
+            }
         }
     }
 

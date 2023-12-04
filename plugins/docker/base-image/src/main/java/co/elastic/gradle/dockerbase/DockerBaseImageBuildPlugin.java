@@ -31,7 +31,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 
@@ -84,11 +84,24 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
         registerPushTask(target, extension, dockerBaseImageBuild);
 
-        final TaskProvider<DockerLockfileTask> dockerBaseImageLockfile = target.getTasks().register(
-                LOCKFILE_TASK_NAME,
-                DockerLockfileTask.class
+        Arrays.stream(Architecture.values()).forEach( arch -> {
+                    target.getTasks().register(
+                            LOCKFILE_TASK_NAME + (
+                                    arch.equals(Architecture.current()) ? "" : arch.dockerName()
+                                    ),
+                            DockerLockfileTask.class,
+                            task -> task.getArchitecture().set(arch)
+                    );
+                }
         );
-        dockerBaseImageLockfile.configure(task -> {
+
+        target.getTasks().register(LOCKFILE_TASK_NAME + "AllWithEmulation",  task -> {
+            task.dependsOn(target.getTasks().withType(DockerLockfileTask.class));
+        });
+
+
+
+        target.getTasks().withType(DockerLockfileTask.class).configureEach(task -> {
                     task.setGroup("containers");
                     task.setDescription("Generates a new lockfile with the latest version of all packages");
                     task.getOSDistribution().set(extension.getOSDistribution());
@@ -104,8 +117,6 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.onlyIf(runningOnSupportedArchitecture(extension));
                 }
         );
-
-        final TaskProvider<DockerLockfileTask> dockerLockfileTask = dockerBaseImageLockfile;
 
         GradleUtils.registerOrGet(target, "dockerBuild").configure(task -> {
             task.dependsOn(dockerBaseImageBuild);
@@ -141,16 +152,22 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                         );
                         // We don't force lock-files to be updated at the same time, but if they are, we need to order
                         // them for correct results
-                        dockerLockfileTask.configure(task -> {
+                        target.getTasks().withType(DockerLockfileTask.class).configureEach(task -> {
                             task.dependsOn(projectPath + ":" + LOCAL_IMPORT_TASK_NAME);
                             task.mustRunAfter(projectPath + ":" + LOCKFILE_TASK_NAME);
                         });
                     });
 
             // assign copy specs to the build tasks to correctly evaluate build avoidance
-            dockerBaseImageBuild.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
+            dockerBaseImageBuild.configure(task ->
+                    InstructionCopySpecMapper.assignCopySpecs(
+                            extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec()
+                    )
             );
-            dockerLockfileTask.configure(task -> InstructionCopySpecMapper.assignCopySpecs(extension.getInstructions(), ((ImageBuildable) task).getRootCopySpec())
+            target.getTasks().withType(DockerLockfileTask.class).configureEach(task ->
+                    InstructionCopySpecMapper.assignCopySpecs(
+                            extension.getInstructions(),
+                            ((ImageBuildable) task).getRootCopySpec())
             );
 
             if (extension.getOsPackageRepository().isPresent()) {
