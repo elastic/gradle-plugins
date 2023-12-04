@@ -119,6 +119,12 @@ As part of generating the lockfile, OS packages used to build the image will als
 repository. When building the image these are pulled using a Gradle Configuration, so they will get cached locally 
 and only downloaded once, making it much faster to iterate on image builds.
 
+When using Docker Desktop or having emulation configured by other means, one can generate the 
+lockfile for all architectures in one go with:
+```shell
+./gradlew dockerBaseImageLockfileAllWithEmulation
+```
+
 One can then build and optionally push the resulting image:
 
 ```shell
