@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     
     @ParameterizedTest
-    @ValueSource(strings = {"centos:7", "ubuntu:20.04", "debian:11"})
+    @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
@@ -81,13 +81,9 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         runGradleTask(gradleRunner, "dockerBaseImageClean");
 
-
         Set<String> imagesInDaemonAfterClean = getImagesInDaemon();
-        imagesInDaemonAfterClean.removeAll(imagesInDaemonAlreadyThere);
-        if (!imagesInDaemonAfterClean.isEmpty()) {
-            // There aren't a lot of great ways to test this, and this one might be too fragile as other tests might add
-            // images that make this fail ...
-            fail("Expected clean task to clean up everything but daemon was left with " + imagesInDaemonAfterClean);
+        if (imagesInDaemonAfterClean.contains(expectedLocalTag)) {
+            fail("Expected " + expectedLocalTag + " to be not be in the daemon after clean but it was");
         }
     }
 

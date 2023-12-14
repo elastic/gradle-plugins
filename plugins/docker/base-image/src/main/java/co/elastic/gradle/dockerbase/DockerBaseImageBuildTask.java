@@ -95,13 +95,17 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         BaseLockfile lockfile = getLockFile().get();
         List<ContainerImageBuildInstruction> instructions = getInputInstructions().get();
 
-        Packages packages = lockfile.getPackages().get(getArchitecture());
-
         if (lockfile.getImage() == null) {
             if (instructions.stream()
                     .anyMatch(each -> each instanceof From)) {
                 throw new GradleException("Missing image in lockfile. Does the lockfile need to be regenerated?");
             }
+        }
+
+        final Architecture architecture = getArchitecture().get();
+        Packages packages = lockfile.getPackages().get(architecture);
+        if (packages == null) {
+            throw new GradleException("The lockfile does not have any packages for " + architecture);
         }
 
         final Set<String> allPackages = instructions.stream()
@@ -129,7 +133,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
                                 ) {
                                     throw new GradleException(
                                             "Can't find " + from.getReference().get() + " in the lockfile. " +
-                                            "Does the lockfile needs to be regenerated?\n" + lockedImage.getTag()
+                                            "Does the lockfile need to be regenerated?\n" + lockedImage.getTag()
                                     );
                                 }
                                 return new From(

@@ -3,7 +3,7 @@ gradlePlugin {
         testSourceSets(java.sourceSets.integrationTest.get())
         create("co.elastic.check-in-generated") {
             id = "co.elastic.check-in-generated"
-            implementationClass = "co.elatic.gradle.cig.CheckInGeneratedPlugin"
+            implementationClass = "co.elastic.gradle.cig.CheckInGeneratedPlugin"
         }
     }
 }

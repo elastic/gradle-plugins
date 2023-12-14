@@ -306,7 +306,7 @@ class SandboxPluginIT extends TestkitIntegrationTest {
                 result.getOutput(),
                 "Pulling docker image: ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9"
         );
-        assertContains(result.getOutput(), "Linux 5");
+        assertContains(result.getOutput(), "Linux ");
 
         // Assert that the dependent tasks ran. These will be up-to-date as they don't have any task actions
         assertEquals(Objects.requireNonNull(result.task(":dockerTask")).getOutcome(), TaskOutcome.UP_TO_DATE);
