@@ -71,7 +71,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
             target.getTasks().withType(SnykCLIExecTask.class, task ->
                     task.environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get().get("plaintext")
+                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get().get("apikey")
                     )
             );
 

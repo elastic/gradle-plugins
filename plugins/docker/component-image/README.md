@@ -245,7 +245,7 @@ cli {
 tasks.withType<SnykCLIExecTask> {
     environment(
         "SNYK_TOKEN",
-        vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["plaintext"].toString()
+        vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
     )
 }
 ```
