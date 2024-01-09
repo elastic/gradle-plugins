@@ -265,8 +265,13 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
-                    fromCentos("centos", "7")
-                    repoConfig("yum -y install epel-release")
+                    fromUbuntu("ubuntu", "22.04")
+                    repoConfig(
+                        "apt update"
+                        "apt install software-properties-common",
+                        "add-apt-repository universe",
+                        "apt update"
+                        )
                     install("jq")
                     run("jq --version")
                 }
