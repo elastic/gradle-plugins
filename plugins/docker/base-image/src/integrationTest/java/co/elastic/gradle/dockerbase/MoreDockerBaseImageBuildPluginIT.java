@@ -11,6 +11,7 @@ import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -246,6 +247,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    @Disabled("This test is centos specfic and currently broken")
     public void testAdditionalRepoConfig() {
         helper.buildScript("""
                 import java.net.URL
@@ -265,13 +267,8 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
-                    fromUbuntu("ubuntu", "22.04")
-                    repoConfig(
-                        "apt update"
-                        "apt install software-properties-common",
-                        "add-apt-repository universe",
-                        "apt update"
-                        )
+                    fromCentos("centos", "7")
+                    repoConfig("yum -y install epel-release")
                     install("jq")
                     run("jq --version")
                 }

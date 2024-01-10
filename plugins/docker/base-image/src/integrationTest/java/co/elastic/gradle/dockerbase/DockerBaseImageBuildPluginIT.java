@@ -33,7 +33,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     
     @ParameterizedTest
     @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "debian:11"})
-    // @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7.9.2009", "debian:11"})
+    // Todo Temp disabled. fix centos base image plugin builds
+    // @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
         final GradleTestkitHelper helper = getHelper(testProjectDir);
         final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
