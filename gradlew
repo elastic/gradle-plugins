@@ -55,7 +55,7 @@
 #       Darwin, MinGW, and NonStop.
 #
 #   (3) This script is generated from the Groovy template
-#       https://github.com/gradle/gradle/blob/master/subprojects/plugins/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
+#       https://github.com/gradle/gradle/blob/HEAD/subprojects/plugins/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
 #       within the Gradle project.
 #
 #       You can find Gradle at https://github.com/gradle/gradle/.
@@ -80,10 +80,10 @@ do
     esac
 done
 
-APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
-
-APP_NAME="Gradle"
+# This is normally unused
+# shellcheck disable=SC2034
 APP_BASE_NAME=${0##*/}
+APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
 
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
@@ -116,71 +116,6 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
-#!/bin/sh
-[ $(uname -m) = "x86_64" ] && JDK_ARCH="x64" || JDK_ARCH="aarch64"
-[ "$darwin" = true ] && JDK_OS="mac" || JDK_OS="linux"
-JDK_VERSION="17.0.2_8"
-JDK_DOWNLOAD_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.2%2B8/OpenJDK17U-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz"
-JDK_CACHE_DIR="${HOME:-$JENKINS_HOME}/.gradle/jdk"
-JDK_DOWNLOAD_FILE="$JDK_CACHE_DIR/jdk-$JDK_VERSION.tar.gz"
-
-if [ -z "${JAVA_HOME_OVERRIDE}" ]; then
-  JAVA_HOME="${JDK_CACHE_DIR}/jdk-${JDK_VERSION}"
-  # make sure java home exists and it's not an empty dir
-  if ! [ -d "$JAVA_HOME" ] || [ -z "$(ls -A $JAVA_HOME)" ]; then
-    if ! [ -d "$JAVA_HOME" ]; then
-      mkdir -p "${JAVA_HOME}" || die "Error while creating local cache directory: ${JAVA_HOME}"
-    fi
-    if ! [ -f $JDK_DOWNLOAD_FILE ] ; then
-      echo "Downloading JDK from $JDK_DOWNLOAD_URL"
-      curl --silent -L "${JDK_DOWNLOAD_URL}" --output $JDK_DOWNLOAD_FILE
-    fi
-    if [ $JDK_OS = "mac" ]; then
-      if [ $JDK_ARCH = "x64" ]; then
-        if ! echo "3630e21a571b7180876bf08f85d0aac0bdbb3267b2ae9bd242f4933b21f9be32  $JDK_DOWNLOAD_FILE" | shasum -c -a 256; then
-          echo "Checksum verification of the downloaded JDK failed"
-          exit 1
-        fi
-      else
-        if ! echo "157518e999d712b541b883c6c167f8faabbef1d590da9fe7233541b4adb21ea4  $JDK_DOWNLOAD_FILE" | shasum -c -a 256; then
-          echo "Checksum verification of the downloaded JDK failed"
-          exit 1
-        fi
-      fi
-    elif [ $JDK_OS = "linux" ]; then
-      if [ $JDK_ARCH = "x64" ]; then
-        if ! echo "288f34e3ba8a4838605636485d0365ce23e57d5f2f68997ac4c2e4c01967cd48  $JDK_DOWNLOAD_FILE" | sha256sum -c; then
-          echo "Checksum verification of the downloaded JDK failed"
-          exit 1
-        fi
-      elif [ $JDK_ARCH = "aarch64" ]; then
-        if ! echo "302caf29f73481b2b914ba2b89705036010c65eb9bc8d7712b27d6e9bedf6200  $JDK_DOWNLOAD_FILE" | sha256sum -c; then
-          echo "Checksum verification of the downloaded JDK failed"
-          exit 1
-        fi
-      else
-        echo "Boostrapping JDK on Linux $JDK_ARCH is not yet supported, set JAVA_HOME_OVERRIDE to a valid JDK"
-        exit 1
-      fi
-    else
-      echo "Bootstrapping a JDK on $JDK_OS is not yet supported, set JAVA_HOME_OVERRIDE to a valid JDK"
-      exit 1
-    fi
-    # extract and deal with different naming conventions on OSX
-    if [ $JDK_OS = "mac" ]; then
-      tar -xzf $JDK_DOWNLOAD_FILE --strip-components=3 -C "${JAVA_HOME}/"
-    else
-      tar -xzf $JDK_DOWNLOAD_FILE --strip-components=1 -C "${JAVA_HOME}/"
-    fi
-    rm -f $JDK_DOWNLOAD_FILE
-    chmod -R u+w,g+w "${JAVA_HOME}"
-    echo "Installed JDK from ${JDK_DOWNLOAD_URL} into ${JAVA_HOME}"
-  fi
-else
-  JAVA_HOME="${JAVA_HOME_OVERRIDE}"
-fi
-
-
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
@@ -208,12 +143,16 @@ fi
 if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     case $MAX_FD in #(
       max*)
+        # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC3045 
         MAX_FD=$( ulimit -H -n ) ||
             warn "Could not query maximum file descriptor limit"
     esac
     case $MAX_FD in  #(
       '' | soft) :;; #(
       *)
+        # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC3045 
         ulimit -n "$MAX_FD" ||
             warn "Could not set maximum file descriptor limit to $MAX_FD"
     esac
@@ -269,6 +208,12 @@ set -- \
         -classpath "$CLASSPATH" \
         org.gradle.wrapper.GradleWrapperMain \
         "$@"
+
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
+fi
 
 # Use "xargs" to parse quoted args.
 #
