@@ -21,7 +21,7 @@ dependencies {
     val jacksonVersion = "2.13.2"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
-    implementation("com.google.cloud.tools:jib-core:0.21.0")
+    implementation("com.google.cloud.tools:jib-core:0.25.0")
     implementation("com.google.jimfs:jimfs:1.2")
     runtimeOnly("com.github.luben:zstd-jni:1.5.0-4")
     implementation("org.apache.commons:commons-compress:1.21")
