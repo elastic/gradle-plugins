@@ -1,0 +1,64 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/catalog-info.json
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: gradle-plugins
+  description: Centralized Gradle plugins for Elastic projects
+
+  annotations:
+    backstage.io/source-location: url:https://github.com/elastic/gradle-plugins/
+    github.com/project-slug: elastic/gradle-plugins
+    github.com/team-slug: elastic/release-eng
+
+  tags:
+    - buildkite
+    - go
+    - release
+    - stack
+
+  links:
+    - title: Documentation
+      url: https://docs.elastic.dev/release/stack/gradle-plugins-process
+spec:
+  type: Library
+  owner: group:release-eng
+  lifecycle: beta
+  dependsOn:
+    - resource:github-repository-elastic-gradle-plugins
+---
+# yaml-language-server: $schema=https://gist.githubusercontent.com/elasticmachine/988b80dae436cafea07d9a4a460a011d/raw/e57ee3bed7a6f73077a3f55a38e76e40ec87a7cf/rre.schema.json
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: buildkite-pipeline-gradle-plugins
+  description: Buildkite Pipeline for gradle-plugins repository
+
+  tags:
+    - buildkite
+    - go
+    - release
+    - stack
+
+  links:
+    - title: Pipeline
+      url: https://buildkite.com/elastic/gradle-plugins
+
+spec:
+  type: buildkite-pipeline
+  owner: group:release-eng
+  system: buildkite
+  implementation:
+    apiVersion: buildkite.elastic.dev/v1
+    kind: Pipeline
+    metadata:
+      description: Unified Release Pipeline
+      name: Unified Release
+    spec:
+      repository: elastic/gradle-plugins
+      pipeline_file: ./.buildkite/pipelines/gradle-plugins-pipeline.yml
+
+      teams:
+        everyone:
+          access_level: BUILD_AND_READ
+        release-eng: {}
