@@ -18,8 +18,9 @@ metadata:
     - stack
 
   links:
+# Todo add plugin documentation to Release docs
     - title: Documentation
-      url: https://docs.elastic.dev/release/stack/gradle-plugins-process
+      url: https://docs.elastic.dev/release/cloud-ci/admin
 spec:
   type: Library
   owner: group:release-eng
@@ -52,11 +53,11 @@ spec:
     apiVersion: buildkite.elastic.dev/v1
     kind: Pipeline
     metadata:
-      description: Unified Release Pipeline
-      name: Unified Release
+      description: Gradle plugins pipeline
+      name: Gradle Plugins CI
     spec:
       repository: elastic/gradle-plugins
-      pipeline_file: ./.buildkite/pipelines/gradle-plugins-pipeline.yml
+      pipeline_file: ./.buildkite/pipelines/gradle-plugins-ci.yml
 
       teams:
         everyone:
