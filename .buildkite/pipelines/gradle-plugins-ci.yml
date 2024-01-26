@@ -1,0 +1,5 @@
+# gradle-plugins-ci.yml 
+steps:
+  label: ":pipeline: Build"
+  commands: 
+  - ".buildkite/pipelines/gradle.sh"
