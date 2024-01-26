@@ -68,6 +68,9 @@ public abstract class ComponentLockfileTask extends ManifestToolExecTask {
         final JsonNode root = new ObjectMapper().readTree(output);
         final Map<Architecture, String> result = new HashMap<>();
         final String digest = root.get("digest").asText();
+        if (digest == null || digest.equals("")) {
+            throw new GradleException("manifest-tool did not return the expected digest");
+        }
         for (Architecture arch : Architecture.values()) {
             result.put(arch, digest);
         }
@@ -121,10 +124,12 @@ public abstract class ComponentLockfileTask extends ManifestToolExecTask {
         try {
             final ExecResult result;
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                Map<String, String> env = new HashMap<>();
+                env.put("PATH", System.getenv("PATH"));
+                env.put("HOME", System.getProperty("user.home"));
+
                 result = getExecOperations().exec(spec -> {
-                    spec.setEnvironment(Collections.singletonMap(
-                            "HOME", System.getProperty("user.home")
-                    ));
+                    spec.setEnvironment(env);
                     spec.setExecutable(getExecutable());
 
                     spec.setArgs(Arrays.asList(

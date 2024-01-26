@@ -189,7 +189,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
             final URL repoUrl = getOsPackageRepository().get();
             final Optional<String[]> userinfo = Optional.ofNullable(repoUrl.getUserInfo()).map(it -> it.split(":"));
             String jfrogCLiArgs = String.format(
-                    "--insecure-tls %s --url %s",
+                    "--retries=25 --retry-wait-time=5s --threads=10 --insecure-tls %s --url %s",
                     userinfo.map(it -> String.format("--user %s --password %s", it[0], it[1])).orElse(""),
                     new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "") +
                             "/" + getOSDistribution().get().name().toLowerCase(Locale.ROOT)

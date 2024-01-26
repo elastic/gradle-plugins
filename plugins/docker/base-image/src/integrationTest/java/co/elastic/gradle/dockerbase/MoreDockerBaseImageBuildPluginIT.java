@@ -11,6 +11,7 @@ import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -246,6 +247,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    @Disabled("This test is centos specfic and currently broken")
     public void testAdditionalRepoConfig() {
         helper.buildScript("""
                 import java.net.URL

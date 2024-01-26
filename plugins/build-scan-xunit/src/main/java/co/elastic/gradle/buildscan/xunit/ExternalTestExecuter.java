@@ -77,19 +77,23 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
                         } else if (testCase.status() instanceof TestCaseFailure failure) {
                             processor.failure(
                                     methodDescriptor.getId(),
-                                    new ExternalTestFailureException(
-                                            "Test case being imported failed (" + Optional.ofNullable(failure.type()).orElse("Untyped") + "): " +
-                                            Optional.ofNullable(failure.message()).orElse("") + " " +
-                                            Optional.ofNullable(failure.description()).orElse("")
+                                    org.gradle.api.tasks.testing.TestFailure.fromTestFrameworkFailure(
+                                        new ExternalTestFailureException(
+                                                "Test case being imported failed (" + Optional.ofNullable(failure.type()).orElse("Untyped") + "): " +
+                                                Optional.ofNullable(failure.message()).orElse("") + " " +
+                                                Optional.ofNullable(failure.description()).orElse("")
+                                        )
                                     )
                             );
                         } else if (testCase.status() instanceof TestCaseError error) {
                             processor.failure(
                                     methodDescriptor.getId(),
-                                    new ExternalTestFailureException(
-                                            "Test case being imported failed (" + Optional.ofNullable(error.type()).orElse("Untyped") + "): " +
-                                            Optional.ofNullable(error.message()).orElse("") +
-                                            Optional.ofNullable(error.description()).map(desc -> "\n" + desc).orElse("")
+                                    org.gradle.api.tasks.testing.TestFailure.fromTestFrameworkFailure(
+                                        new ExternalTestFailureException(
+                                                "Test case being imported failed (" + Optional.ofNullable(error.type()).orElse("Untyped") + "): " +
+                                                Optional.ofNullable(error.message()).orElse("") +
+                                                Optional.ofNullable(error.description()).map(desc -> "\n" + desc).orElse("")
+                                        )
                                     )
                             );
                         } else if (testCase.status() instanceof TestCaseSkipped skipped) {
