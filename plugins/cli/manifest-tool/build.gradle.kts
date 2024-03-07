@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.cli.manifest-tool") {
             id = "co.elastic.cli.manifest-tool"
             implementationClass = "co.elastic.gradle.cli.manifest.ManifestToolPlugin"
+            displayName = "Elastic Cli plugin for manifest tool"
+            description = "Provision and make it easy to use the manifest tool cli"
         }
     }
 }

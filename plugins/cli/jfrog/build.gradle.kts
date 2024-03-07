@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.cli.jfrog") {
             id = "co.elastic.cli.jfrog"
             implementationClass = "co.elastic.gradle.cli.jfrog.JFrogPlugin"
+            displayName = "Elastic CLI Plugin to use jfrog"
+            description = "Plugin that provisions and maks it easy to use the jfrog cli"
         }
     }
 }

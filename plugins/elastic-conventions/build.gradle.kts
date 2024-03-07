@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.elastic-conventions") {
             id = "co.elastic.elastic-conventions"
             implementationClass = "co.elastic.gradle.elastic_conventions.ElasticConventionsPlugin"
+            displayName = "Elastic Conventions Plugin"
+            description = "Implement internal elastic conventions"
         }
     }
 }

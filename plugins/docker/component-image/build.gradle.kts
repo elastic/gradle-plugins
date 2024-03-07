@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.docker-component") {
             id = "co.elastic.docker-component"
             implementationClass = "co.elastic.gradle.dockercomponent.DockerComponentPlugin"
+            displayName = "Elastic Component Image"
+            description = "Opinionated way to build container images using jib"
         }
     }
 }

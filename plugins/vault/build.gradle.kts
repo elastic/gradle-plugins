@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.vault") {
             id = "co.elastic.vault"
             implementationClass = "co.elastic.gradle.vault.VaultPlugin"
+            displayName = "Elastic Vault Plugin"
+            description = "Plugin to interact with Hashicorp Vault"
         }
     }
 }
