@@ -34,7 +34,7 @@ import java.util.stream.Stream;
  * <b>NOTE:</b> This should be used with deterministic commands only!
  * e.x.
  * <code>
- * tasks.register<SandboxExecTask>("example") {
+ * tasks.register&lt;SandboxExecTask&gt;("example") {
  * reads("src/foo.txt")
  * writesFile(file("out.txt"))
  * writesDir(file("$buildDir/results"))
