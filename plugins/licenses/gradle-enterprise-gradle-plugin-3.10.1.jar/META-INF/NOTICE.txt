@@ -1,0 +1,12 @@
+Gradle Enterprise Gradle Plugin
+===============================
+Copyright (c) 2022 Gradle Inc.
+All rights reserved.
+
+Use of this software is subject to the Gradle Enterprise Software Agreement
+located at https://gradle.com/legal/gradle-enterprise-software-agreement
+
+This artifact includes parts of the following open source libraries.
+
+Jackson-annotations (http://github.com/FasterXML/jackson) - Apache-2.0 (see licenses/jackson-annotations-2.13.2/LICENSE.txt)
+Jackson-core (https://github.com/FasterXML/jackson-core) - Apache-2.0 (see licenses/jackson-core-2.13.2/LICENSE.txt)
