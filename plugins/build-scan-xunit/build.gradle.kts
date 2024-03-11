@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.build-scan.xunit") {
             id = "co.elastic.build-scan.xunit"
             implementationClass = "co.elastic.gradle.buildscan.xunit.XUnitBuildScanImporterPlugin"
+            displayName = "Elastic Import Xunit to Build Scan"
+            description = "Utilities to import xunit into build scans"
         }
     }
 }

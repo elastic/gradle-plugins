@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.gradle.docker-base") {
             id = "co.elastic.docker-base"
             implementationClass = "co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin"
+            displayName = "Elastic Docker Base Image"
+            description = "Oppinionated way to build docker base images"
         }
     }
 }

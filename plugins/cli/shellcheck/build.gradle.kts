@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.cli.shellcheck") {
             id = "co.elastic.cli.shellcheck"
             implementationClass = "co.elastic.gradle.cli.shellcheck.ShellcheckPlugin"
+            displayName = "Elastic CLI plugin for shellcheck"
+            description = "Provision and make it easy to use the shellcheck cli"
         }
     }
 }

@@ -4,6 +4,8 @@ gradlePlugin {
         create("co.elastic.sandbox") {
             id = "co.elastic.sandbox"
             implementationClass = "co.elastic.gradle.sandbox.SandboxPlugin"
+            displayName = "Elastic Sandbox"
+            description = "Implements sandbox tasks that guarantee no reliance on the local system"
         }
     }
 }
