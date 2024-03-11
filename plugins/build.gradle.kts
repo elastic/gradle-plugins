@@ -10,8 +10,8 @@ subprojects {
     }
 
     configure<GradlePluginDevelopmentExtension> {
-        website.set("https://github.com/elastic/gradle-plugins")
-        vcsUrl.set("https://github.com/elastic/gradle-plugins")
+        website.set("https://github.com/elastic/gradle-plugins/blob/main/README.md")
+        vcsUrl.set("https://github.com/elastic/gradle-plugins/")
         plugins.all {
             tags.addAll(listOf("elastic"))
         }
