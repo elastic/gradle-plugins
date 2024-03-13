@@ -35,8 +35,9 @@ allprojects {
 
 tasks.register("concatenateLicenseReports") {
     doLast {
-        val noticeFile = File("$projectDir/NOTICE")
-        noticeFile.writeText("")
+        val noticeFile = File("$projectDir/NOTICE.txt")
+        noticeFile.writeText("Elastic Gradle Plugins\n")
+        noticeFile.writeText("Copyright 2012-2024 Elasticsearch B.V.\n\n")
         project.fileTree(project.rootDir) {
             include("**/licenses/licenses.md")
         }.forEach { licenseFile ->
