@@ -19,7 +19,6 @@
 package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.cli.jfrog.JFrogPlugin;
-import co.elastic.gradle.docker.base.DockerLocalCleanTask;
 import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;

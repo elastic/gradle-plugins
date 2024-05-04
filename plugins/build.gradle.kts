@@ -4,10 +4,7 @@ subprojects {
     apply(plugin = "java")
     apply(plugin = "jvm-test-suite")
     apply(plugin = "java-gradle-plugin")
-
-    if (! listOf("base", "cli", "docker").contains(project.name)) {
-        apply(plugin = "com.gradle.plugin-publish")
-    }
+    apply(plugin = "com.gradle.plugin-publish")
 
     configure<GradlePluginDevelopmentExtension> {
         website.set("https://github.com/elastic/gradle-plugins/blob/main/README.md")
