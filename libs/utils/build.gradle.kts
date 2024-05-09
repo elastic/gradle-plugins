@@ -12,3 +12,14 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+gradlePlugin {
+    plugins {
+        create("co.elastic.utils") {
+            id = "co.elastic.utils"
+            displayName = "Elastic Utilities Library"
+            description = "Library of shared tools between elatic plugins"
+            implementationClass = "co.elastic.gradle.utils.DontApplyPlugin"
+        }
+    }
+}

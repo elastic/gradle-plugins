@@ -1,8 +1,5 @@
-import org.gradle.api.DefaultTask
-import org.gradle.api.tasks.TaskAction
 import java.io.File
 import com.github.jk1.license.render.InventoryMarkdownReportRenderer
-import org.gradle.internal.impldep.org.junit.experimental.categories.Categories.CategoryFilter.include
 
 plugins {
     id("com.gradle.plugin-publish").version("1.2.1").apply(false)
@@ -15,8 +12,23 @@ allprojects {
         mavenCentral()
     }
 
-    version = "0.0.1"
+    version = "0.0.6"
     group = "co.elastic.gradle"
+
+    // Some projects are used for testing only, some are empty containers, everything else we publish
+    println(project.path)
+    if (! listOf(":", ":plugins", ":plugins:cli", ":plugins:docker", ":libs", ":libs:test-utils").contains(project.path)) {
+        apply(plugin = "java-gradle-plugin")
+        apply(plugin = "com.gradle.plugin-publish")
+
+        configure<GradlePluginDevelopmentExtension> {
+            website.set("https://github.com/elastic/gradle-plugins/blob/main/README.md")
+            vcsUrl.set("https://github.com/elastic/gradle-plugins/")
+            plugins.all {
+                tags.addAll(listOf("elastic"))
+            }
+        }
+    }
 
     if (extensions.findByType(JavaPluginExtension::class) != null) {
         configure<JavaPluginExtension> {

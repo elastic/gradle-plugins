@@ -17,7 +17,7 @@ dependencies {
     implementation(project(":libs:utils"))
 
     implementation(project(":plugins:cli:jfrog"))
-    implementation(project(":plugins:docker:base"))
+    implementation(project(":plugins:docker:docker-lib"))
     implementation(project(":plugins:lifecycle"))
 
     val jacksonVersion = "2.13.2"

@@ -11,7 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(project(":plugins:cli:base"))
+    implementation(project(":plugins:cli:cli-lib"))
     implementation(project(":plugins:lifecycle"))
     implementation(project(":libs:utils"))
     runtimeOnly("org.tukaani:xz:1.8")
