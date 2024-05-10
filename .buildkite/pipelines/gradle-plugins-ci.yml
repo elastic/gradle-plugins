@@ -1,16 +1,16 @@
 # gradle-plugins-ci.yml 
 agents:
-  cpu: "4"
-  memory: "8G"
-  ephemeralStorage: "80G"
-  image: pixelgroup/docker-java-git:17-jdk
+  provider: "gcp"
+  image: family/cloud-ubuntu-2204
+  diskSizeGb: 80
+  machineType: 'custom-4-12288'
 steps:
   - label: ":pipeline: Gradle Check"
+    commands:    
+      - "./gradlew check"
+  - label: ":pipeline: Build examples: docker-full"
     commands:
-    - "./gradlew check"
-  #- label: ":pipeline: Build examples: docker-full"
-  #  commands:
-  #    - "cd examples/docker-full ./gradlew dockerBuild"
-  #- label: ":pipeline: Build examples: docker-elastic"
-  #  commands:
-  #    - "cd examples/docker-elastic ./gradlew dockerBuild"
+      - "cd examples/docker-full && ./gradlew dockerBuild"
+  - label: ":pipeline: Build examples: docker-elastic"
+    commands:
+      - "cd examples/docker-elastic && ./gradlew dockerBuild"
