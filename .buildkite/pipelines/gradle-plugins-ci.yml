@@ -3,6 +3,7 @@ agents:
   cpu: "4"
   memory: "8G"
   ephemeralStorage: "80G"
+  image: docker.elastic.co/ci-agent-images/elasticsearch-stateless/buildkite-agent
 steps:
   - label: ":pipeline: Gradle Check"
     commands:
