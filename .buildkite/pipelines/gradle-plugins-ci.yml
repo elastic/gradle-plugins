@@ -10,7 +10,7 @@ steps:
       - "./gradlew check"
   - label: ":pipeline: Build examples: docker-full"
     commands:
-      - "cd examples/docker-full && ./gradlew dockerBuild"
+      - "cd examples/docker-full && ../../gradlew dockerBuild"
   - label: ":pipeline: Build examples: docker-elastic"
     commands:
-      - "cd examples/docker-elastic && ./gradlew dockerBuild"
+      - "cd examples/docker-elastic && ../../gradlew dockerBuild"

@@ -49,8 +49,6 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void buildLocalImportAndLocalScanFromStaticImage() throws IOException, InterruptedException {
-        final Set<String> imagesInDaemonBeforeTest = getImagesInDaemon();
-
         helper.settings("""
                      rootProject.name = "just-a-test"
                 """);
