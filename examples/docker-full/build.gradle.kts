@@ -1,34 +1,11 @@
 import java.net.URL
 
 plugins {
-    val pluginVersion = "0.0.5"
+    val pluginVersion = "0.0.6"
     id("co.elastic.docker-base").version(pluginVersion)
     id("co.elastic.vault").version(pluginVersion)
     id("co.elastic.cli.jfrog").version(pluginVersion)
     id("co.elastic.cli.snyk").version(pluginVersion)
-}
-
-vault {
-    address.set("https://vault-ci-prod.elastic.dev")
-    auth {
-        ghTokenFile()
-        ghTokenEnv()
-        tokenEnv()
-        roleAndSecretEnv()
-    }
-}
-
-val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
-
-cli {
-    jfrog {
-        username.set(creds["username"])
-        password.set(creds["plaintext"])
-    }
-    snyk {
-        username.set(creds["username"])
-        password.set(creds["plaintext"])
-    }
 }
 
 dockerBaseImage {
