@@ -3,7 +3,7 @@ agents:
   cpu: "4"
   memory: "8G"
   ephemeralStorage: "80G"
-  image: pixelgroup/docker-java-git:11-jdk
+  image: pixelgroup/docker-java-git:17-jdk
 steps:
   - label: ":pipeline: Gradle Check"
     commands:
