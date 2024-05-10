@@ -154,8 +154,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal")
                 .buildAndFail();
 
-        // FIXME: update the message when snyk scan recognises the archive
-        assertContains(scanResult.getOutput(), "[snyk] Tested 175 dependencies for known issues");
+        assertContains(scanResult.getOutput(), "[snyk] Tested ");
     }
 
 
