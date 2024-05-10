@@ -6,7 +6,7 @@ agents:
   machineType: 'custom-4-12288'
 steps:
   - label: ":pipeline: Gradle Check"
-    commands:    
+    commands:
       - "./gradlew check"
   - label: ":pipeline: Build examples: docker-full"
     commands:

@@ -41,21 +41,18 @@ class WrapperPluginIT extends TestkitIntegrationTest {
                             }
                             tasks.wrapperProvisionJdk {
                                 jdkCacheDir.set("\\${JENKINS_HOME:-\\$HOME}/.gradle/jdks")
-                                javaReleaseName.set("11.0.15+10")
-                                appleM1URLOverride.set(
-                                    "https://download.bell-sw.com/java/11.0.13+8/bellsoft-jdk11.0.13+8-macos-aarch64.tar.gz"
-                                )
+                                javaReleaseName.set("17.0.10_7")
                                 checksums.set(
-                                  mapOf(
-                                     LINUX to mapOf(
-                                       X86_64 to "5fdb4d5a1662f0cca73fec30f99e67662350b1fa61460fa72e91eb9f66b54d0b",
-                                       AARCH64 to "999fbd90b070f9896142f0eb28354abbeb367cbe49fd86885c626e2999189e0a"
-                                     ),
-                                     DARWIN to mapOf(
-                                       X86_64 to "ebd8b9553a7b4514599bc0566e108915ce7dc95d29d49a9b10b8afe4ab7cc9db",
-                                       AARCH64 to "7dce00825d5ff0d6f2d39fa1add59ce7f4eefee5b588981b43708d00c43f4f9b"
-                                     )
-                                  )
+                                    mapOf(
+                                        LINUX to mapOf(
+                                            X86_64 to "a8fd07e1e97352e97e330beb20f1c6b351ba064ca7878e974c7d68b8a5c1b378",
+                                            AARCH64 to "6e4201abfb3b020c1fb899b7ac063083c271250bf081f3aa7e63d91291a90b74"
+                                        ),
+                                        DARWIN to mapOf(
+                                            X86_64 to "e16ee89d3304bb2ba706f9a7b0ba279725c2aea55d5468336f8de4bb859f300d",
+                                            AARCH64 to "a6ec3b94f61695e8f445ee508411c56a2ce0cabc16ea4c4296ff062d13559d92"
+                                        )
+                                    )
                                 )
                             }
                         """,
@@ -68,7 +65,7 @@ class WrapperPluginIT extends TestkitIntegrationTest {
         final String gradlewContent = Files.readString(helper.projectDir().resolve("gradlew"));
         AssertContains.assertContains(
                 gradlewContent,
-                "https://api.adoptium.net/v3/binary/version/"
+                "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-jdk-17.0.10_7/OpenJDK17U-jdk_"
         );
         AssertContains.assertDoesNotContain(
                 gradlewContent,

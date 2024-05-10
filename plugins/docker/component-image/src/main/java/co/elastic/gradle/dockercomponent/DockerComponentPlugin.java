@@ -169,7 +169,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
                             "The task creates a report in Snyk and alwasy suceeds."
                     );
                     task.doFirst(t ->
-                            task.setArgs(Arrays.asList("container", "monitor", pushManifestList.get().getTag().get()))
+                            task.setArgs(Arrays.asList("container", "monitor", "--platform=linux/" + Architecture.current().dockerName(), pushManifestList.get().getTag().get()))
                     );
                     task.onlyIf(
                             unused -> dockerComponentImageBuild.get().getInstructions().keySet().get()

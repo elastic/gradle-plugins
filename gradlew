@@ -116,6 +116,73 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+[ $(uname -m) = "x86_64" ] && JDK_ARCH="x64" || JDK_ARCH="aarch64"
+[ "$darwin" = true ] && JDK_OS="mac" || JDK_OS="linux"
+JDK_VERSION="17.0.10_7"
+JDK_DOWNLOAD_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10%2B7/OpenJDK17U-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz"
+JDK_CACHE_DIR="$HOME/.gradle/jdks"
+JDK_DOWNLOAD_FILE="$JDK_CACHE_DIR/jdk-$JDK_VERSION.tar.gz"
+
+if ! which curl > /dev/null ; then
+   echo "Provisioning the JDK in the wrapper requires curl to be available in the path, but it was not."
+   exit 99
+fi
+
+
+if [ -z "${JAVA_HOME_OVERRIDE}" ]; then
+  JAVA_HOME="${JDK_CACHE_DIR}/jdk-${JDK_VERSION}"
+  # make sure java home exists and it's not an empty dir
+  if ! [ -d "$JAVA_HOME" ] || [ -z "$(ls -A $JAVA_HOME)" ]; then
+    if ! [ -d "$JAVA_HOME" ]; then
+      mkdir -p "${JAVA_HOME}" || die "Error while creating local cache directory: ${JAVA_HOME}"
+    fi
+    echo "Downloading JDK from $JDK_DOWNLOAD_URL"
+    curl --silent -L "${JDK_DOWNLOAD_URL}" --output $JDK_DOWNLOAD_FILE
+    if [ $JDK_OS = "mac" ]; then
+      if [ $JDK_ARCH = "x64" ]; then
+        if ! echo "e16ee89d3304bb2ba706f9a7b0ba279725c2aea55d5468336f8de4bb859f300d  $JDK_DOWNLOAD_FILE" | shasum -c -a 256; then
+          echo "Checksum verification of the downloaded JDK failed"
+          exit 1
+        fi
+      else
+        if ! echo "a6ec3b94f61695e8f445ee508411c56a2ce0cabc16ea4c4296ff062d13559d92  $JDK_DOWNLOAD_FILE" | shasum -c -a 256; then
+          echo "Checksum verification of the downloaded JDK failed"
+          exit 1
+        fi
+      fi
+    elif [ $JDK_OS = "linux" ]; then
+      if [ $JDK_ARCH = "x64" ]; then
+        if ! echo "a8fd07e1e97352e97e330beb20f1c6b351ba064ca7878e974c7d68b8a5c1b378  $JDK_DOWNLOAD_FILE" | sha256sum -c; then
+          echo "Checksum verification of the downloaded JDK failed"
+          exit 1
+        fi
+      elif [ $JDK_ARCH = "aarch64" ]; then
+        if ! echo "6e4201abfb3b020c1fb899b7ac063083c271250bf081f3aa7e63d91291a90b74  $JDK_DOWNLOAD_FILE" | sha256sum -c; then
+          echo "Checksum verification of the downloaded JDK failed"
+          exit 1
+        fi
+      else
+        echo "Boostrapping JDK on Linux $JDK_ARCH is not yet supported, set JAVA_HOME_OVERRIDE to a valid JDK"
+        exit 1
+      fi
+    else
+      echo "Bootstrapping a JDK on $JDK_OS is not yet supported, set JAVA_HOME_OVERRIDE to a valid JDK"
+      exit 1
+    fi
+    # extract and deal with different naming conventions on OSX
+    if [ $JDK_OS = "mac" ]; then
+      tar -xzf $JDK_DOWNLOAD_FILE --strip-components=3 -C "${JAVA_HOME}/"
+    else
+      tar -xzf $JDK_DOWNLOAD_FILE --strip-components=1 -C "${JAVA_HOME}/"
+    fi
+    rm -f $JDK_DOWNLOAD_FILE
+    chmod -R u+w,g+w "${JAVA_HOME}"
+    echo "Installed JDK from ${JDK_DOWNLOAD_URL} into ${JAVA_HOME}"
+  fi
+else
+  JAVA_HOME="${JAVA_HOME_OVERRIDE}"
+fi
+
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
