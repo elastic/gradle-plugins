@@ -48,7 +48,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.cli.shellcheck")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -58,7 +58,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     shellcheck {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -70,7 +70,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 .withArguments("--warning-mode", "fail", "-s", "check")
                 .buildAndFail();
         System.out.println(result.getOutput());
-        assertPathExists(helper.projectDir().resolve("gradle/bin/shellcheck"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/shellcheck"));
         assertEquals(TaskOutcome.FAILED, Objects.requireNonNull(result.task(":shellcheck")).getOutcome());
     }
 
@@ -88,7 +88,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.cli.shellcheck")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -98,7 +98,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     shellcheck {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -114,7 +114,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 .build();
         System.out.println(result.getOutput());
         assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":shellcheck")).getOutcome());
-        assertPathExists(helper.projectDir().resolve("gradle/bin/shellcheck"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/shellcheck"));
 
         final BuildResult resultUpToDate = gradleRunner
                 .withArguments("-i", "shellcheck")

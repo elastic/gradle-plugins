@@ -420,7 +420,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                        id("co.elastic.vault")
                    }
                    configure<VaultExtension> {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                       }

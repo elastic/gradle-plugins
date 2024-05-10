@@ -63,7 +63,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
                        id("co.elastic.vault")
                 }
                 vault {
-                          address.set("https://secrets.elastic.co:8200")
+                          address.set("https://vault-ci-prod.elastic.dev")
                           auth {
                             ghTokenFile()
                             ghTokenEnv()
@@ -72,7 +72,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
                           }
                 }
                 cli {
-                     val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                     val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                      snyk {                         
                            username.set(credentials["username"])
                            password.set(credentials["plaintext"])

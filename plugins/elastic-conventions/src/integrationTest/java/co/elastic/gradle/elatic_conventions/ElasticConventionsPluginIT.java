@@ -116,14 +116,14 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
         System.out.println(result.getOutput());
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-aarch64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test

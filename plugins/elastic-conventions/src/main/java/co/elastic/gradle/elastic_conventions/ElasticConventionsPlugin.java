@@ -50,16 +50,12 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
-    public static final int OBSERVABILITY_TIME_FRAME_MINUTES = 5;
-    public static final String VAULT_ARTIFACTORY_PATH = "secret/cloud-team/cloud-ci/artifactory_creds";
+    public static final String VAULT_ARTIFACTORY_PATH = "secret/ci/elastic-cloud/artifactory_creds";
 
     @Override
     public void apply(PluginAware target) {
@@ -158,9 +154,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         var jobName = getFirsEnvVar("JOB_NAME", "BUILDKITE_PIPELINE_NAME");
         var nodeName = getFirsEnvVar("NODE_NAME", "BUILDKITE_AGENT_NAME");
 
-        var startTime = OffsetDateTime.now(ZoneOffset.UTC);
-        nodeName.ifPresent(s -> buildScan.buildFinished(result -> linkToObservability(buildScan, startTime, s)));
-
         if (isCI) {
             buildScan.tag("CI");
         }
@@ -220,55 +213,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         return ('x' + str).trim().substring(1);
     }
 
-    private void linkToObservability(BuildScanExtension buildScan, OffsetDateTime startTime, String nodeName) {
-        var from = startTime.minusMinutes(OBSERVABILITY_TIME_FRAME_MINUTES)
-                .format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
-        var to = OffsetDateTime.now(ZoneOffset.UTC)
-                .plusMinutes(OBSERVABILITY_TIME_FRAME_MINUTES)
-                .format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
-        buildScan.link(
-                "APM: CPU, Load, Memory, FS Metrics",
-                "https://ci-stats.elastic.co/app/metrics/explorer?" +
-                "metricsExplorer=(" +
-                "chartOptions:(stack:!f,type:line,yAxisMode:fromZero)," +
-                "options:(" +
-                "aggregation:avg," +
-                "filterQuery:%27host.name:" + nodeName + "%27," +
-                "metrics:!(" +
-                "(aggregation:avg,color:color0,field:system.cpu.total.norm.pct)," +
-                "(aggregation:avg,color:color1,field:system.load.norm.1)," +
-                "(aggregation:avg,color:color2,field:system.load.norm.5)," +
-                "(aggregation:avg,color:color3,field:system.load.norm.15)," +
-                "(aggregation:avg,color:color4,field:system.memory.actual.used.pct)," +
-                "(aggregation:avg,color:color5,field:system.core.steal.pct)," +
-                "(aggregation:avg,color:color6,field:system.filesystem.used.pct)" +
-                ")," +
-                "source:url" +
-                ")," +
-                "timerange:(from:%27" + to + "%27,interval:%3E%3D10s,to:%27" + from + "%27)" +
-                ")"
-        );
-
-        buildScan.link(
-                "APM: IO Latency Metrics",
-                "https://ci-stats.elastic.co/app/metrics/explorer?" +
-                "metricsExplorer=(" +
-                "chartOptions:(stack:!f,type:line,yAxisMode:fromZero)," +
-                "options:(" +
-                "aggregation:avg," +
-                "filterQuery:%27host.name:" + nodeName + "%27," +
-                "metrics:!(" +
-                "(aggregation:avg,color:color0,field:system.diskio.iostat.write.await)," +
-                "(aggregation:avg,color:color1,field:system.diskio.iostat.read.await)," +
-                "(aggregation:avg,color:color2,field:system.diskio.iostat.service_time)" +
-                ")," +
-                "source:url" +
-                ")," +
-                "timerange:(from:%27" + from +  "%27,interval:%3E%3D10s,to:%27" + to + "%27)" +
-                ")"
-        );
-    }
-
     public Optional<String> getFirsEnvVar(String... names) {
         for (String name : names) {
             final String value = System.getenv(name);
@@ -280,7 +224,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     }
 
     public void configureVaultPlugin(VaultExtension extension) {
-        extension.getAddress().set("https://secrets.elastic.co:8200");
+        extension.getAddress().set("https://vault-ci-prod.elastic.dev");
         final VaultAuthenticationExtension auth = extension.getExtensions()
                 .getByType(VaultAuthenticationExtension.class);
         auth.ghTokenFile();

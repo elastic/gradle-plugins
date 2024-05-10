@@ -5,7 +5,6 @@ plugins {
     id("co.elastic.docker-base").version(pluginVersion)
     id("co.elastic.vault").version(pluginVersion)
     id("co.elastic.cli.jfrog").version(pluginVersion)
-    //id("co.elastic.elastic-conventions").version(pluginVersion)
 }
 
 vault {

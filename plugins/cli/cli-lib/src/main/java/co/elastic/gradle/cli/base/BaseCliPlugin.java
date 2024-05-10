@@ -105,7 +105,7 @@ public abstract class BaseCliPlugin implements Plugin<Project> {
     }
 
     private static Path getPathToSyncedBinary(Project target, String name) {
-        return target.getRootDir().toPath().resolve("gradle/bin").resolve(name);
+        return target.getRootDir().toPath().resolve(".gradle/bin").resolve(name);
     }
 
     @SuppressWarnings("unused")

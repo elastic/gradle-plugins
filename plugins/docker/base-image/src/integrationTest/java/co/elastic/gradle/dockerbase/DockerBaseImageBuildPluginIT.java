@@ -142,7 +142,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.docker-base").apply(false)
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -150,7 +150,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                                 
                 subprojects {
                     apply(plugin = "co.elastic.docker-base")
@@ -242,7 +242,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.vault")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -256,7 +256,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 dependencies {
                    dockerEphemeral("org.slf4j:slf4j-api:1.7.36")
                 }
-                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
@@ -309,7 +309,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                id("co.elastic.vault")
             }
             vault {
-                  address.set("https://secrets.elastic.co:8200")
+                  address.set("https://vault-ci-prod.elastic.dev")
                   auth {
                     ghTokenFile()
                     ghTokenEnv()
@@ -317,7 +317,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                     roleAndSecretEnv()
                   }
             }
-            val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+            val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
             cli {
                 jfrog {
                     username.set(creds["username"])
@@ -354,7 +354,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.vault")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -362,7 +362,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
                 cli {
                     jfrog {
                         username.set(creds["username"])

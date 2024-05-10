@@ -50,7 +50,7 @@ plugins {
     id("co.elastic.vault")
 }
 vault {
-    address.set("https://secrets.elastic.co:8200")
+    address.set("https://vault-ci-prod.elastic.dev")
     auth {
         ghTokenFile()
         ghTokenEnv()
@@ -58,7 +58,7 @@ vault {
         roleAndSecretEnv()
     }
 }
-val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
 dockerBaseImage {
     dockerTagLocalPrefix.set("gradle-test-local")                // configures how the image is imported to the local daemon
     dockerTagPrefix.set("docker.elastic.co/employees/ghHandle")  // configures where the image is pushed 
@@ -237,7 +237,7 @@ plugins {
     id("co.elastic.vault")
 }
 vault {
-    address.set("https://secrets.elastic.co:8200")
+    address.set("https://vault-ci-prod.elastic.dev")
     auth {
         ghTokenFile()
         ghTokenEnv()
@@ -245,7 +245,7 @@ vault {
         roleAndSecretEnv()
     }
 }
-val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
 
 subprojects {
     print(project.name)
@@ -343,7 +343,7 @@ plugins {
     id("co.elastic.sandbox")
 }
 vault {
-    address.set("https://secrets.elastic.co:8200")
+    address.set("https://vault-ci-prod.elastic.dev")
     auth {
         ghTokenFile()
         ghTokenEnv()
@@ -351,7 +351,7 @@ vault {
         roleAndSecretEnv()
     }
 }
-val creds = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
 dockerBaseImage {
     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
     fromUbuntu("ubuntu", "20.04")

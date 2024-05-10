@@ -31,7 +31,6 @@ include("plugins:check-in-generated")
 include("plugins:wrapper-provision-jdk")
 
 
-val startTime = OffsetDateTime.now(ZoneOffset.UTC)
 gradleEnterprise {
     val isRunningInCI = System.getenv("BUILD_URL") != null
 
@@ -63,55 +62,6 @@ gradleEnterprise {
             val buildNumber = System.getenv("BUILD_NUMBER")
             val buildUrl = System.getenv("BUILD_URL")
             val jobName = System.getenv("JOB_NAME")
-            val nodeName = System.getenv("NODE_NAME")
-
-            // Include a link to metricbeat on CI workers
-            if (nodeName != null) {
-                buildFinished {
-                    val from = startTime.minusMinutes(5).format(ISO_ZONED_DATE_TIME)
-                    val to = OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5).format(ISO_ZONED_DATE_TIME)
-                    link(
-                        "APM: CPU, Load, Memory, FS Metrics",
-                        "https://ci-stats.elastic.co/app/metrics/explorer?" +
-                            "metricsExplorer=(" +
-                            "chartOptions:(stack:!f,type:line,yAxisMode:fromZero)," +
-                            "options:(" +
-                            "aggregation:avg," +
-                            "filterQuery:%27host.name:$nodeName%27," +
-                            "metrics:!(" +
-                            "(aggregation:avg,color:color0,field:system.cpu.total.norm.pct)," +
-                            "(aggregation:avg,color:color1,field:system.load.norm.1)," +
-                            "(aggregation:avg,color:color2,field:system.load.norm.5)," +
-                            "(aggregation:avg,color:color3,field:system.load.norm.15)," +
-                            "(aggregation:avg,color:color4,field:system.memory.actual.used.pct)," +
-                            "(aggregation:avg,color:color5,field:system.core.steal.pct)," +
-                            "(aggregation:avg,color:color6,field:system.filesystem.used.pct)" +
-                            ")," +
-                            "source:url" +
-                            ")," +
-                            "timerange:(from:%27$from%27,interval:%3E%3D10s,to:%27$to%27)" +
-                            ")"
-                    )
-                    link(
-                        "APM: IO Latency Metrics",
-                        "https://ci-stats.elastic.co/app/metrics/explorer?" +
-                            "metricsExplorer=(" +
-                            "chartOptions:(stack:!f,type:line,yAxisMode:fromZero)," +
-                            "options:(" +
-                            "aggregation:avg," +
-                            "filterQuery:%27host.name:$nodeName%27," +
-                            "metrics:!(" +
-                            "(aggregation:avg,color:color0,field:system.diskio.iostat.write.await)," +
-                            "(aggregation:avg,color:color1,field:system.diskio.iostat.read.await)," +
-                            "(aggregation:avg,color:color2,field:system.diskio.iostat.service_time)" +
-                            ")," +
-                            "source:url" +
-                            ")," +
-                            "timerange:(from:%27$from%27,interval:%3E%3D10s,to:%27$to%27)" +
-                            ")"
-                    )
-                }
-            }
 
             // Jenkins-specific build scan metadata
             if (buildUrl == null) {
