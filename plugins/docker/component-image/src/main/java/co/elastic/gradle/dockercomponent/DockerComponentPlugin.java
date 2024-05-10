@@ -144,12 +144,11 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     task.setGroup("security");
                     task.setDescription("Runs a snyk test on the resulting locally imported image." +
                                         " The task fails if vulnerabilities are discovered.");
-                    task.dependsOn(dockerComponentImageBuild);
+                    task.dependsOn(localImport);
                     task.doFirst(t -> {
-                        final String archivePath = dockerComponentImageBuild.get().getImageArchive().get()
-                                .get(Architecture.current()).getAsFile().getAbsolutePath();
-                        task.getLogger().lifecycle("Scanning `{}` with snyk", archivePath);
-                        task.setArgs(Arrays.asList("container", "test", "docker-archive:" + archivePath));
+                        final String tagToScan = localImport.get().getTag().get();
+                        task.getLogger().lifecycle("Scanning `{}` with snyk", tagToScan);
+                        task.setArgs(Arrays.asList("container", "test", "--platform=linux/" + Architecture.current().dockerName(), tagToScan));
                     });
                     // snyk only scans the image of the platform it's running on and would fail if one is not available.
                     // luckily a non-existing image can't have any vulnerabilities, so we can just skip it

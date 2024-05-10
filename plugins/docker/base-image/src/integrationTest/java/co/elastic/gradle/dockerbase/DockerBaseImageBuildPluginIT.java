@@ -226,8 +226,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
         assertContains(
                 result.getOutput(),
                 Architecture.current().map(Map.of(
-                        Architecture.AARCH64, "sha256:a51c8bb81605567ea27d627425adf94a613d675a664bf473d43a55a8a26416b8",
-                        Architecture.X86_64, "sha256:31cd7bbfd36421dfd338bceb36d803b3663c1bfa87dfe6af7ba764b5bf34de05"
+                        Architecture.AARCH64, "sha256:9bfe2c7a24b46c861ffea8b27dd1015e3b52e93e5581a09eacecd5a3cd601924",
+                        Architecture.X86_64, "sha256:cc9cc8169c9517ae035cf293b15f06922cb8c6c864d625a72b7b18667f264b70"
                 ))
         );
         assertEquals(TaskOutcome.SKIPPED, Objects.requireNonNull(result.task(":s2:dockerBasePull")).getOutcome());
