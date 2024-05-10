@@ -79,7 +79,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     dockerTagPrefix.set("docker.elastic.co/employees/%s")
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
@@ -131,7 +131,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 repositories {
                     mavenCentral()
                 }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
@@ -187,7 +187,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
@@ -238,7 +238,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                     }
                 }
                                 
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(
                         URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
@@ -282,7 +282,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                         roleAndSecretEnv()
                       }
                 }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromCentos("centos", "7")
@@ -323,7 +323,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                                 roleAndSecretEnv()
                               }
                         }             
-                        val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                        val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                         dockerBaseImage {
                             osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                             fromUbuntu("ubuntu", "20.04")

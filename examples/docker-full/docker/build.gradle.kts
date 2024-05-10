@@ -18,7 +18,7 @@ vault {
     }
 }
 
-val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
 
 cli {
     jfrog {

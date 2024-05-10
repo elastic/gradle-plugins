@@ -55,7 +55,44 @@ import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
-    public static final String VAULT_ARTIFACTORY_PATH = "secret/ci/elastic-cloud/artifactory_creds";
+
+    private String getVaultArtifactoryPath() {
+
+        return "secret/ci/" + getRepoName() + "/artifactory_creds";
+    }
+
+    private  String getSnykVaultPath() {
+        return "secret/ci/" + getRepoName() + "/snyk_api_key";
+    }
+
+    private String getRepoName() {
+        String repoUrl = System.getenv("BUILDKITE_REPO");
+        if (repoUrl == null || repoUrl.isEmpty()) {
+            return "elastic-gradle-plugins";
+        }
+
+        // Example: git@github.com:acme-inc/my-project.git
+        String[] parts = repoUrl.split(":");
+        if (parts.length != 2) {
+            throw new GradleException("Can't find : separator in env var BUILDKITE_REPO: " + repoUrl);
+        }
+
+        String path = parts[1];
+        if (path.endsWith(".git")) {
+            path = path.substring(0, path.length() - 4);
+        } else {
+            throw new GradleException("Path does not end in .git in env var BUILDKITE_REPO: " + path);
+        }
+
+        String[] pathParts = path.split("/");
+        if (pathParts.length != 2) {
+            throw new GradleException("Path is not the expected length in env var BUILDKITE_REPO:" + path);
+        }
+
+        // Replace special characters and combine the organization and project name
+        return pathParts[0] + "-" + pathParts[1];
+
+    }
 
     @Override
     public void apply(PluginAware target) {
@@ -85,11 +122,11 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
             target.getTasks().withType(SnykCLIExecTask.class, task ->
                     task.environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get().get("apikey")
+                            vault.readAndCacheSecret(getSnykVaultPath()).get().get("apikey")
                     )
             );
 
-            var creds = vault.readAndCacheSecret(VAULT_ARTIFACTORY_PATH).get();
+            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
             try {
                 extension.getOsPackageRepository().set(new URL(
                         "https://" + creds.get("username") + ":" + creds.get("plaintext") +
@@ -112,7 +149,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                     listOfNames.add(extensionSchema.getName());
                 }
             }
-            var creds = vault.readAndCacheSecret(VAULT_ARTIFACTORY_PATH).get();
+            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
             for (String name : listOfNames) {
                 final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
                 extension.getUsername().set(creds.get("username"));

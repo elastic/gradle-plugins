@@ -58,7 +58,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     shellcheck {
-                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -98,7 +98,7 @@ class ShellcheckPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     shellcheck {
-                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }

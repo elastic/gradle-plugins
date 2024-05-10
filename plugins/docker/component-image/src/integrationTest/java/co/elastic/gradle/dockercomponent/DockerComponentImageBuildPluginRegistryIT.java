@@ -88,12 +88,12 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 }
                 cli {
                     manifestTool {
-                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
                     snyk {
-                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -101,7 +101,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 tasks.withType<co.elastic.gradle.snyk.SnykCLIExecTask> {
                        environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
+                            vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
                         )
                 }
                 dockerComponentImage {
@@ -172,7 +172,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                       }
                 }
                 cli {
-                    val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()                      
+                    val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()                      
                     manifestTool {
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
@@ -186,7 +186,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                         password.set(credentials["plaintext"])
                     }
                 }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                 dockerBaseImage {
                     dockerTagPrefix.set("docker.elastic.co/employees/%s")
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))

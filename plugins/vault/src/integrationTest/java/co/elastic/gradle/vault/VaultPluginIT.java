@@ -426,8 +426,8 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                       }
                    }
                    val vault = the<VaultExtension>()
-                   logger.lifecycle("secret is {}", vault.readSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
-                   logger.lifecycle("secret cached is {}", vault.readAndCacheSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("secret is {}", vault.readSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("secret cached is {}", vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
                 """, VaultExtension.class.getName()));
 
         final BuildResult result = gradleRunner
@@ -436,10 +436,10 @@ public class VaultPluginIT extends TestkitIntegrationTest {
 
         assertContains(result.getOutput(), "secret is test");
         assertContains(result.getOutput(), "secret cached is test");
-        assertCacheLocationExists(".gradle/secrets/secret/cloud-team/cloud-ci/gradle-vault-integration");
-        assertCacheLocationExists(".gradle/secrets/secret/cloud-team/cloud-ci/gradle-vault-integration/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/cloud-team/cloud-ci/gradle-vault-integration/data");
-        assertCacheLocationExists(".gradle/secrets/secret/cloud-team/cloud-ci/gradle-vault-integration/data/key1");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/data");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/data/key1");
     }
 
     private void assertCacheLocationExists(String other) {

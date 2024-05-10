@@ -46,7 +46,7 @@ vault {
 }
 cli {
     manifestTool {
-        val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+        val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
         username.set(credentials["username"])
         password.set(credentials["plaintext"])
     }
@@ -129,12 +129,12 @@ vault {
 }
 cli {
     manifestTool {
-        val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+        val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
         username.set(credentials["username"])
         password.set(credentials["plaintext"])
     }
 }
-val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
 dockerBaseImage {
     dockerTagPrefix.set("docker.elastic.co/employees/alpar-t")
     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
@@ -237,7 +237,7 @@ import co.elastic.gradle.snyk.SnykCLIExecTask
 
 cli {
     snyk {
-        val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+        val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
         username.set(credentials["username"])
         password.set(credentials["plaintext"])
     }
@@ -245,7 +245,7 @@ cli {
 tasks.withType<SnykCLIExecTask> {
     environment(
         "SNYK_TOKEN",
-        vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
+        vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
     )
 }
 ```

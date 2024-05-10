@@ -60,7 +60,7 @@ vault {
 }
 cli {
     snyk {
-       val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
        username.set(credentials["username"])
        password.set(credentials["plaintext"])
     }
@@ -149,7 +149,7 @@ import co.elastic.gradle.snyk.SnykCLIExecTask
 tasks.withType<SnykCLIExecTask> {
     environment(
         "SNYK_TOKEN",
-        vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
+        vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
     )
 }
 ```

@@ -72,7 +72,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
                           }
                 }
                 cli {
-                     val credentials = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+                     val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                      snyk {                         
                            username.set(credentials["username"])
                            password.set(credentials["plaintext"])
@@ -85,7 +85,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
                 tasks.withType<co.elastic.gradle.snyk.SnykCLIExecTask> {
                        environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
+                            vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
                         )
                 }
                 dockerComponentImage {

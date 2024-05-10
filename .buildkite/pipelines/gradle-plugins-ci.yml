@@ -1,5 +1,15 @@
 # gradle-plugins-ci.yml 
+agents:
+  cpu: "4"
+  memory: "8G"
+  ephemeralStorage: "80G"
 steps:
-  - label: ":pipeline: Build"
+  - label: ":pipeline: Gradle Check"
     commands:
-    - ".buildkite/scripts/gradle.sh"
+    - "./gradlew check"
+  #- label: ":pipeline: Build examples: docker-full"
+  #  commands:
+  #    - "cd examples/docker-full ./gradlew dockerBuild"
+  #- label: ":pipeline: Build examples: docker-elastic"
+  #  commands:
+  #    - "cd examples/docker-elastic ./gradlew dockerBuild"

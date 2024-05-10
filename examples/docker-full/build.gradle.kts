@@ -5,6 +5,7 @@ plugins {
     id("co.elastic.docker-base").version(pluginVersion)
     id("co.elastic.vault").version(pluginVersion)
     id("co.elastic.cli.jfrog").version(pluginVersion)
+    id("co.elastic.cli.snyk").version(pluginVersion)
 }
 
 vault {
@@ -17,10 +18,14 @@ vault {
     }
 }
 
-val creds = vault.readAndCacheSecret("secret/ci/elastic-cloud/artifactory_creds").get()
+val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
 
 cli {
     jfrog {
+        username.set(creds["username"])
+        password.set(creds["plaintext"])
+    }
+    snyk {
         username.set(creds["username"])
         password.set(creds["plaintext"])
     }
