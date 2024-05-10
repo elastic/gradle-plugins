@@ -2,4 +2,4 @@
 steps:
   - label: ":pipeline: Build"
     commands:
-    - ".buildkite/pipelines/gradle.sh"
+    - ".buildkite/scripts/gradle.sh"
