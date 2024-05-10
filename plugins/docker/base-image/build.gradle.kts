@@ -20,7 +20,7 @@ dependencies {
     implementation(project(":plugins:docker:docker-lib"))
     implementation(project(":plugins:lifecycle"))
 
-    val jacksonVersion = "2.13.2"
+    val jacksonVersion = "2.17.1"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("org.jetbrains:annotations:23.0.0")
@@ -29,7 +29,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.0-4")
 
     // Fixme: remove dependency from base image
-    implementation("com.google.cloud.tools:jib-core:0.21.0")
+    implementation("com.google.cloud.tools:jib-core:0.27.0")
 
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:vault"))

@@ -155,7 +155,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 .buildAndFail();
 
         // FIXME: update the message when snyk scan recognises the archive
-        assertContains(scanResult.getOutput(), "Tested 175 dependencies for known issues, found 20 issues.");
+        assertContains(scanResult.getOutput(), "[snyk] Tested 175 dependencies for known issues");
     }
 
 

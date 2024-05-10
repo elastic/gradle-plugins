@@ -16,7 +16,6 @@ allprojects {
     group = "co.elastic.gradle"
 
     // Some projects are used for testing only, some are empty containers, everything else we publish
-    println(project.path)
     if (! listOf(":", ":plugins", ":plugins:cli", ":plugins:docker", ":libs", ":libs:test-utils").contains(project.path)) {
         apply(plugin = "java-gradle-plugin")
         apply(plugin = "com.gradle.plugin-publish")

@@ -60,7 +60,7 @@ class SnykPluginIT extends TestkitIntegrationTest {
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "snyk").build();
 
-        assertContains(result.getOutput(), "[snyk] 1.856.0 (standalone)");
+        assertContains(result.getOutput(), "[snyk] 1.1290.0");
 
         assertPathExists(helper.projectDir().resolve(".gradle/bin/snyk"));
     }
@@ -86,7 +86,7 @@ class SnykPluginIT extends TestkitIntegrationTest {
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "snyk").build();
 
-        assertContains(result.getOutput(), "[snyk] 1.856.0 (standalone)");
+        assertContains(result.getOutput(), "[snyk] 1.1290.0");
 
         assertPathExists(helper.projectDir().resolve(".gradle/bin/snyk"));
     }
