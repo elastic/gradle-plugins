@@ -43,7 +43,7 @@ public class ShellcheckPlugin implements Plugin<Project> {
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
                 .create("shellcheck", BaseCLiExtension.class);
-        extension.getVersion().convention("v0.8.0");
+        extension.getVersion().convention("v0.10.0");
 
         extension.getPattern()
                 .convention("[organisation]/releases/download/[revision]/[module]-[revision].[classifier]");

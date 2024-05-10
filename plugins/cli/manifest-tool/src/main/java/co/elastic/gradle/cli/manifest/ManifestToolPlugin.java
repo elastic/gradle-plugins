@@ -45,7 +45,7 @@ public class ManifestToolPlugin implements Plugin<Project> {
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
                 .create("manifestTool", BaseCLiExtension.class);
-        extension.getVersion().convention("v2.0.3");
+        extension.getVersion().convention("v2.1.6");
 
         target.afterEvaluate(p -> {
             BaseCliPlugin.addDownloadRepo(target, extension);
