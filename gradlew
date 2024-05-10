@@ -119,7 +119,7 @@ CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 [ $(uname -m) = "x86_64" ] && JDK_ARCH="x64" || JDK_ARCH="aarch64"
 [ "$darwin" = true ] && JDK_OS="mac" || JDK_OS="linux"
 JDK_VERSION="17.0.10_7"
-JDK_DOWNLOAD_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-jdk-17.0.10_7/OpenJDK17U-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz"
+JDK_DOWNLOAD_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10%2B7/OpenJDK17U-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz"
 JDK_CACHE_DIR="$HOME/.gradle/jdks"
 JDK_DOWNLOAD_FILE="$JDK_CACHE_DIR/jdk-$JDK_VERSION.tar.gz"
 
@@ -128,13 +128,6 @@ if ! which curl > /dev/null ; then
    exit 99
 fi
 
-
-if [ $JDK_OS = "mac" ]; then
-  if [ $JDK_ARCH = "aarch64" ]; then
-     # Adoptium doesn't have it yet
-    JDK_DOWNLOAD_URL="https://github.com/adoptium/temurin17-binaries/releases/download/jdk-jdk-17.0.10_7/OpenJDK17U-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz"
-  fi
-fi
 
 if [ -z "${JAVA_HOME_OVERRIDE}" ]; then
   JAVA_HOME="${JDK_CACHE_DIR}/jdk-${JDK_VERSION}"
@@ -185,7 +178,6 @@ if [ -z "${JAVA_HOME_OVERRIDE}" ]; then
     rm -f $JDK_DOWNLOAD_FILE
     chmod -R u+w,g+w "${JAVA_HOME}"
     echo "Installed JDK from ${JDK_DOWNLOAD_URL} into ${JAVA_HOME}"
-
   fi
 else
   JAVA_HOME="${JAVA_HOME_OVERRIDE}"
