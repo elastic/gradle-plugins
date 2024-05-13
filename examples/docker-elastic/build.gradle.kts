@@ -3,14 +3,13 @@ import java.net.URL
 plugins {
     val pluginVersion = "0.0.6"
     id("co.elastic.docker-base").version(pluginVersion)
-    id("co.elastic.vault").version(pluginVersion)
-    id("co.elastic.cli.jfrog").version(pluginVersion)
-    id("co.elastic.cli.snyk").version(pluginVersion)
+    id("co.elastic.elastic-conventions").version(pluginVersion)
 }
 
 dockerBaseImage {
     dockerTagLocalPrefix.set("gradle-test-local")                // configures how the image is imported to the local daemon
     dockerTagPrefix.set("docker.elastic.co/employees/ghHandle")  // configures where the image is pushed
+
     fromUbuntu("ubuntu", "20.04")           // Specify the source image, hinting at the distribution
     install("patch")                        // Install the patch utility using the version from the lockfile
     createUser("foobar", 1234, "foobar", 1234)  // generate commands to create a specific user
