@@ -2,7 +2,7 @@ import org.gradle.internal.jvm.Jvm
 
 plugins {
     id("com.gradle.enterprise").version("3.9")
-    id("co.elastic.elastic-conventions").version("0.0.6")
+    id("co.elastic.elastic-conventions").version("0.0.7")
 }
 
 include("libs")
