@@ -65,7 +65,7 @@ class WrapperPluginIT extends TestkitIntegrationTest {
         final String gradlewContent = Files.readString(helper.projectDir().resolve("gradlew"));
         AssertContains.assertContains(
                 gradlewContent,
-                "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-jdk-17.0.10_7/OpenJDK17U-jdk_"
+                "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.10"
         );
         AssertContains.assertDoesNotContain(
                 gradlewContent,

@@ -90,7 +90,7 @@ abstract public class ProvisionJDKInWrapperTask extends DefaultTask {
                                                        String.format(
                                                                "https://github.com/adoptium/temurin%s-binaries/releases/download/jdk-%s/OpenJDK%sU-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz",
                                                                javaMajor,
-                                                               URLEncoder.encode("jdk-" + getJavaReleaseName().get(), StandardCharsets.UTF_8),
+                                                               URLEncoder.encode(getJavaReleaseName().get().replace("_", "+"), StandardCharsets.UTF_8),
                                                                javaMajor
                                                        );
                             String replaced = getCodeToDownloadJDK()
