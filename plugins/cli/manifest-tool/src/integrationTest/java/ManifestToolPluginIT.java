@@ -84,7 +84,7 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
                 cli {
                     manifestTool {
                        baseURL.set(java.net.URL("https://artifactory.elastic.dev/artifactory/github-release-proxy"))
-                       version.set("v1.0.2")
+                       version.set("v2.1.5")
                        val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
@@ -97,7 +97,7 @@ class ManifestToolPluginIT extends TestkitIntegrationTest {
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "manifestTool").build();
 
-        assertContains(result.getOutput(), "[manifest-tool]    1.0.2 (commit: fa20a3b9b43f7c1acedb8d97c249803cc923e009)");
+        assertContains(result.getOutput(), "[manifest-tool]    2.1.5 (commit: 29c4cb6a3402f479ff3bd44bbfe0d9b3273a2e4c)");
 
         assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
     }
