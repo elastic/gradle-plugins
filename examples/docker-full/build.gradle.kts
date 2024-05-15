@@ -1,10 +1,10 @@
 import java.net.URL
 
 plugins {
-    val pluginVersion = "0.0.7"
-    id("co.elastic.docker-base").version(pluginVersion)
-    id("co.elastic.vault").version(pluginVersion)
-    id("co.elastic.cli.jfrog").version(pluginVersion)
+    // No version when using plugin in settings
+    id("co.elastic.docker-base")
+    id("co.elastic.vault")
+    id("co.elastic.cli.jfrog")
 }
 
 vault {
