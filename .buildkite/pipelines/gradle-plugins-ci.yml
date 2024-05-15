@@ -3,7 +3,7 @@ agents:
   provider: "gcp"
   image: family/cloud-ubuntu-2204
   diskSizeGb: 80
-  machineType: 'custom-4-12288'
+  machineType: 'custom-6-18432'
 steps:
   - label: ":pipeline: Gradle Check"
     commands:
