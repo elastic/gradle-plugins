@@ -1,9 +1,8 @@
 import java.net.URL
 
 plugins {
-    val pluginVersion = "0.0.7"
-    id("co.elastic.docker-base").version(pluginVersion)
-    id("co.elastic.elastic-conventions").version(pluginVersion)
+    id("co.elastic.docker-base")
+    id("co.elastic.elastic-conventions")
 }
 
 dockerBaseImage {
