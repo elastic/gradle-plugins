@@ -7,7 +7,7 @@ agents:
 steps:
   - label: ":pipeline: Gradle Check"
     commands:
-      - "./gradlew check"
+      - "./gradlew check --continue"
   - label: ":pipeline: Build examples: docker-full"
     commands:
       - "cd examples/docker-full && ../../gradlew dockerBuild"
