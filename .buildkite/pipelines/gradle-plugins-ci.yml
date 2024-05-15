@@ -13,4 +13,4 @@ steps:
       - "cd examples/docker-full && ../../gradlew dockerBuild"
   - label: ":pipeline: Build examples: docker-elastic"
     commands:
-      - "cd examples/docker-elastic && ../../gradlew dockerBuild"
+      - "cd examples/docker-elastic && ../../gradlew dockerComponentImageLocalImport"

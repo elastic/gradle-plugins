@@ -3,6 +3,7 @@ import java.net.URL
 plugins {
     id("co.elastic.docker-base")
     id("co.elastic.elastic-conventions")
+    id("co.elastic.docker-component")
 }
 
 dockerBaseImage {
@@ -40,4 +41,10 @@ dockerBaseImage {
     setUser("foobar")                    // configure the default user of the image
 
     run("whoami > /home/foo/whoami")
+}
+
+dockerComponentImage {
+    buildAll {
+        from(project)
+    }
 }

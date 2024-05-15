@@ -46,6 +46,7 @@ import java.util.stream.Stream;
 
 import static co.elastic.gradle.AssertContains.assertContains;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     
@@ -376,6 +377,10 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void testLockfileWithEmulation() throws IOException {
+        assumeTrue(
+                Architecture.current().equals(Architecture.AARCH64),
+                "Test will be skipped unless running on ARM"
+        );
         helper.buildScript("""
         import java.net.URL
             plugins {
