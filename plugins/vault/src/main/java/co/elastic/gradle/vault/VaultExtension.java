@@ -20,6 +20,7 @@ package co.elastic.gradle.vault;
 
 import co.elastic.gradle.vault.VaultAuthenticationExtension.VaultTokenFile;
 import com.bettercloud.vault.Vault;
+import com.bettercloud.vault.VaultException;
 import com.bettercloud.vault.response.LogicalResponse;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
@@ -38,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.*;
@@ -86,7 +88,7 @@ abstract public class VaultExtension implements ExtensionAware {
         return getProviderFactory().provider(() -> {
             logger.lifecycle("Reading " + path + " from vault");
             final Vault driver = getDriver();
-            final LogicalResponse response = driver.logical().read(path);
+            LogicalResponse response = getDataFromVault(path);
             final Map<String, String> data = response.getData();
             if (data.isEmpty()) {
                 throw new GradleException("No data was available in vault path " + path);
@@ -107,12 +109,8 @@ abstract public class VaultExtension implements ExtensionAware {
 
         return getProviderFactory().provider(() -> {
             logger.lifecycle("Reading " + path + " from vault (cached value not available or expired)");
-            final Vault driver = getDriver();
-            final LogicalResponse response = driver.logical().read(path);
-            final Map<String, String> data = response.getData();
-            if (data.isEmpty()) {
-                throw new GradleException("No data was available in vault path " + path);
-            }
+
+            LogicalResponse response = getDataFromVault(path);
 
             writeCacheDir(
                     leaseExpiration,
@@ -125,12 +123,38 @@ abstract public class VaultExtension implements ExtensionAware {
                             )
                     )
             );
+            final Map<String, String> data = response.getData();
             data.forEach((key, value) -> {
                 writeCacheDir(dataPath.resolve(key), value);
             });
 
             return data;
         });
+    }
+
+    protected LogicalResponse getDataFromVault(String path) throws VaultException {
+        final Vault driver = getDriver();
+        LogicalResponse response = null;
+        for (int retries = 0; retries < 5; retries++) {
+            response = driver.logical().read(path);
+            if (response.getData().isEmpty()) {
+                if (retries == 4) { // Check if it's the last retry
+                    throw new GradleException("No data was available in vault path " + path);
+                }
+            } else {
+                break;
+            }
+
+            try {
+                // Exponential back-off: 2^(retries + 2) * 500 milliseconds (e.g., 2000 ms, 4000 ms, 8000 ms, ...)
+                long backOffTime = (long) Math.pow(2, retries + 2) * 500;
+                TimeUnit.MILLISECONDS.sleep(backOffTime);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new GradleException("Retry interrupted for vault path " + path, e);
+            }
+        }
+        return response;
     }
 
     private Map<String, String> tryReadCache(Path leaseExpiration, Path data) {

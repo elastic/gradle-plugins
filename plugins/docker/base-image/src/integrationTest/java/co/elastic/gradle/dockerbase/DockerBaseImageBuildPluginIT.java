@@ -139,6 +139,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                                                             
                 plugins {
                    id("co.elastic.vault")
+                   id("co.elastic.cli.jfrog")
                    id("co.elastic.docker-base").apply(false)
                 }
                 vault {
@@ -151,6 +152,13 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                       }
                 }
                 val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
                                 
                 subprojects {
                     apply(plugin = "co.elastic.docker-base")
