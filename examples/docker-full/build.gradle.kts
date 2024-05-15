@@ -1,7 +1,7 @@
 import java.net.URL
 
 plugins {
-    val pluginVersion = "0.0.6"
+    val pluginVersion = "0.0.7"
     id("co.elastic.docker-base").version(pluginVersion)
     id("co.elastic.vault").version(pluginVersion)
     id("co.elastic.cli.jfrog").version(pluginVersion)
