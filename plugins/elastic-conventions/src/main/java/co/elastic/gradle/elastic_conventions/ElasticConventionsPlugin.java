@@ -142,19 +142,23 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         plugins.withType(BaseCliPlugin.class, unused -> {
             plugins.apply(VaultPlugin.class);
             final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
-            final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);
-            var listOfNames = new ArrayList<String>();
-            for (ExtensionsSchema.ExtensionSchema extensionSchema : cliExtension.getExtensions().getExtensionsSchema()) {
-                if (extensionSchema.getPublicType().isAssignableFrom(BaseCLiExtension.class)) {
-                    listOfNames.add(extensionSchema.getName());
+
+            target.afterEvaluate(t -> {
+                final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);
+
+                var listOfNames = new ArrayList<String>();
+                for (ExtensionsSchema.ExtensionSchema extensionSchema : cliExtension.getExtensions().getExtensionsSchema()) {
+                    if (extensionSchema.getPublicType().isAssignableFrom(BaseCLiExtension.class)) {
+                        listOfNames.add(extensionSchema.getName());
+                    }
                 }
-            }
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
-            for (String name : listOfNames) {
-                final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
-                extension.getUsername().set(creds.get("username"));
-                extension.getPassword().set(creds.get("plaintext"));
-            }
+                var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
+                for (String name : listOfNames) {
+                    final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
+                    extension.getUsername().set(creds.get("username"));
+                    extension.getPassword().set(creds.get("plaintext"));
+                }
+            });
         });
     }
 
