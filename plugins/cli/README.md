@@ -32,7 +32,7 @@ Parameters are self-explanatory. The pattern is interpreted as an
 [Ivy pattern](https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:defining_custom_pattern_layout_for_an_ivy_repository)
 and appended to the base URL to get the tool at a specific version.
 
-The tools are linked to `gradle/bin` and can be used outside Gradle too.
+The tools are linked to `.gradle/bin` and can be used outside Gradle too.
 
 Base URLs default to locations in the elastic Artifactory instance and require credentials to use.
 
@@ -50,7 +50,7 @@ plugins {
    id("co.elastic.cli.snyk")
 }
 vault {
-      address.set("https://secrets.elastic.co:8200")
+      address.set("https://vault-ci-prod.elastic.dev")
       auth {
         ghTokenFile()
         ghTokenEnv()
@@ -60,7 +60,7 @@ vault {
 }
 cli {
     snyk {
-       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
        username.set(credentials["username"])
        password.set(credentials["plaintext"])
     }
@@ -149,7 +149,7 @@ import co.elastic.gradle.snyk.SnykCLIExecTask
 tasks.withType<SnykCLIExecTask> {
     environment(
         "SNYK_TOKEN",
-        vault.readAndCacheSecret("secret/cloud-team/cloud-ci/snyk_api_key").get()["apikey"].toString()
+        vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
     )
 }
 ```

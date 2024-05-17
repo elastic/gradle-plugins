@@ -13,3 +13,14 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+gradlePlugin {
+    plugins {
+        create("co.elastic.docker") {
+            id = "co.elastic.docker"
+            displayName = "Elastic Docker Library"
+            description = "Library of shared tools between docker plugins"
+            implementationClass = "co.elastic.gradle.utils.docker.DontApplyPlugin"
+        }
+    }
+}

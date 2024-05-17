@@ -60,17 +60,14 @@ if [ -z "${JAVA_HOME_OVERRIDE}" ]; then
     fi
     # extract and deal with different naming conventions on OSX
     if [ $JDK_OS = "mac" ]; then
-      if [ $JDK_ARCH = "x64" ]; then
-        tar -xzf $JDK_DOWNLOAD_FILE --strip-components=3 -C "${JAVA_HOME}/"
-      else
-        tar -xzf $JDK_DOWNLOAD_FILE --strip-components=1 -C "${JAVA_HOME}/"
-      fi
+      tar -xzf $JDK_DOWNLOAD_FILE --strip-components=3 -C "${JAVA_HOME}/"
     else
       tar -xzf $JDK_DOWNLOAD_FILE --strip-components=1 -C "${JAVA_HOME}/"
     fi
     rm -f $JDK_DOWNLOAD_FILE
     chmod -R u+w,g+w "${JAVA_HOME}"
     echo "Installed JDK from ${JDK_DOWNLOAD_URL} into ${JAVA_HOME}"
+
   fi
 else
   JAVA_HOME="${JAVA_HOME_OVERRIDE}"

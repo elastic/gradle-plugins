@@ -145,7 +145,11 @@ public class DockerComponentPlugin implements Plugin<Project> {
                     task.setDescription("Runs a snyk test on the resulting locally imported image." +
                                         " The task fails if vulnerabilities are discovered.");
                     task.dependsOn(localImport);
-                    task.doFirst(t -> task.setArgs(Arrays.asList("container", "test", localImport.get().getTag().get())));
+                    task.doFirst(t -> {
+                        final String tagToScan = localImport.get().getTag().get();
+                        task.getLogger().lifecycle("Scanning `{}` with snyk", tagToScan);
+                        task.setArgs(Arrays.asList("container", "test", "--platform=linux/" + Architecture.current().dockerName(), tagToScan));
+                    });
                     // snyk only scans the image of the platform it's running on and would fail if one is not available.
                     // luckily a non-existing image can't have any vulnerabilities, so we can just skip it
                     task.onlyIf(
@@ -165,7 +169,7 @@ public class DockerComponentPlugin implements Plugin<Project> {
                             "The task creates a report in Snyk and alwasy suceeds."
                     );
                     task.doFirst(t ->
-                            task.setArgs(Arrays.asList("container", "monitor", pushManifestList.get().getTag().get()))
+                            task.setArgs(Arrays.asList("container", "monitor", "--platform=linux/" + Architecture.current().dockerName(), pushManifestList.get().getTag().get()))
                     );
                     task.onlyIf(
                             unused -> dockerComponentImageBuild.get().getInstructions().keySet().get()

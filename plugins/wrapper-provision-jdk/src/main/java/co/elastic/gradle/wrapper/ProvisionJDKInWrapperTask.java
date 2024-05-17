@@ -85,18 +85,13 @@ abstract public class ProvisionJDKInWrapperTask extends DefaultTask {
                     gradlewNewPath,
                     gradlew.map(line -> {
                         if (line.startsWith("CLASSPATH=")) {
-                            final String downloadUrl = "https://api.adoptium.net/v3/binary/version/" +
+                            var javaMajor = getJavaReleaseName().get().split("\\.")[0];
+                            final String downloadUrl = "" +
                                                        String.format(
-                                                               "%s/%s/%s/jdk/hotspot/normal/eclipse?project=jdk",
-                                                               URLEncoder.encode("jdk-" + getJavaReleaseName().get(), StandardCharsets.UTF_8),
-                                                               OS.current().map(Map.of(
-                                                                       OS.LINUX, "linux",
-                                                                       OS.DARWIN, "mac"
-                                                               )),
-                                                               Architecture.current().map(Map.of(
-                                                                       Architecture.X86_64, "x64",
-                                                                       Architecture.AARCH64, "aarch64"
-                                                               ))
+                                                               "https://github.com/adoptium/temurin%s-binaries/releases/download/jdk-%s/OpenJDK%sU-jdk_${JDK_ARCH}_${JDK_OS}_hotspot_${JDK_VERSION}.tar.gz",
+                                                               javaMajor,
+                                                               URLEncoder.encode(getJavaReleaseName().get().replace("_", "+"), StandardCharsets.UTF_8),
+                                                               javaMajor
                                                        );
                             String replaced = getCodeToDownloadJDK()
                                     .replace("%{JDK_VERSION}%", getJavaReleaseName().get())

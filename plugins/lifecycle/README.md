@@ -74,7 +74,7 @@ Using the synced binary directories
 Run Gradle to create the bin dir and add it to your path:
 ```shell
 ./gradlew syncBinDir  # make sure the bin dir is up to date
-export PATH=$PWD/gradle/bin:$PATH # Add the bin dir to the path
+export PATH=$PWD/.gradle/bin:$PATH # Add the bin dir to the path
 some-gradle-provisioned-tool --help
 ```
 

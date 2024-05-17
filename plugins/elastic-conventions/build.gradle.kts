@@ -21,7 +21,7 @@ dependencies {
     implementation(project(":libs:utils"))
     implementation(project(":plugins:lifecycle"))
     implementation(project(":plugins:vault"))
-    implementation(project(":plugins:cli:base"))
+    implementation(project(":plugins:cli:cli-lib"))
     implementation(project(":plugins:cli:snyk"))
     implementation(project(":plugins:docker:base-image"))
 

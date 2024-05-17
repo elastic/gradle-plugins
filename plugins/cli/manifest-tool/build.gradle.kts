@@ -11,7 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation(project(":plugins:cli:base"))
+    implementation(project(":plugins:cli:cli-lib"))
     implementation(project(":libs:utils"))
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:vault"))

@@ -39,12 +39,12 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         helper.settings("""
                 plugins {
                     id("co.elastic.elastic-conventions")
-                }    
+                }
                 """);
         helper.buildScript("""
                 plugins {
                     id("co.elastic.elastic-conventions")
-                }    
+                }
                 """);
 
         final BuildResult result = gradleRunner
@@ -63,8 +63,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                    }
                    
                    val vault = the<VaultExtension>()
-                   logger.lifecycle("settings secret is {}", vault.readSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
-                   logger.lifecycle("settings secret cached is {}", vault.readAndCacheSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("settings secret is {}", vault.readSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("settings secret cached is {}", vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
                 """, VaultExtension.class.getName())
         );
         helper.buildScript(String.format("""
@@ -74,8 +74,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                        id("co.elastic.elastic-conventions")
                    }
                                   
-                   logger.lifecycle("build secret is {}", vault.readSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
-                   logger.lifecycle("build secret cached is {}", vault.readAndCacheSecret("secret/cloud-team/cloud-ci/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("build secret is {}", vault.readSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
+                   logger.lifecycle("build secret cached is {}", vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/gradle-vault-integration").get()["key1"])
                 """, VaultExtension.class.getName())
         );
 
@@ -116,14 +116,14 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
         System.out.println(result.getOutput());
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-aarch64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/manifest-tool-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test
@@ -154,7 +154,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal")
                 .buildAndFail();
 
-        assertContains(scanResult.getOutput(), "Tested 98 dependencies for known issues,");
+        assertContains(scanResult.getOutput(), "[snyk] Tested ");
     }
 
 

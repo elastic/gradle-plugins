@@ -41,7 +41,7 @@ public class SnykPlugin implements Plugin<Project> {
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
                 .create("snyk", BaseCLiExtension.class);
-        extension.getVersion().convention("v1.856.0");
+        extension.getVersion().convention("v1.1290.0");
         try {
             extension.getBaseURL()
                     .convention(new URL("https://artifactory.elastic.dev/artifactory/snyk-release-proxy"));

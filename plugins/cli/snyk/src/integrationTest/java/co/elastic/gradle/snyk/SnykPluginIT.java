@@ -36,7 +36,7 @@ class SnykPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.cli.snyk")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -46,7 +46,7 @@ class SnykPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     snyk {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -60,9 +60,9 @@ class SnykPluginIT extends TestkitIntegrationTest {
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "snyk").build();
 
-        assertContains(result.getOutput(), "[snyk] 1.856.0 (standalone)");
+        assertContains(result.getOutput(), "[snyk] 1.1290.0");
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/snyk"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/snyk"));
     }
 
     @Test
@@ -86,9 +86,9 @@ class SnykPluginIT extends TestkitIntegrationTest {
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "snyk").build();
 
-        assertContains(result.getOutput(), "[snyk] 1.856.0 (standalone)");
+        assertContains(result.getOutput(), "[snyk] 1.1290.0");
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/snyk"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/snyk"));
     }
 
 }

@@ -36,7 +36,7 @@ public class JFrogPluginIT extends TestkitIntegrationTest {
                    id("co.elastic.cli.jfrog")
                 }
                 vault {
-                      address.set("https://secrets.elastic.co:8200")
+                      address.set("https://vault-ci-prod.elastic.dev")
                       auth {
                         ghTokenFile()
                         ghTokenEnv()
@@ -46,7 +46,7 @@ public class JFrogPluginIT extends TestkitIntegrationTest {
                 }
                 cli {
                     jfrog {
-                       val credentials = vault.readAndCacheSecret("secret/cloud-team/cloud-ci/artifactory_creds").get()
+                       val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
                        username.set(credentials["username"])
                        password.set(credentials["plaintext"])
                     }
@@ -60,10 +60,10 @@ public class JFrogPluginIT extends TestkitIntegrationTest {
 
         assertContains(result.getOutput(), "2.16.4");
 
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-x86_64"));
-        assertPathExists(helper.projectDir().resolve("gradle/bin/jfrog-cli-linux-aarch64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
     }
 
 }

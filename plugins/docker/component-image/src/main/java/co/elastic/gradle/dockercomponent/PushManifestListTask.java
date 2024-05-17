@@ -125,8 +125,10 @@ abstract public class PushManifestListTask extends ManifestToolExecTask {
             final String output;
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 result = getExecOperations().exec(spec -> {
-                    spec.setEnvironment(Collections.singletonMap(
-                            "HOME", System.getProperty("user.home")
+                    spec.setEnvironment(Map.of(
+                            "HOME", System.getProperty("user.home"),
+                            // required for docker-credential-desktop
+                            "PATH", "/usr/local/bin/"
                     ));
                     spec.setExecutable(getExecutable());
                     spec.setArgs(Arrays.asList(
