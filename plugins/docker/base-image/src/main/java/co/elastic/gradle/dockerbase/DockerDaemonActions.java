@@ -19,6 +19,7 @@
 
 package co.elastic.gradle.dockerbase;
 
+import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.instruction.*;
@@ -127,6 +128,24 @@ public abstract class DockerDaemonActions {
                     ).flatMap(
                             Function.identity()
                     ).collect(Collectors.toList());
+                    case WOLFI -> {
+                        final String archDir = Architecture.current().name().toLowerCase(Locale.ROOT);
+                        yield Stream.of(
+                                Stream.of("cd /var/packages-from-gradle/ && " +
+                                          "mkdir '" + archDir + "' && " +
+                                          "mv *.apk '" + archDir + "' &&" +
+                                          "mv __META__Packages* '" + archDir + "/APKINDEX.tar.gz' &&" +
+                                          "apk update --allow-untrusted && find /var/packages-from-gradle").filter(s -> requiresCleanLayers),
+                                // When building the lock-file we do NOT allow untrusted sources
+                                Stream.of(command).filter(s -> !requiresCleanLayers),
+                                // When we're building the actual image, everything is coming from Gradle, so it's safe
+                                // and already checked (as long as dependency verification is enabled)
+                                // The package db itself is not signed, so we need to allow untrusted
+                                Stream.of(command.replace("apk add", "apk add --allow-untrusted")).filter(s -> requiresCleanLayers)
+                        ).flatMap(
+                                Function.identity()
+                        ).collect(Collectors.toList());
+                    }
                 }
         );
     }
@@ -145,6 +164,7 @@ public abstract class DockerDaemonActions {
                                 case UBUNTU, DEBIAN -> "apt-get install -y " + packagesToInstall;
                                 case CENTOS -> "yum install --setopt=skip_missing_names_on_install=False -y " +
                                                 packagesToInstall;
+                                case WOLFI -> "apk add " + packagesToInstall;
                             }
                     ),
                     // And we restore the user after that
@@ -219,13 +239,16 @@ public abstract class DockerDaemonActions {
                 "readonly,target=" + buildable.getDockerEphemeralMount().get(), getDockerEphemeralDir()
         );
         if (buildable.getIsolateFromExternalRepos().get()) {
-            result.put("readonly,target=" + switch (buildable.getOSDistribution().get()) {
+            result.put("readonly,target=" +
+                    switch (buildable.getOSDistribution().get()) {
                         case DEBIAN, UBUNTU -> "/etc/apt/sources.list";
                         case CENTOS -> "/etc/yum.repos.d";
+                        case WOLFI -> "/etc/apk/repositories";
                     },
                     switch (buildable.getOSDistribution().get()) {
                         case DEBIAN, UBUNTU -> getRepositoryEphemeralDir().resolve("sources.list");
                         case CENTOS -> getRepositoryEphemeralDir();
+                        case WOLFI -> getRepositoryEphemeralDir().resolve("repositories");
                     }
             );
             result.put("readwrite,target=/var/packages-from-gradle", getOSPackagesDir());
@@ -258,7 +281,8 @@ public abstract class DockerDaemonActions {
 
         Files.createDirectories(listsEphemeralDir);
 
-        final URL url = new URL("file:///var/packages-from-gradle");
+        final String path = "/var/packages-from-gradle";
+        final URL url = new URL("file://" + path);
         final String name = "gradle-configuration";
         try {
             Files.write(
@@ -266,6 +290,7 @@ public abstract class DockerDaemonActions {
                             switch (buildable.getOSDistribution().get()) {
                                 case CENTOS -> name + ".repo";
                                 case DEBIAN, UBUNTU -> "sources.list";
+                                case WOLFI -> "repositories";
                             }),
                     switch (buildable.getOSDistribution().get()) {
                         case CENTOS -> List.of(
@@ -277,6 +302,9 @@ public abstract class DockerDaemonActions {
                         );
                         case DEBIAN, UBUNTU -> List.of(
                                 "deb [trusted=yes] " + url + " /"
+                        );
+                        case WOLFI -> List.of(
+                                path
                         );
                     }
             );

@@ -114,6 +114,12 @@ public abstract class BaseImageExtension implements ExtensionAware {
     }
 
     @SuppressWarnings("unused")
+    public void fromWolfi(String image, String version) {
+        getOSDistribution().set(OSDistribution.WOLFI);
+        from(image, version);
+    }
+
+    @SuppressWarnings("unused")
     public void fromUbuntu(String image, String version) {
         getOSDistribution().set(OSDistribution.UBUNTU);
         from(image, version);

@@ -200,13 +200,17 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
                 target.getRepositories().ivy(repo -> {
                     repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
+
                     repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
+                    final URL repoURL;
                     try {
-                        repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
+                        repoURL = new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", ""));
                     } catch (MalformedURLException e) {
                         throw new IllegalStateException(e);
                     }
-                    // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
+                    repo.setUrl(repoURL);
+
+
                     repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision].[ext]"));
                     repo.content(content -> content.onlyForConfigurations(osPackageConfiguration.getName()));
                     if (credentialsAction != null) {
@@ -228,7 +232,11 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                         final String type = extension.getOSDistribution().get()
                                                 .name().toLowerCase(Locale.ROOT);
                                         final Map<String, String> dependencyNotation = Map.of(
-                                                "group", type,
+                                                "group", type + (
+                                                        extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
+                                                                "/" + Architecture.current().name().toLowerCase(Locale.ROOT)  :
+                                                                ""
+                                                        ),
                                                 "name", pkg.name(),
                                                 // Gradle has trouble dealing with : in the version, so we rename the
                                                 // packages to have . instead and use the same here
@@ -238,9 +246,11 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                                     case CENTOS -> pkg.version() + "-" +
                                                                    pkg.release() + "." +
                                                                    pkg.architecture();
+                                                    case WOLFI -> pkg.version();
                                                 },
                                                 "ext", switch (extension.getOSDistribution().get()) {
                                                     case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
+                                                    case WOLFI -> pkg.name().startsWith("__META__") ? "gz" : "apk";
                                                     case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
                                                 }
                                         );

@@ -164,6 +164,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                                         switch (getOSDistribution().get()) {
                                             case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
                                             case CENTOS -> "yum -y upgrade";
+                                            case WOLFI -> "apk upgrade";
                                         }
                                 )
                         )
@@ -220,7 +221,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                         "docker", "run", "--rm",
                         "-v", archiveScript + ":/mnt/" + ARCHIVE_PACKAGES_NAME,
                         "-v", getJFrogCli().get().getAsFile().toPath() + ":/mnt/jfrog-cli",
-                        "--entrypoint", "/bin/bash",
+                        "--entrypoint",  getOSDistribution().get().equals(OSDistribution.WOLFI) ? "/bin/sh" : "/bin/bash",
                         "-eJFROG_CLI_ARGS=" + jfrogCLiArgs,
                         uuid,
                         "/mnt/" + ARCHIVE_PACKAGES_NAME
@@ -259,13 +260,17 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                     new Packages(
                             // Keep the latest version only. CentOS can keep multiple versions installed, e.g. kernel-core
                             Packages.getUniquePackagesWithMaxVersion(parser.getRecords().stream()
-                                    .map(record -> new UnchangingPackage(
-                                            record.get(0),
-                                            record.get(1),
-                                            record.get(2),
-                                            record.get(3)
-                                    ))
-                                    .toList()
+                                    .map(record -> {
+                                        if (record.size() < 4) {
+                                            throw new RuntimeException("CSV line from script not valid: " + record.get(0));
+                                        }
+                                        return new UnchangingPackage(
+                                                record.get(0),
+                                                record.get(1),
+                                                record.get(2),
+                                                record.get(3)
+                                        );
+                                    }).toList()
                             )
                     )
             );

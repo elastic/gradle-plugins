@@ -22,6 +22,6 @@ public enum OSDistribution {
 
     CENTOS,
     DEBIAN,
-    UBUNTU
-
+    UBUNTU,
+    WOLFI
 }
