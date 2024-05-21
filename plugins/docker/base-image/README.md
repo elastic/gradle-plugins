@@ -44,7 +44,7 @@ Since the plugin interacts with the package manager inside the image the followi
 by using the appropriate DSL method:
  - use `fromUbuntu(...)` for Ubuntu 
  - use `fromWolfi(...)` for Chainguard Wolfi (uses apk, alpine images might work but are not tested)
- - use `fromCentos()`for CentOS - deprecated and untested 
+ - use `fromCentos()` for CentOS - deprecated and untested 
 
 Usage
 -----
