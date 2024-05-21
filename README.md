@@ -1,3 +1,5 @@
+[![Build status](https://badge.buildkite.com/5115f9893efcdf7638d97d664feed26b10af3a2eb04ea05aa3.svg)](https://buildkite.com/elastic/gradle-plugins-ci) 
+
 About
 =====
 
