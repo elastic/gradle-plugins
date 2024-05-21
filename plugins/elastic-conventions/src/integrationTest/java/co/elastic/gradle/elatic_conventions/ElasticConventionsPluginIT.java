@@ -95,9 +95,9 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                    import %s
                    import %s
                    plugins {
+                       id("co.elastic.elastic-conventions")
                        id("co.elastic.cli.jfrog")
                        id("co.elastic.cli.manifest-tool")
-                       id("co.elastic.elastic-conventions")
                    }
                                   
                    val jfrog by tasks.registering(JFrogCliExecTask::class)
@@ -111,7 +111,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "check")
+                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies")
                 .build();
 
         System.out.println(result.getOutput());
