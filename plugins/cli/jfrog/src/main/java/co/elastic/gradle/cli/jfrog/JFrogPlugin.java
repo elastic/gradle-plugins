@@ -37,7 +37,7 @@ import java.util.Arrays;
 
 public abstract class JFrogPlugin implements Plugin<Project> {
 
-    public static final String EXTENSION_NAME = "jfrog";
+    private static final String EXTENSION_NAME = "jfrog";
 
     @Override
     public void apply(Project target) {
