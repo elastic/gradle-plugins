@@ -195,7 +195,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
-    public void withImageBuild() throws IOException {
+    public void withImageBuildAndLast() throws IOException {
         Files.copy(
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
                 helper.projectDir().resolve("docker-base-image.lock")
@@ -225,5 +225,35 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         assertContains(scanResult.getOutput(), "[snyk] Tested ");
     }
 
+    @Test
+    public void withImageBuildAndFirst() throws IOException {
+        Files.copy(
+                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
+                helper.projectDir().resolve("docker-base-image.lock")
+        );
+
+        helper.buildScript("""
+                   plugins {
+                       id("co.elastic.elastic-conventions")
+                       id("co.elastic.docker-base")
+                       id("co.elastic.docker-component")                       
+                   }
+                   
+                   dockerBaseImage {
+                       fromUbuntu("ubuntu", "20.04")
+                   }
+                   dockerComponentImage {
+                       buildAll {
+                            from(project)
+                       }
+                   }
+                """
+        );
+
+        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal")
+                .buildAndFail();
+
+        assertContains(scanResult.getOutput(), "[snyk] Tested ");
+    }
 
 }
