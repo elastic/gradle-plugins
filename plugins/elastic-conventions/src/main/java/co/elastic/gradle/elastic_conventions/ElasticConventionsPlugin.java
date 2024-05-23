@@ -109,8 +109,11 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         plugins.withType(VaultPlugin.class, unused ->
                 configureVaultPlugin(target.getExtensions().getByType(VaultExtension.class))
         );
+        target.getRootProject().getPlugins().withType(VaultPlugin.class, unused ->
+                configureVaultPlugin(target.getRootProject().getExtensions().getByType(VaultExtension.class))
+        );
 
-        configureCliPlugins(target, plugins);
+        configureCliPlugins(target);
 
 
 
@@ -138,10 +141,11 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         });
     }
 
-    private void configureCliPlugins(Project target, PluginContainer plugins) {
-        plugins.withType(BaseCliPlugin.class, unused -> {
-            plugins.apply(VaultPlugin.class);
-            final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+    private void configureCliPlugins(Project target) {
+        // BaseCli project works on the root project, need to configure it there
+        target.getRootProject().getPlugins().withType(BaseCliPlugin.class, unused -> {
+            target.getRootProject().getPlugins().apply(VaultPlugin.class);
+            final VaultExtension vault = target.getRootProject().getExtensions().getByType(VaultExtension.class);
 
             target.afterEvaluate(t -> {
                 final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);

@@ -37,12 +37,14 @@ import java.util.Arrays;
 
 public abstract class JFrogPlugin implements Plugin<Project> {
 
+    public static final String EXTENSION_NAME = "jfrog";
+
     @Override
     public void apply(Project target) {
         target.getPluginManager().apply(BaseCliPlugin.class);
         final BaseCLiExtension extension = target.getExtensions().getByType(CliExtension.class)
                 .getExtensions()
-                .create("jfrog", BaseCLiExtension.class);
+                .create(EXTENSION_NAME, BaseCLiExtension.class);
         extension.getVersion().convention("2.16.4");
         extension.getPattern().convention("[organisation]/[module]/v2-jf/[revision]/[module]-[classifier]/jf");
         try {
