@@ -5,6 +5,7 @@ import co.elastic.gradle.TestkitIntegrationTest;
 import org.apache.commons.io.IOUtils;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
+import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,8 +41,11 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
         helper.writeFile("image_content/foo.txt", "sample content");
         writeSimpleBuildScript(helper, baseImages);
         final BuildResult lockfileResult = runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+
         System.out.println(lockfileResult.getOutput());
         runGradleTask(gradleRunner, "dockerLocalImport");
+
+
 
         System.out.println("Running verification script...");
         Files.copy(
@@ -83,6 +87,12 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
         if (imagesInDaemonAfterClean.contains(expectedLocalTag)) {
             fail("Expected " + expectedLocalTag + " to be not be in the daemon after clean but it was");
         }
+
+        // clean to test that the next run takes the result from cache
+        runGradleTask(gradleRunner, "clean");
+        final BuildResult localImportResult = runGradleTask(gradleRunner, "dockerLocalImport");
+        System.out.println(localImportResult.getOutput());
+        assertEquals(TaskOutcome.FROM_CACHE, Objects.requireNonNull(localImportResult.task(":dockerBaseImageBuild")).getOutcome());
     }
 
     private Set<String> getImagesInDaemon() throws IOException {
@@ -105,9 +115,17 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
     private void writeSimpleBuildScript(GradleTestkitHelper helper, String baseImages) {
         final String[] from = baseImages.split(":");
         assertEquals(2, from.length);
+        helper.settings("""
+                buildCache {
+                    local {
+                        isEnabled = true
+                    }
+                }
+                """);
         helper.buildScript(String.format("""
                 import java.net.URL
                 plugins {
+                   id("base")
                    id("co.elastic.docker-base")
                    id("co.elastic.cli.jfrog")
                    id("co.elastic.vault")
@@ -128,6 +146,7 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
                         password.set(creds["plaintext"])
                     }
                 }
+            
                 dockerBaseImage {
                     dockerTagLocalPrefix.set("gradle-test-local")
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
