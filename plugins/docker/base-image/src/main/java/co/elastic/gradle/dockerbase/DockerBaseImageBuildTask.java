@@ -242,7 +242,7 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
     @Input
     public abstract Property<Long> getMaxOutputSizeMB();
 
-    @LocalState
+    @Internal
     @Override
     public abstract DirectoryProperty getWorkingDirectory();
 
