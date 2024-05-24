@@ -295,8 +295,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     @Test
     public void testLockfileWithEmulation() throws IOException {
         assumeTrue(
-                Architecture.current().equals(Architecture.AARCH64),
-                "Test will be skipped unless running on ARM"
+                System.getenv().getOrDefault("BUILDKITE", "false").equals("false"),
+                "Test will be skipped in CI because there's no emulation support"
         );
         helper.buildScript("""
         import java.net.URL
