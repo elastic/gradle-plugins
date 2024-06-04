@@ -75,6 +75,7 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 plugins {
                    id("co.elastic.docker-component")
                    id("co.elastic.vault")
+                   
                 }
                 project.version = "myversion"
                 vault {
