@@ -37,12 +37,9 @@ public class TestkitIntegrationTest {
         gradleRunner = getGradleRunner(testProjectDir);
     }
 
-    protected GradleRunner getGradleRunner(Path testProjectDir) throws IOException {
-        final Path testKitDir = testProjectDir.resolve("test-kit-dir");
-        Files.createDirectories(testKitDir);
+    protected GradleRunner getGradleRunner(Path testProjectDir) {
         final GradleRunner gradleRunner = GradleRunner.create()
                 .withProjectDir(testProjectDir.toFile())
-                .withTestKitDir(testKitDir.toFile())
                 .withPluginClasspath();
         return gradleRunner;
     }
