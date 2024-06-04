@@ -18,7 +18,9 @@
  */
 package co.elastic.gradle;
 
+import org.gradle.internal.impldep.org.apache.commons.io.FileUtils;
 import org.gradle.testkit.runner.GradleRunner;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,16 +32,31 @@ public class TestkitIntegrationTest {
 
     protected GradleTestkitHelper helper;
     protected GradleRunner gradleRunner;
+    protected Path gradleHome;
 
     @BeforeEach
     void setUp(@TempDir Path testProjectDir) throws IOException {
         helper = getHelper(testProjectDir);
         gradleRunner = getGradleRunner(testProjectDir);
+        gradleHome = Files.createTempDirectory("gradle-home");
     }
 
-    protected GradleRunner getGradleRunner(Path testProjectDir) {
+    @AfterEach
+    void tearDown() throws IOException {
+        try {
+            FileUtils.deleteDirectory(gradleHome.toFile());
+        } catch (IOException e) {
+            // Best effort because
+            System.err.println("Failed to remove temporary GRADLE_HOME " + e.getMessage());
+        }
+    }
+
+    protected GradleRunner getGradleRunner(Path testProjectDir) throws IOException {
+        final Path testKitDir = testProjectDir.resolve("test-kit-dir");
+        Files.createDirectories(testKitDir);
         final GradleRunner gradleRunner = GradleRunner.create()
                 .withProjectDir(testProjectDir.toFile())
+                .withTestKitDir(gradleHome.toFile())
                 .withPluginClasspath();
         return gradleRunner;
     }
