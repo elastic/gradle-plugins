@@ -52,7 +52,6 @@ public class ShellcheckPlugin implements Plugin<Project> {
             BaseCliPlugin.addDownloadRepo(target, extension);
             Arrays.stream(OS.values()).forEach(os ->
                     Arrays.stream(Architecture.values())
-                            .filter(arch -> !(OS.current().equals(OS.DARWIN) && arch.equals(Architecture.AARCH64)))
                             .forEach(arch -> {
                                         BaseCliPlugin.addDependency(
                                                 target,

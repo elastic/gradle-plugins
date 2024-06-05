@@ -1,16 +1,64 @@
 # gradle-plugins-ci.yml 
-agents:
-  provider: "gcp"
-  image: family/cloud-ubuntu-2204
-  diskSizeGb: 80
-  machineType: 'custom-6-18432'
+
 steps:
-  - label: ":pipeline: Gradle Check"
-    commands:
-      - "./gradlew check --continue"
-  - label: ":pipeline: Build examples: docker-full"
-    commands:
-      - "cd examples/docker-full && ../../gradlew dockerBuild"
-  - label: ":pipeline: Build examples: docker-elastic"
-    commands:
-      - "cd examples/docker-elastic && ../../gradlew dockerComponentImageLocalImport"
+  - group: "amd64 Tests"
+    steps:
+      - label: ":pipeline: :gcloud: Gradle Check"
+        commands:
+          - "./gradlew check --continue"
+        agents:
+          provider: "gcp"
+          image: family/cloud-ubuntu-2204
+          diskSizeGb: 80
+          machineType: 'custom-6-18432'
+        plugins:
+          - elastic/vault-docker-login#v0.3.0:
+              secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
+      - label: ":pipeline: :gcloud: Build examples: docker-full"
+        commands:
+          - "cd examples/docker-full && ../../gradlew dockerBuild"
+        agents:
+          provider: "gcp"
+          image: family/cloud-ubuntu-2204
+          diskSizeGb: 80
+          machineType: 'custom-2-6144'
+      - label: ":pipeline: :gcloud: Build examples: docker-elastic"
+        commands:
+          - "cd examples/docker-elastic && ../../gradlew dockerComponentImageLocalImport"
+        agents:
+          provider: "gcp"
+          image: family/cloud-ubuntu-2204
+          diskSizeGb: 80
+          machineType: 'custom-6-6144'
+  - group: "arm64 Test"
+    steps:
+      - label: ":pipeline: :aws-logo:  Gradle Check"
+        commands:
+          - "./gradlew check --continue"
+        agents:
+          provider: "aws"
+          diskSizeGb: 200
+          instanceType: m6g.4xlarge
+          imagePrefix: cloud-ubuntu-2204-aarch64
+          diskName: "/dev/xvda"
+        plugins:
+          - elastic/vault-docker-login#v0.3.0:
+              secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
+      - label: ":pipeline: :aws-logo:  Build examples: docker-full"
+        commands:
+          - "cd examples/docker-full && ../../gradlew dockerBuild"
+        agents:
+          provider: "aws"
+          diskSizeGb: 200
+          instanceType: m6g.2xlarge
+          imagePrefix: cloud-ubuntu-2204-aarch64
+          diskName: "/dev/xvda"
+      - label: ":pipeline: :aws-logo:  Build examples: docker-elastic"
+        commands:
+          - "cd examples/docker-elastic && ../../gradlew dockerComponentImageLocalImport"
+        agents:
+          provider: "aws"
+          diskSizeGb: 200
+          instanceType: m6g.2xlarge
+          imagePrefix: cloud-ubuntu-2204-aarch64
+          diskName: "/dev/xvda"

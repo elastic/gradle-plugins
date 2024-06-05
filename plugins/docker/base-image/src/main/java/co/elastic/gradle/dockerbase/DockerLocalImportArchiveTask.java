@@ -37,7 +37,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.util.Objects;
 
 public abstract class DockerLocalImportArchiveTask extends DefaultTask implements ContainerImageProviderTask {
 
@@ -71,9 +70,10 @@ public abstract class DockerLocalImportArchiveTask extends DefaultTask implement
     public void localImport() throws IOException {
         DockerUtils dockerUtils = new DockerUtils(getExecOperations());
         final String imageId = getImageId().get();
-        String uuid = null;
         if (imageExistsInDaemon(dockerUtils, imageId)) {
             getLogger().lifecycle("Docker Daemon already has image with Id {}. Skip import.", imageId);
+            // The image might exist, but we want to make sure it's still tagged as we want it to
+            tagImage(dockerUtils, imageId);
         } else {
             final ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (InputStream archiveInput = ExtractCompressedTar.uncompressedInputStream(RegularFileUtils.toPath(getImageArchive()))) {
@@ -83,24 +83,22 @@ public abstract class DockerLocalImportArchiveTask extends DefaultTask implement
                     spec.setStandardOutput(out);
                 });
                 final String dockerLoad = out.toString().trim();
+                final String uuid;
                 if (dockerLoad.startsWith("Loaded image:") && dockerLoad.endsWith(":latest")) {
                     uuid = dockerLoad.substring(dockerLoad.indexOf(":") + 1);
                 } else {
                     throw new GradleException("Unexpected docker load output:" + dockerLoad);
                 }
+                // Tag image with the expected ID
+                tagImage(dockerUtils, imageId);
+                // Untag image with the internal UUID
+                dockerUtils.exec(spec ->
+                        spec.commandLine("docker", "image", "rm", uuid.trim())
+                );
             } catch (IOException e) {
                 throw new GradleException("Error importing image in docker daemon", e);
             }
         }
-        // The image might exist, but we want to make sure it's still tagged as we want it to
-        dockerUtils.exec(spec ->
-                spec.commandLine("docker", "tag", imageId, getTag().get())
-        );
-
-        String finalUuid = Objects.requireNonNull(uuid).trim();
-        dockerUtils.exec(spec ->
-            spec.commandLine("docker", "image", "rm", finalUuid)
-        );
 
         getLogger().lifecycle(
                 "Image tagged as {}",
@@ -112,6 +110,11 @@ public abstract class DockerLocalImportArchiveTask extends DefaultTask implement
         );
     }
 
+    protected ExecResult tagImage(DockerUtils dockerUtils, String imageId) {
+        return dockerUtils.exec(spec ->
+                spec.commandLine("docker", "tag", imageId, getTag().get())
+        );
+    }
 
 
     private boolean imageExistsInDaemon(DockerUtils daemonActions, String imageId) throws IOException {

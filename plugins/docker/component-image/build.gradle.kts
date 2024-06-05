@@ -38,4 +38,5 @@ dependencies {
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
+    integrationTestImplementation(project(":plugins:lifecycle"))
 }

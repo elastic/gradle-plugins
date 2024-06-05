@@ -172,6 +172,88 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    public void withMultiarchPlugin() throws IOException, InterruptedException {
+        helper.settings("""
+                     rootProject.name = "just-a-test"
+                """);
+        Files.copy(Objects.requireNonNull(getClass().getResourceAsStream("/test_created_image.sh")), helper.projectDir().resolve("test_created_image.sh"));
+        helper.buildScript("""
+                import kotlin.random.Random
+                                
+                plugins {
+                       id("co.elastic.docker-component")
+                       id("co.elastic.vault")
+                       id("co.elastic.lifecycle-multi-arch")                       
+                }
+                vault {
+                          address.set("https://vault-ci-prod.elastic.dev")
+                          auth {
+                            ghTokenFile()
+                            ghTokenEnv()
+                            tokenEnv()
+                            roleAndSecretEnv()
+                          }
+                }
+                cli {
+                     val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                     snyk {                         
+                           username.set(credentials["username"])
+                           password.set(credentials["plaintext"])
+                     }
+                     manifestTool {                         
+                           username.set(credentials["username"])
+                           password.set(credentials["plaintext"])
+                     }
+                }
+                tasks.withType<co.elastic.gradle.snyk.SnykCLIExecTask> {
+                       environment(
+                            "SNYK_TOKEN",
+                            vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
+                        )
+                }
+                dockerComponentImage {
+                    buildAll {
+                        from("ubuntu", "20.04")
+                        maintainer("Jon Doe", "jon.doe@email.com")
+                        copySpec("1000:1000") {
+                            from(fileTree(projectDir)) {
+                                include("build.gradle.kts")
+                            }
+                            into("home")
+                        }
+                        copySpec {
+                           from("build.gradle.kts") {
+                              into("home/${architecture.toString().toLowerCase()}")
+                           }
+                        }
+                        copySpec {
+                           from("test_created_image.sh")
+                        }
+                        entryPoint(listOf("/test_created_image.sh"))
+                        cmd(listOf("foo", "bar"))
+                        env("MY_FOO" to "BAR")
+                        workDir("/home")
+                        exposeTcp(80)
+                        exposeUdp(80)
+                        label("foo" to "bar")
+                        changingLabel("random" to Random.nextInt(0, 10000).toString())
+                    }
+                }
+                    """);
+        Files.copy(Objects.requireNonNull(getClass().getResourceAsStream("/docker-component-image.lock")), helper.projectDir().resolve("docker-component-image.lock"));
+
+        final BuildResult buildPlatformIndependent = runGradleTask("buildPlatformIndependent");
+        System.out.println(buildPlatformIndependent.getOutput());
+        assertNull(buildPlatformIndependent.task(":dockerComponentImageBuild"), "Component image build should not run with `buildPlatformIndependent` but it did");
+
+        final BuildResult buildForPlatform = runGradleTask("buildForPlatform");
+        assertNull(buildForPlatform.task(":dockerComponentImageBuild"), "Component image build should not run with `buildForPlatform` but it did");
+
+        final BuildResult buildCombinePlatform = runGradleTask("buildCombinePlatform");
+        assertNotNull(buildCombinePlatform.task(":dockerComponentImageBuild"), "Component image build should run with `buildCombinePlatform` but it did not");
+    }
+
+    @Test
     public void testMaxOutputSize() throws IOException {
         helper.buildScript("""              
                 plugins {
