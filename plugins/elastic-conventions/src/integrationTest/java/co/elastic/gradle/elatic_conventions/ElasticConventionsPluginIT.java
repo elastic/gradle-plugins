@@ -21,6 +21,8 @@ package co.elastic.gradle.elatic_conventions;
 import co.elastic.gradle.TestkitIntegrationTest;
 import co.elastic.gradle.cli.jfrog.JFrogCliExecTask;
 import co.elastic.gradle.cli.manifest.ManifestToolExecTask;
+import co.elastic.gradle.cli.shellcheck.ShellcheckTask;
+import co.elastic.gradle.snyk.SnykCLIExecTask;
 import co.elastic.gradle.vault.VaultExtension;
 import org.gradle.testkit.runner.BuildResult;
 import org.junit.jupiter.api.Test;
@@ -95,9 +97,9 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                    import %s
                    import %s
                    plugins {
+                       id("co.elastic.elastic-conventions")
                        id("co.elastic.cli.jfrog")
                        id("co.elastic.cli.manifest-tool")
-                       id("co.elastic.elastic-conventions")
                    }
                                   
                    val jfrog by tasks.registering(JFrogCliExecTask::class)
@@ -111,7 +113,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "check")
+                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies")
                 .build();
 
         System.out.println(result.getOutput());
@@ -127,7 +129,142 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
-    public void withImageBuild() throws IOException {
+    public void withCliMultiProject() {
+        helper.buildScript("""
+        plugins {               
+            id("co.elastic.elastic-conventions")
+        }    
+        """);
+        helper.buildScript("p1", String.format("""
+                import %s
+                import %s
+                plugins {                   
+                    id("co.elastic.elastic-conventions")
+                    id("co.elastic.cli.jfrog")
+                    id("co.elastic.cli.manifest-tool")                    
+                }
+                val jfrog by tasks.registering(JFrogCliExecTask::class)
+                val manifestTool by tasks.registering(ManifestToolExecTask::class)
+               
+                tasks.check {
+                   dependsOn(jfrog, manifestTool)
+                }
+                
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName()
+        ));
+        helper.buildScript("p2", String.format("""
+                import %s
+                import %s
+                import %s
+                import %s
+                plugins {                   
+                    id("co.elastic.cli.jfrog")
+                    id("co.elastic.cli.manifest-tool")
+                    id("co.elastic.cli.snyk")
+                    id("co.elastic.cli.shellcheck")
+                    id("co.elastic.elastic-conventions")
+                }
+                val jfrog by tasks.registering(JFrogCliExecTask::class)
+                val manifestTool by tasks.registering(ManifestToolExecTask::class)
+                val snyk by tasks.registering(SnykCLIExecTask::class)
+                val shellCheck by tasks.registering(ShellcheckTask::class)
+                tasks.check {
+                  dependsOn(jfrog, manifestTool, snyk, shellCheck)
+                }                
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
+        ));
+
+        helper.settings("""
+                      include("p1")
+                      include("p2")
+                      plugins {
+                       id("co.elastic.elastic-conventions")
+                      }                      
+                  """);
+
+        final BuildResult result = gradleRunner
+                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies")
+                .build();
+
+        System.out.println(result.getOutput());
+
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
+
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
+    }
+
+    @Test
+    public void withCliMultiProjectWithoutRoot() {
+        helper.buildScript("p1", String.format("""
+                import %s
+                import %s
+                plugins {                   
+                    id("co.elastic.elastic-conventions")
+                    id("co.elastic.cli.jfrog")
+                    id("co.elastic.cli.manifest-tool")                    
+                }
+                val jfrog by tasks.registering(JFrogCliExecTask::class)
+                val manifestTool by tasks.registering(ManifestToolExecTask::class)
+               
+                tasks.check {
+                   dependsOn(jfrog, manifestTool)
+                }
+                
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName()
+        ));
+        helper.buildScript("p2", String.format("""
+                import %s
+                import %s
+                import %s
+                import %s
+                plugins {                   
+                    id("co.elastic.cli.jfrog")
+                    id("co.elastic.cli.manifest-tool")
+                    id("co.elastic.cli.snyk")
+                    id("co.elastic.cli.shellcheck")
+                    id("co.elastic.elastic-conventions")
+                }
+                val jfrog by tasks.registering(JFrogCliExecTask::class)
+                val manifestTool by tasks.registering(ManifestToolExecTask::class)
+                val snyk by tasks.registering(SnykCLIExecTask::class)
+                val shellCheck by tasks.registering(ShellcheckTask::class)
+                tasks.check {
+                  dependsOn(jfrog, manifestTool, snyk, shellCheck)
+                }                
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
+        ));
+
+        helper.settings("""
+                      include("p1")
+                      include("p2")
+                      plugins {
+                       id("co.elastic.elastic-conventions")
+                      }                      
+                  """);
+
+        final BuildResult result = gradleRunner
+                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies")
+                .build();
+
+        System.out.println(result.getOutput());
+
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
+
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
+        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
+    }
+
+    @Test
+    public void withImageBuildAndLast() throws IOException {
         Files.copy(
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
                 helper.projectDir().resolve("docker-base-image.lock")
@@ -157,5 +294,35 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         assertContains(scanResult.getOutput(), "[snyk] Tested ");
     }
 
+    @Test
+    public void withImageBuildAndFirst() throws IOException {
+        Files.copy(
+                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
+                helper.projectDir().resolve("docker-base-image.lock")
+        );
+
+        helper.buildScript("""
+                   plugins {
+                       id("co.elastic.elastic-conventions")
+                       id("co.elastic.docker-base")
+                       id("co.elastic.docker-component")                       
+                   }
+                   
+                   dockerBaseImage {
+                       fromUbuntu("ubuntu", "20.04")
+                   }
+                   dockerComponentImage {
+                       buildAll {
+                            from(project)
+                       }
+                   }
+                """
+        );
+
+        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal")
+                .buildAndFail();
+
+        assertContains(scanResult.getOutput(), "[snyk] Tested ");
+    }
 
 }

@@ -101,12 +101,24 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                                 Map.of(OS.DARWIN, "mac")
                         ))
                 )
-                .filter(value -> value.getName().contains(OS.current().name()) ||
-                                 value.getName().contains(OS.current().name().toLowerCase(Locale.ROOT)) ||
-                                 value.getName().contains(OS.current().map(
-                                         Map.of(OS.DARWIN, "mac")
-                                 ))
-                )
+                .filter(value -> {
+                    // Some binaries only have OS in their name
+                    final boolean nameHasCurrentOS = value.getName().contains(OS.current().name()) ||
+                                                     value.getName().contains(OS.current().name().toLowerCase(Locale.ROOT)) ||
+                                                     value.getName().contains(OS.current().map(
+                                                             Map.of(OS.DARWIN, "mac")
+                                                     ));
+                    if (value.getName().toLowerCase(Locale.ROOT)
+                                .contains(arch.name().toLowerCase(Locale.ROOT)) ||
+                        value.getName().toLowerCase(Locale.ROOT)
+                                .contains(arch.dockerName().toLowerCase(Locale.ROOT))
+                    ) {
+                        return nameHasCurrentOS;
+                    } else {
+                        // When the name has no architecture, we imply x86_64
+                        return nameHasCurrentOS && arch.equals(Architecture.X86_64);
+                    }
+                })
                 .collect(Collectors.toMap(
                         value -> {
                             String name = value.getName();

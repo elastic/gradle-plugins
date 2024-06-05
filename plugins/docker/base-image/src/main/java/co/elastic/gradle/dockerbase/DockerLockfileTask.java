@@ -99,7 +99,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     public abstract RegularFileProperty getImageIdFile();
 
     @Override
-    @LocalState
+    @Internal
     public abstract DirectoryProperty getWorkingDirectory();
 
     @Override

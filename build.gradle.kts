@@ -8,8 +8,9 @@ plugins {
     id("com.github.jk1.dependency-license-report").version("2.5")
 
     // self-loop
-    id("co.elastic.wrapper-provision-jdk").version("0.0.7")
-    id("co.elastic.elastic-conventions").version("0.0.7")
+    val versionReleased:String = File("version-released").readText().trim()
+    id("co.elastic.wrapper-provision-jdk").version(versionReleased)
+    id("co.elastic.elastic-conventions").version(versionReleased)
 }
 
 allprojects {
@@ -18,7 +19,7 @@ allprojects {
         mavenCentral()
     }
 
-    version = "0.0.8"
+    version = rootProject.file("version-next").readText().trim()
     group = "co.elastic.gradle"
 
     // Some projects are used for testing only, some are empty containers, everything else we publish

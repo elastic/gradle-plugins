@@ -21,6 +21,8 @@ package co.elastic.gradle.dockerbase;
 import co.elastic.gradle.cli.jfrog.JFrogPlugin;
 import co.elastic.gradle.docker.base.DockerLocalCleanTask;
 import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
+import co.elastic.gradle.dockerbase.lockfile.Packages;
+import co.elastic.gradle.dockerbase.lockfile.UnchangingPackage;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.utils.Architecture;
@@ -68,6 +70,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         final BaseImageExtension extension = target.getExtensions().create("dockerBaseImage", BaseImageExtension.class);
 
         final Configuration osPackageConfiguration = target.getConfigurations().create("_osPackageRepo");
+        final Configuration osPackageConfigurationAll = target.getConfigurations().create("_osPackageRepo_all");
 
         registerPullTask(target, extension);
 
@@ -225,46 +228,57 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     final BaseLockfile lockfile = BaseLockfile.parse(
                             Files.newBufferedReader(lockfilePath)
                     );
-                    lockfile.getPackages().get(Architecture.current()).getPackages()
+                    // Add all packages to a configuration to make verification data easier
+                    final Map<Architecture, Packages> lockfilePackages = lockfile.getPackages();
+                    for (Architecture architecture : Architecture.values()) {
+                        if (lockfilePackages.containsKey(architecture)) {
+                            lockfilePackages.get(architecture).getPackages()
+                                    .stream()
+                                    .forEach(pkg -> addPackageAsDependency(target, extension, osPackageConfigurationAll.getName(), pkg));
+                        }
+                    }
+                    // Add the actual packages that are needed to a different one for correct inputs tracking
+                    lockfilePackages.get(Architecture.current()).getPackages()
                             .stream()
-                            .forEach(pkg ->
-                                    {
-                                        final String type = extension.getOSDistribution().get()
-                                                .name().toLowerCase(Locale.ROOT);
-                                        final Map<String, String> dependencyNotation = Map.of(
-                                                "group", type + (
-                                                        extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
-                                                                "/" + Architecture.current().name().toLowerCase(Locale.ROOT)  :
-                                                                ""
-                                                        ),
-                                                "name", pkg.name(),
-                                                // Gradle has trouble dealing with : in the version, so we rename the
-                                                // packages to have . instead and use the same here
-                                                "version", switch (extension.getOSDistribution().get()) {
-                                                    case DEBIAN, UBUNTU -> pkg.version().replace(":", ".") +
-                                                                           "-" + pkg.architecture();
-                                                    case CENTOS -> pkg.version() + "-" +
-                                                                   pkg.release() + "." +
-                                                                   pkg.architecture();
-                                                    case WOLFI -> pkg.version();
-                                                },
-                                                "ext", switch (extension.getOSDistribution().get()) {
-                                                    case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
-                                                    case WOLFI -> pkg.name().startsWith("__META__") ? "gz" : "apk";
-                                                    case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
-                                                }
-                                        );
-                                        target.getDependencies().add(
-                                                osPackageConfiguration.getName(),
-                                                dependencyNotation
-                                        );
-                                    }
-                            );
+                            .forEach(pkg -> addPackageAsDependency(target, extension, osPackageConfiguration.getName(), pkg));
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
             }
         });
+    }
+
+    protected static void addPackageAsDependency(Project target, BaseImageExtension extension, String packageConfigurationName, UnchangingPackage pkg) {
+        final String type = extension.getOSDistribution().get()
+                .name().toLowerCase(Locale.ROOT);
+        final Map<String, String> dependencyNotation = Map.of(
+                "group", type + (
+                        extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
+                                "/" + Architecture.current().name().toLowerCase(Locale.ROOT)  :
+                                ""
+                ),
+                "name", pkg.name(),
+                // Gradle has trouble dealing with : in the version, so we rename the
+                // packages to have . instead and use the same here
+                "version", switch (extension.getOSDistribution().get()) {
+                    case DEBIAN, UBUNTU -> pkg.version().replace(":", ".") +
+                                           "-" + pkg.architecture();
+                    case CENTOS -> pkg.version() + "-" +
+                                   pkg.release() + "." +
+                                   pkg.architecture();
+                    case WOLFI -> pkg.version();
+                },
+                "ext", switch (extension.getOSDistribution().get()) {
+                    case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
+                    case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
+                    case WOLFI -> pkg.name().startsWith("__META__") ? "gz" : "apk";
+                }
+        );
+
+        target.getDependencies().add(
+                packageConfigurationName,
+                dependencyNotation
+        );
     }
 
     @NotNull

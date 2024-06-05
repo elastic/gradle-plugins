@@ -106,26 +106,30 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     public void applyToProject(Project target) {
         final PluginContainer plugins = target.getPlugins();
         plugins.apply(LifecyclePlugin.class);
+        plugins.apply(VaultPlugin.class);
+        final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
         plugins.withType(VaultPlugin.class, unused ->
-                configureVaultPlugin(target.getExtensions().getByType(VaultExtension.class))
+                configureVaultPlugin(vault)
+        );
+        target.getRootProject().getPlugins().withType(VaultPlugin.class, unused ->
+                configureVaultPlugin(target.getRootProject().getExtensions().getByType(VaultExtension.class))
         );
 
-        configureCliPlugins(target, plugins);
+        configureCliPlugins(target);
 
-
-
-        target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
-            plugins.apply(VaultPlugin.class);
-            final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
-            final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
-
-            target.getTasks().withType(SnykCLIExecTask.class, task ->
+        target.afterEvaluate(unused -> {
+                target.getTasks().withType(SnykCLIExecTask.class, task -> {
+                    target.getLogger().info("Configuring Snyk token env var for " + task.getPath());
                     task.environment(
                             "SNYK_TOKEN",
                             vault.readAndCacheSecret(getSnykVaultPath()).get().get("apikey")
-                    )
-            );
+                    );
+                });
+        });
 
+        target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
+            target.getPlugins().apply(VaultPlugin.class);
+            final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
             var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
             try {
                 extension.getOsPackageRepository().set(new URL(
@@ -138,24 +142,25 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         });
     }
 
-    private void configureCliPlugins(Project target, PluginContainer plugins) {
-        plugins.withType(BaseCliPlugin.class, unused -> {
-            plugins.apply(VaultPlugin.class);
-            final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
-            final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);
-            var listOfNames = new ArrayList<String>();
-            for (ExtensionsSchema.ExtensionSchema extensionSchema : cliExtension.getExtensions().getExtensionsSchema()) {
-                if (extensionSchema.getPublicType().isAssignableFrom(BaseCLiExtension.class)) {
-                    listOfNames.add(extensionSchema.getName());
+    private void configureCliPlugins(Project target) {
+        final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+        target.afterEvaluate(unused ->
+            target.getPlugins().withType(BaseCliPlugin.class, u -> {
+                final CliExtension cliExtension = target.getExtensions().getByType(CliExtension.class);
+                var listOfNames = new ArrayList<String>();
+                for (ExtensionsSchema.ExtensionSchema extensionSchema : cliExtension.getExtensions().getExtensionsSchema()) {
+                    if (extensionSchema.getPublicType().isAssignableFrom(BaseCLiExtension.class)) {
+                        listOfNames.add(extensionSchema.getName());
+                    }
                 }
-            }
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
-            for (String name : listOfNames) {
-                final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
-                extension.getUsername().set(creds.get("username"));
-                extension.getPassword().set(creds.get("plaintext"));
-            }
-        });
+                var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
+                for (String name : listOfNames) {
+                    final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
+                    extension.getUsername().set(creds.get("username"));
+                    extension.getPassword().set(creds.get("plaintext"));
+                }
+            })
+        );
     }
 
     public void applyToSettings(Settings target) {

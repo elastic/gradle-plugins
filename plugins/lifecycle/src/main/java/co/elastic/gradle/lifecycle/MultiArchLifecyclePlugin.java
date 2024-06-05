@@ -255,17 +255,17 @@ public class MultiArchLifecyclePlugin implements Plugin<Project> {
     }
 
     public static void publishCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
-        whenPluginAddedAddDependency(target, dependency, PUBLISH_TASK_NAME + "");
+        whenPluginAddedAddDependency(target, dependency, PUBLISH_TASK_NAME + "CombinePlatform");
         LifecyclePlugin.publish(target, dependency);
     }
 
     public static void checkCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
-        whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.CHECK_TASK_NAME + "");
+        whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.CHECK_TASK_NAME + "CombinePlatform");
         LifecyclePlugin.check(target, dependency);
     }
 
     public static void assembleCombinePlatform(Project target, TaskProvider<? extends Task> dependency) {
-        whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.ASSEMBLE_TASK_NAME + "");
+        whenPluginAddedAddDependency(target, dependency, LifecycleBasePlugin.ASSEMBLE_TASK_NAME + "CombinePlatform");
         LifecyclePlugin.assemble(target, dependency);
     }
 
