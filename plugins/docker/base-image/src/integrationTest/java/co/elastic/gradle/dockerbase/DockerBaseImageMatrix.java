@@ -31,18 +31,13 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
     @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "debian:11"})
     // Todo Temp disabled. fix centos base image plugin builds
     // @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7", "debian:11"})
-    public void testSingleProject(String baseImages, @TempDir Path testProjectDir) throws IOException, InterruptedException {
-        final GradleTestkitHelper helper = getHelper(testProjectDir);
-        final GradleRunner gradleRunner = getGradleRunner(testProjectDir);
-
-        Set<String> imagesInDaemonAlreadyThere = getImagesInDaemon();
-
+    public void testSingleProject(String baseImages, @TempDir Path gradleHome) throws IOException, InterruptedException {
         helper.writeFile("image_content/foo.txt", "sample content");
         writeSimpleBuildScript(helper, baseImages);
-        final BuildResult lockfileResult = runGradleTask(gradleRunner, "dockerBaseImageLockfile");
+        final BuildResult lockfileResult = runGradleTask(gradleRunner, "dockerBaseImageLockfile", gradleHome);
 
         System.out.println(lockfileResult.getOutput());
-        runGradleTask(gradleRunner, "dockerLocalImport");
+        runGradleTask(gradleRunner, "dockerLocalImport", gradleHome);
 
 
 
@@ -80,7 +75,7 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
             fail("Expected " + expectedLocalTag + " to be present in the daemon after local import but it was not");
         }
 
-        runGradleTask(gradleRunner, "dockerBaseImageClean");
+        runGradleTask(gradleRunner, "dockerBaseImageClean", gradleHome);
 
         Set<String> imagesInDaemonAfterClean = getImagesInDaemon();
         if (imagesInDaemonAfterClean.contains(expectedLocalTag)) {
@@ -174,9 +169,14 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
         );
     }
 
-    private BuildResult runGradleTask(GradleRunner gradleRunner, String task) throws IOException {
+    private BuildResult runGradleTask(GradleRunner gradleRunner, String task, Path gradleHome) throws IOException {
         try {
-            return gradleRunner.withArguments("--warning-mode", "fail", "-s", task).build();
+            return gradleRunner.withArguments(
+                    "--warning-mode", "fail",
+                    "-s",
+                    "--gradle-user-home", gradleHome.toAbsolutePath().toString(),
+                    task
+            ).build();
         } finally {
             System.out.println("Listing of project dir:");
             Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore", "gradle-configuration.list");
