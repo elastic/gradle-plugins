@@ -172,14 +172,19 @@ public abstract class DockerDaemonActions {
                     }).collect(Collectors.joining(" "));
             return "RUN " + mountOptions + "\\\n " +
                    String.join(" && \\ \n\t", run.getCommands());
-        } else if (instruction instanceof RepoConfigRun repoConfig) {
+        } else if (instruction instanceof RepoConfigRun repoConfigRun) {
             if (buildable.getIsolateFromExternalRepos().get()) {
                 return "";
             } else {
-                return "RUN " + String.join(" && \\ \n\t", repoConfig.getCommands());
+                return "RUN " + String.join(" && \\ \n\t", repoConfigRun.getCommands());
             }
-        }
-        else if (instruction instanceof CreateUser createUser) {
+        } else if (instruction instanceof RepoConfigInstall repoConfigInstall) {
+            if (buildable.getIsolateFromExternalRepos().get()) {
+                return "";
+            } else {
+                return convertInstallToRun(new Install(repoConfigInstall.packages())).map(this::instructionAsDockerFileInstruction).findAny().orElse("");
+            }
+        } else if (instruction instanceof CreateUser createUser) {
             // Specific case for Alpine and Busybox
             return String.format(
                     """

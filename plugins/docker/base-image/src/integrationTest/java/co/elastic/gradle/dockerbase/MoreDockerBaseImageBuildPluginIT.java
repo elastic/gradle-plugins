@@ -286,6 +286,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromCentos("centos", "7")
+                    repoInstall("epel-release")
                     repoConfig("yum -y install epel-release")
                     install("jq")
                     run("jq --version")
