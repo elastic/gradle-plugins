@@ -22,7 +22,7 @@ import org.gradle.api.tasks.Input;
 
 import java.util.List;
 
-public record RepoConfigInstall(List<String> packages) implements ContainerImageBuildInstruction {
+public record RepoInstall(List<String> packages) implements ContainerImageBuildInstruction {
     @Input
     public List<String> getPackages() {
         return packages;

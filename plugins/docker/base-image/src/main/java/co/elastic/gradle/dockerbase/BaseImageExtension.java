@@ -170,7 +170,7 @@ public abstract class BaseImageExtension implements ExtensionAware {
     }
 
     public void repoInstall(List<String> packages) {
-        instructions.add(new RepoConfigInstall(packages));
+        instructions.add(new RepoInstall(packages));
     }
 
     @SuppressWarnings("unused")
