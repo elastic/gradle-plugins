@@ -56,42 +56,24 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
-    private String getVaultArtifactoryPath() {
+    public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
 
-        return "secret/ci/" + getRepoName() + "/artifactory_creds";
+    private String getVaultArtifactoryPath(Project target) {
+
+        return getVaultPrefix(target) + "/artifactory_creds";
     }
 
-    private  String getSnykVaultPath() {
-        return "secret/ci/" + getRepoName() + "/snyk_api_key";
+    private  String getSnykVaultPath(Project target) {
+        return getVaultPrefix(target) + "/snyk_api_key";
     }
 
-    private String getRepoName() {
-        String repoUrl = System.getenv("BUILDKITE_REPO");
-        if (repoUrl == null || repoUrl.isEmpty()) {
-            return "elastic-gradle-plugins";
+    private String getVaultPrefix(Project target) {
+        final Object vaultPrefixFromProperty = target.getProperties().get(PROPERTY_NAME_VAULT_PREFIX);
+        if (vaultPrefixFromProperty == null) {
+            throw new GradleException("This plugin requires the co.elastic.vault_prefix to be set for the vault integration." +
+                                      "Most of the time this needs to be set in the gradle.properties in your repo to `secret/ci/elastic-<name of your repo>`.");
         }
-
-        // Example: git@github.com:acme-inc/my-project.git
-        String[] parts = repoUrl.split(":");
-        if (parts.length != 2) {
-            throw new GradleException("Can't find : separator in env var BUILDKITE_REPO: " + repoUrl);
-        }
-
-        String path = parts[1];
-        if (path.endsWith(".git")) {
-            path = path.substring(0, path.length() - 4);
-        } else {
-            throw new GradleException("Path does not end in .git in env var BUILDKITE_REPO: " + path);
-        }
-
-        String[] pathParts = path.split("/");
-        if (pathParts.length != 2) {
-            throw new GradleException("Path is not the expected length in env var BUILDKITE_REPO:" + path);
-        }
-
-        // Replace special characters and combine the organization and project name
-        return pathParts[0] + "-" + pathParts[1];
-
+        return vaultPrefixFromProperty.toString();
     }
 
     @Override
@@ -122,7 +104,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                     target.getLogger().info("Configuring Snyk token env var for " + task.getPath());
                     task.environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret(getSnykVaultPath()).get().get("apikey")
+                            vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey")
                     );
                 });
         });
@@ -130,7 +112,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
             target.getPlugins().apply(VaultPlugin.class);
             final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
+            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
             try {
                 extension.getOsPackageRepository().set(new URL(
                         "https://" + creds.get("username") + ":" + creds.get("plaintext") +
@@ -153,7 +135,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                         listOfNames.add(extensionSchema.getName());
                     }
                 }
-                var creds = vault.readAndCacheSecret(getVaultArtifactoryPath()).get();
+                var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
                 for (String name : listOfNames) {
                     final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
                     extension.getUsername().set(creds.get("username"));
