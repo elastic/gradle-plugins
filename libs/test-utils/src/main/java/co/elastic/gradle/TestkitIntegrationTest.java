@@ -37,7 +37,7 @@ public class TestkitIntegrationTest {
         helper = getHelper(testProjectDir);
         // Each suite needs to get its own tes-kit dir as running many tests in parallel causes locking issues on the
         // local artifactory cache. This does create multiple copies of the artefact cache to be used by the tests.
-        testkitDir = Path.of(System.getProperty("java.io.tmpdir") + this.getClass().getName());
+        testkitDir = Path.of(System.getProperty("java.io.tmpdir")).resolve(this.getClass().getName());
         Files.createDirectories(testkitDir);
         gradleRunner = getGradleRunner(testProjectDir);
     }
