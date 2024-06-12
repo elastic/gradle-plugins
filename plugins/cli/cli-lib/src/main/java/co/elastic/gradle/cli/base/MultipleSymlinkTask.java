@@ -116,7 +116,12 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                         return nameHasCurrentOS;
                     } else {
                         // When the name has no architecture, we imply x86_64
-                        return nameHasCurrentOS && arch.equals(Architecture.X86_64);
+                        if (OS.current().equals(OS.DARWIN)) {
+                            // except for mac where some binaries still rely on emulation
+                            return nameHasCurrentOS;
+                        } else {
+                            return nameHasCurrentOS && arch.equals(Architecture.X86_64);
+                        }
                     }
                 })
                 .collect(Collectors.toMap(
@@ -125,8 +130,8 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                             for (OS os : OS.values()) {
                                 for (String separator : List.of("-", ".")) {
                                     name = name
-                                            .replace(separator + OS.current().name(), "")
-                                            .replace(separator + OS.current().name().toLowerCase(Locale.ROOT), "")
+                                            .replace(separator + os.name(), "")
+                                            .replace(separator + os.name().toLowerCase(Locale.ROOT), "")
                                             .replace(separator + arch.name(), "")
                                             .replace(separator + arch.name().toLowerCase(Locale.ROOT), "")
                                             .replace(separator + arch.dockerName(), "")
