@@ -132,6 +132,12 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                     mavenCentral()
                 }
                 val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")

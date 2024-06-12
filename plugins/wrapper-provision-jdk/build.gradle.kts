@@ -15,3 +15,9 @@ dependencies {
     integrationTestImplementation(project(":libs:utils"))
     integrationTestImplementation("commons-io:commons-io:2.11.0")
 }
+
+tasks.integrationTest {
+    // Need to validate these on a per OS and architecture basis
+    inputs.properties("OS" to co.elastic.gradle.utils.OS.current())
+    inputs.properties("Architecture" to co.elastic.gradle.utils.Architecture.current())
+}
