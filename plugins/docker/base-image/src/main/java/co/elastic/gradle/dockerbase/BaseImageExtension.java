@@ -117,12 +117,14 @@ public abstract class BaseImageExtension implements ExtensionAware {
     public void fromUbuntu(String image, String version) {
         getOSDistribution().set(OSDistribution.UBUNTU);
         from(image, version);
+        env(new Pair<>("DEBIAN_FRONTEND", "noninteractive"));
     }
 
     @SuppressWarnings("unused")
     public void fromDebian(String image, String version) {
         getOSDistribution().set(OSDistribution.DEBIAN);
         from(image, version);
+        env(new Pair<>("DEBIAN_FRONTEND", "noninteractive"));
     }
 
     @SuppressWarnings("unused")
@@ -165,6 +167,15 @@ public abstract class BaseImageExtension implements ExtensionAware {
     @SuppressWarnings("unused")
     public void repoConfig(String... commands) {
         repoConfig(Arrays.asList(commands));
+    }
+
+    public void repoInstall(List<String> packages) {
+        instructions.add(new RepoInstall(packages));
+    }
+
+    @SuppressWarnings("unused")
+    public void repoInstall(String... packages) {
+        repoInstall(Arrays.asList(packages));
     }
 
     @SuppressWarnings("unused")
