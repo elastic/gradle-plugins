@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static co.elastic.gradle.AssertContains.assertContains;
+import static co.elastic.gradle.AssertContains.assertDoesNotContain;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -354,7 +355,7 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
 
         // software-properties-common should not be mentioned in the dockerBaseImageBuild Dockerfile
         final Path buildDockerfilePath = helper.projectDir().resolve("build/dockerBaseImageBuild/Dockerfile");
-        assertContains(Files.readString(buildDockerfilePath), "software-properties-common");
+        assertDoesNotContain(Files.readString(buildDockerfilePath), "software-properties-common");
     }
 
     @Test

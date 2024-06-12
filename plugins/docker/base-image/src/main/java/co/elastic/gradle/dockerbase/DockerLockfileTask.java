@@ -163,7 +163,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                                     return Stream.of(
                                             new SetUser("root"),
                                             switch (getOSDistribution().get()) {
-                                                case UBUNTU, DEBIAN -> new Run(List.of("apt-get -y purge " + packages, "apt-get -y autoremove"));
+                                                case UBUNTU, DEBIAN -> new Run(List.of("apt-get -y --auto-remove purge " + packages));
                                                 case CENTOS -> new Run(List.of("yum -y --remove-leaves remove " + packages));
                                             }
                                     );
