@@ -182,7 +182,7 @@ public abstract class DockerDaemonActions {
             if (buildable.getIsolateFromExternalRepos().get()) {
                 return "";
             } else {
-                return convertInstallToRun(new Install(repoInstall.packages())).map(this::instructionAsDockerFileInstruction).findAny().orElse("");
+                return convertInstallToRun(new Install(repoInstall.packages())).map(this::instructionAsDockerFileInstruction).collect(Collectors.joining("\n"));
             }
         } else if (instruction instanceof CreateUser createUser) {
             // Specific case for Alpine and Busybox
