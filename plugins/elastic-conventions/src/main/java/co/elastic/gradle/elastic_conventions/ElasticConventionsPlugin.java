@@ -70,7 +70,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     private String getVaultPrefix(Project target) {
         final Object vaultPrefixFromProperty = target.getProperties().get(PROPERTY_NAME_VAULT_PREFIX);
         if (vaultPrefixFromProperty == null) {
-            throw new GradleException("This plugin requires the co.elastic.vault_prefix to be set for the vault integration." +
+            throw new GradleException("This plugin requires the co.elastic.vault_prefix to be set for the vault integration. " +
                                       "Most of the time this needs to be set in the gradle.properties in your repo to `secret/ci/elastic-<name of your repo>`.");
         }
         return vaultPrefixFromProperty.toString();

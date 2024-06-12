@@ -110,11 +110,11 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                       dependsOn(jfrog, manifestTool)
                    }
                  
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), getVaultPrefixProperty())
+                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName())
         );
 
         final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies", "")
+                .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies", getVaultPrefixProperty())
                 .build();
 
         System.out.println(result.getOutput());
@@ -155,7 +155,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 .buildAndFail();
 
         assertContains(result.getOutput(),
-                "This plugin requires the co.elastic.vault_prefix to be set for the vault integration." +
+                "This plugin requires the co.elastic.vault_prefix to be set for the vault integration. " +
                 "Most of the time this needs to be set in the gradle.properties in your repo to `secret/ci/elastic-<name of your repo>`."
         );
     }
