@@ -54,6 +54,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 
 public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
@@ -69,8 +71,11 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
         final BaseImageExtension extension = target.getExtensions().create("dockerBaseImage", BaseImageExtension.class);
 
-        final Configuration osPackageConfiguration = target.getConfigurations().create("_osPackageRepo");
-        final Configuration osPackageConfigurationAll = target.getConfigurations().create("_osPackageRepo_all");
+        final Map<Architecture, Configuration> osPackageConfigurations = Arrays.stream(Architecture.values())
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        each -> target.getConfigurations().create("_osPackageRepo_" + each.dockerName())
+                ));
 
         registerPullTask(target, extension);
 
@@ -90,8 +95,8 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             task.getInputInstructions().set(extension.getInstructions());
             task.onlyIf(runningOnSupportedArchitecture(extension));
             task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
-            task.getOSPackagesConfiguration().set(osPackageConfiguration);
-            task.dependsOn(osPackageConfiguration);
+            task.getOSPackagesConfiguration().set(osPackageConfigurations.get(Architecture.current()));
+            task.dependsOn(osPackageConfigurations.get(Architecture.current()));
         });
         MultiArchLifecyclePlugin.assembleForPlatform(target, dockerBaseImageBuild);
 
@@ -132,7 +137,8 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.getOsPackageRepository().set(extension.getOsPackageRepository());
                     task.getMirrorRepositories().set(extension.getMirrorRepositories());
                     task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
-                    task.getOSPackagesConfiguration().set(osPackageConfiguration);
+                    // Map the configuration to the architecture of the task
+                    task.getOSPackagesConfiguration().set(task.getArchitecture().map(osPackageConfigurations::get));
                     // hard code Linux here, because we are using it inside a docker container
                     task.getJFrogCli().set(JFrogPlugin.getExecutable(target, OS.LINUX));
                     task.onlyIf(runningOnSupportedArchitecture(extension));
@@ -202,19 +208,11 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                 } : null;
 
                 target.getRepositories().ivy(repo -> {
-                    repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
-                    repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
-                    try {
-                        repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
-                    } catch (MalformedURLException e) {
-                        throw new IllegalStateException(e);
-                    }
-                    // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
-                    repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision].[ext]"));
-                    repo.content(content -> content.onlyForConfigurations(osPackageConfiguration.getName()));
-                    if (credentialsAction != null) {
-                        repo.credentials(credentialsAction);
-                    }
+                    osPackageConfigurations.values().stream()
+                            .map(Configuration::getName)
+                            .forEach(configurationName -> configureRepoForConfiguration(
+                                    repoUrl, credentialsAction, repo, configurationName
+                            ));
                 });
             }
 
@@ -226,18 +224,13 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     );
                     // Add all packages to a configuration to make verification data easier
                     final Map<Architecture, Packages> lockfilePackages = lockfile.getPackages();
-                    for (Architecture architecture : Architecture.values()) {
-                        if (lockfilePackages.containsKey(architecture)) {
-                            lockfilePackages.get(architecture).getPackages()
+                    for (Map.Entry<Architecture, Configuration> configuration : osPackageConfigurations.entrySet()) {
+                        if (lockfilePackages.containsKey(configuration.getKey())) {
+                            lockfilePackages.get(configuration.getKey()).getPackages()
                                     .stream()
-                                    .forEach(pkg -> addPackageAsDependency(target, extension, osPackageConfigurationAll.getName(), pkg));
+                                    .forEach(pkg -> addPackageAsDependency(target, extension, configuration.getValue().getName(), pkg));
                         }
                     }
-                    // Add the actual packages that are needed to a different one for correct inputs tracking
-                    lockfilePackages.get(Architecture.current()).getPackages()
-                            .stream()
-                            .forEach(pkg -> addPackageAsDependency(target, extension, osPackageConfiguration.getName(), pkg)
-);
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
@@ -245,12 +238,30 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         });
     }
 
+    protected static void configureRepoForConfiguration(URL repoUrl, Action<? super PasswordCredentials> credentialsAction, IvyArtifactRepository repo, String configurationName) {
+        repo.setName(repoUrl.getHost() + "/" + repoUrl.getPath());
+        repo.metadataSources(IvyArtifactRepository.MetadataSources::artifact);
+        try {
+            repo.setUrl(new URL(repoUrl.toString().replace(repoUrl.getUserInfo() + "@", "")));
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException(e);
+        }
+        // We don't use [ext] and add extension to classifier instead since Gradle doesn't allow it to be empty and defaults to jar
+        repo.patternLayout(config -> config.artifact("[organisation]/[module]-[revision].[ext]"));
+        repo.content(content -> {
+            content.onlyForConfigurations(configurationName);
+        });
+        if (credentialsAction != null) {
+            repo.credentials(credentialsAction);
+        }
+    }
+
     protected static void addPackageAsDependency(Project target, BaseImageExtension extension, String packageConfigurationName, UnchangingPackage pkg) {
         final String type = extension.getOSDistribution().get()
                 .name().toLowerCase(Locale.ROOT);
         final Map<String, String> dependencyNotation = Map.of(
                 "group", type,
-                "name", pkg.name(),
+                "name", pkg.getName(),
                 // Gradle has trouble dealing with : in the version, so we rename the
                 // packages to have . instead and use the same here
                 "version", switch (extension.getOSDistribution().get()) {
@@ -261,8 +272,8 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                                    pkg.architecture();
                 },
                 "ext", switch (extension.getOSDistribution().get()) {
-                    case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
-                    case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
+                    case DEBIAN, UBUNTU ->  pkg.getName().startsWith("__META__") ? "gz" : "deb";
+                    case CENTOS ->  pkg.getName().startsWith("__META__") ? "tar" : "rpm";
                 }
         );
 

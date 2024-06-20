@@ -22,11 +22,28 @@ import co.elastic.gradle.TestkitIntegrationTest;
 import co.elastic.gradle.utils.Architecture;
 import org.apache.commons.io.IOUtils;
 import org.gradle.testkit.runner.BuildResult;
-import org.gradle.testkit.runner.GradleRunner;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -171,10 +188,10 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 """
         );
 
-        runGradleTask(gradleRunner, ":s1:dockerBaseImageLockfile");
-        runGradleTask(gradleRunner, ":s2:dockerBaseImageLockfile");
-        runGradleTask(gradleRunner, ":s3:dockerBaseImageLockfile");
-        runGradleTask(gradleRunner, "dockerLocalImport");
+        runGradleTask(":s1:dockerBaseImageLockfile");
+        runGradleTask(":s2:dockerBaseImageLockfile");
+        runGradleTask(":s3:dockerBaseImageLockfile");
+        runGradleTask("dockerLocalImport");
     }
 
     @Test
@@ -267,12 +284,12 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
         assertContains(result.getOutput(), "slf4j-api-1.7.36.jar");
     }
 
-    private BuildResult runGradleTask(GradleRunner gradleRunner, String task) throws IOException {
+    private BuildResult runGradleTask(String task) throws IOException {
         try {
             return gradleRunner.withArguments("--warning-mode", "fail", "-s", task).build();
         } finally {
             System.out.println("Listing of project dir:");
-            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore", "gradle-configuration.list");
+            Set<String> fileNamesOfInterest = Set.of("docker-base-image.lock", "Dockerfile", ".dockerignore", "gradle-configuration.list", "verification-metadata.xml");
             try (Stream<Path> s = Files.walk(helper.projectDir()).filter(each -> !each.toString().contains(".gradle"))) {
                 s.forEach(each -> {
                     if (fileNamesOfInterest.contains(each.getFileName().toString())) {
@@ -327,8 +344,8 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 install("patch")
             }
         """);
-        final BuildResult result = runGradleTask(gradleRunner, "dockerBaseImageLockfileAllWithEmulation");
-        System.out.println(result.getOutput());
+        final BuildResult result = runGradleTask("dockerBaseImageLockfileAllWithEmulation");
+            System.out.println(result.getOutput());
         assertNotNull(result.task(":dockerBaseImageLockfile"), "Expected task dockerBaseImageLockfile to have run");
         switch (Architecture.current()) {
             case X86_64 -> {
@@ -338,6 +355,97 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 assertNotNull(result.task(":dockerBaseImageLockfileamd64"), "Expected task dockerBaseImageLockfileamd64 to have run.");
             }
         }
+
+    }
+
+    @Test
+    public void testVerificationMetadata() throws IOException, XPathExpressionException, ParserConfigurationException, TransformerException, SAXException {
+        Files.copy(
+                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
+                helper.projectDir().resolve("docker-base-image.lock")
+        );
+
+        helper.buildScript("""
+        import java.net.URL                      
+        
+            plugins {
+               id("co.elastic.docker-base")
+               id("co.elastic.cli.jfrog")
+               id("co.elastic.vault")
+            }
+            vault {
+                  address.set("https://vault-ci-prod.elastic.dev")
+                  auth {
+                    ghTokenFile()
+                    ghTokenEnv()
+                    tokenEnv()
+                    roleAndSecretEnv()
+                  }
+            }
+            val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+            cli {
+                jfrog {
+                    username.set(creds["username"])
+                    password.set(creds["plaintext"])
+                }
+            }
+            dockerBaseImage {
+                osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                fromUbuntu("ubuntu", "20.04")
+                install("patch")
+            }
+        """);
+
+
+
+
+        // Test that the dependencies from the lock-file are added to verification metadata
+
+        System.out.println(
+                gradleRunner.withArguments(
+                        "--warning-mode", "fail",
+                        "-s",
+                        "--write-verification-metadata", "sha256,sha512",
+                        "help"
+                ).build().getOutput()
+        );
+
+        System.out.println(runGradleTask("dependencies").getOutput());
+
+        assertVerificationMetaDataContainsOsPackages(
+                helper.projectDir().resolve("gradle/verification-metadata.xml")
+        );
+    }
+
+    private void assertVerificationMetaDataContainsOsPackages(Path verificationData) throws IOException, ParserConfigurationException, SAXException, XPathExpressionException, TransformerException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document document = builder.parse(Files.newInputStream(verificationData));
+
+        XPathFactory xPathFactory = XPathFactory.newInstance();
+        XPath xpath = xPathFactory.newXPath();
+        String expression = "//*[local-name()='component'][@group='ubuntu' and @name='patch']";
+        NodeList components = (NodeList) xpath.evaluate(expression, document, XPathConstants.NODESET);
+
+
+        System.out.println(" == Verification metadata xml ==");
+        System.out.println("-- Found components: --");
+        for (int i = 0; i < components.getLength(); i++) {
+            Node component = components.item(i);
+            System.out.println(nodeToString(component));
+        }
+
+        assertEquals(2, components.getLength(), "Expected to find 2 components for patch in verification metadata.");
+    }
+
+    private String nodeToString(Node node) throws TransformerException {
+        Transformer transformer = TransformerFactory.newInstance().newTransformer();
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        StringWriter writer = new StringWriter();
+        transformer.transform(new DOMSource(node), new StreamResult(writer));
+        return writer.toString();
     }
 
 }
