@@ -22,7 +22,7 @@ import co.elastic.gradle.dockercomponent.lockfile.ComponentLockfile;
 import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.TaskAction;
 
@@ -32,7 +32,7 @@ import java.nio.file.Path;
 
 public abstract class ComponentPullTask extends DefaultTask {
 
-    @InputFile
+    @InputFiles
     public abstract RegularFileProperty getLockfileLocation();
 
     @TaskAction
