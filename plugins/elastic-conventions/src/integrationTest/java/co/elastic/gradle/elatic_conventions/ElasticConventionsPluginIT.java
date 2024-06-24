@@ -329,6 +329,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 .buildAndFail();
 
         assertContains(scanResult.getOutput(), "[snyk] Tested ");
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty()).build();
     }
 
     @Test
@@ -360,6 +362,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 .buildAndFail();
 
         assertContains(scanResult.getOutput(), "[snyk] Tested ");
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty()).build();
     }
 
 }

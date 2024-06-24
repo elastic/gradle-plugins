@@ -22,8 +22,8 @@ import co.elastic.gradle.dockercomponent.lockfile.ComponentLockfile;
 import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.tasks.InputFiles;
-import org.gradle.api.tasks.SkipWhenEmpty;
+import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.TaskAction;
 
 import java.io.IOException;
@@ -32,13 +32,15 @@ import java.nio.file.Path;
 
 public abstract class ComponentPullTask extends DefaultTask {
 
-    @InputFiles
-    @SkipWhenEmpty
+    @InputFile
     public abstract RegularFileProperty getLockfileLocation();
 
     @TaskAction
     public void pullImages() throws IOException {
         final Path lockfileLocation = RegularFileUtils.toPath(getLockfileLocation());
+        if (!Files.exists(lockfileLocation)) {
+            throw new StopExecutionException("Lockfile does not exist");
+        }
         final ComponentLockfile lockFile = ComponentLockfile.parse(Files.newBufferedReader(lockfileLocation));
         final JibActions actions = new JibActions();
         lockFile.images().values().forEach(ref -> {
