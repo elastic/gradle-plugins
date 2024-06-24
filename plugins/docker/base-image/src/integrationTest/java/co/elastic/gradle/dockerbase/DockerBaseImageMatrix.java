@@ -163,7 +163,7 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
                         "chmod -R 777 /home"
                     ))
                     setUser("foobar")
-                    install("patch", "sudo")
+                    install("patch", "sudo", "bash")
                     if ("%s" == "centos") {
                        install("which")
                     }

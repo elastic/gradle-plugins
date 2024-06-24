@@ -91,6 +91,20 @@ archive_apk_packages() {
   echo "Installed packages: $PACKAGES" >&2
   URLS=$(apk fetch --url --simulate $PACKAGES)
 
+  # Initialize an empty string to hold the final package=version list
+  package_version_list=""
+
+  # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
+  # do it explicitly. URLS will point to the last version in the registry.
+  for url in $URLS; do
+    # Extract the package name and version from the URL
+    package_name=$(basename "$url" | cut -d'-' -f1)
+    package_version=$(basename "$url" | cut -d'-' -f2- | sed 's/.apk//')
+
+    # Append the package=version to the package_version_list
+    package_version_list="$package_version_list $package_name=$package_version"
+  done
+  apk add $package_version_list
 
   if apk info --installed curl > /dev/null ; then
     KEEP_CURL='yes'
