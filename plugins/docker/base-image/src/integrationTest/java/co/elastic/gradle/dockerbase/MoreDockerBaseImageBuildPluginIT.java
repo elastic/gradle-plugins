@@ -19,6 +19,7 @@
 package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.TestkitIntegrationTest;
+import co.elastic.gradle.dockerbase.lockfile.BaseLockfile;
 import co.elastic.gradle.sandbox.SandboxDockerExecTask;
 import co.elastic.gradle.utils.Architecture;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,9 @@ import java.util.List;
 import java.util.Objects;
 
 import static co.elastic.gradle.AssertContains.assertContains;
+import static co.elastic.gradle.AssertContains.assertDoesNotContain;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
@@ -132,6 +136,12 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                     mavenCentral()
                 }
                 val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
                 dockerBaseImage {
                     osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
                     fromUbuntu("ubuntu", "20.04")
@@ -302,6 +312,56 @@ public class MoreDockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
                 "dockerBaseImageBuild"
         ).build();
 
+    }
+
+    @Test
+    public void testRepoInstall() throws IOException {
+        helper.buildScript("""
+                import java.net.URL
+                plugins {
+                   id("co.elastic.docker-base")
+                   id("co.elastic.vault")
+                }
+                vault {
+                      address.set("https://vault-ci-prod.elastic.dev")
+                      auth {
+                        ghTokenFile()
+                        ghTokenEnv()
+                        tokenEnv()
+                        roleAndSecretEnv()
+                      }
+                }
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                dockerBaseImage {
+                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                    fromUbuntu("ubuntu", "20.04")
+                    repoInstall("software-properties-common")
+                    repoConfig("add-apt-repository ppa:vbernat/haproxy-2.8")
+                    install("haproxy")
+                }
+                """
+        );
+
+        final BuildResult Lockfileresult = gradleRunner.withArguments("--warning-mode", "fail", "-s",
+                "dockerBaseImageLockfile"
+        ).build();
+        System.out.println(Lockfileresult.getOutput());
+
+        // software-properties-common should be mentioned in the dockerBaseImageLockfile Dockerfile
+        final Path lockDockerfilePath = helper.projectDir().resolve("build/dockerBaseImageLockfile/Dockerfile");
+        assertContains(Files.readString(lockDockerfilePath), "software-properties-common");
+
+        // software-properties-common should not be in the lockfile
+        BaseLockfile lockfile = BaseLockfile.parse(Files.newBufferedReader(helper.projectDir().resolve("docker-base-image.lock")));
+        assertFalse(lockfile.getPackages().get(Architecture.current()).findByName("software-properties-common").isPresent());
+
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s",
+                "dockerBaseImageBuild"
+        ).build();
+
+        // software-properties-common should not be mentioned in the dockerBaseImageBuild Dockerfile
+        final Path buildDockerfilePath = helper.projectDir().resolve("build/dockerBaseImageBuild/Dockerfile");
+        assertDoesNotContain(Files.readString(buildDockerfilePath), "software-properties-common");
     }
 
     @Test

@@ -30,16 +30,22 @@ public class TestkitIntegrationTest {
 
     protected GradleTestkitHelper helper;
     protected GradleRunner gradleRunner;
+    protected Path testkitDir;
 
     @BeforeEach
     void setUp(@TempDir Path testProjectDir) throws IOException {
         helper = getHelper(testProjectDir);
+        // Each suite needs to get its own tes-kit dir as running many tests in parallel causes locking issues on the
+        // local artifactory cache. This does create multiple copies of the artefact cache to be used by the tests.
+        testkitDir = Path.of(System.getProperty("java.io.tmpdir")).resolve(this.getClass().getName());
+        Files.createDirectories(testkitDir);
         gradleRunner = getGradleRunner(testProjectDir);
     }
 
     protected GradleRunner getGradleRunner(Path testProjectDir) {
         final GradleRunner gradleRunner = GradleRunner.create()
                 .withProjectDir(testProjectDir.toFile())
+                .withTestKitDir(testkitDir.toFile())
                 .withPluginClasspath();
         return gradleRunner;
     }

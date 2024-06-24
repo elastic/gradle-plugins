@@ -29,9 +29,7 @@ import co.elastic.gradle.utils.RetryUtils;
 import co.elastic.gradle.utils.docker.DockerPluginConventions;
 import co.elastic.gradle.utils.docker.DockerUtils;
 import co.elastic.gradle.utils.docker.UnchangingContainerReference;
-import co.elastic.gradle.utils.docker.instruction.ContainerImageBuildInstruction;
-import co.elastic.gradle.utils.docker.instruction.From;
-import co.elastic.gradle.utils.docker.instruction.SetUser;
+import co.elastic.gradle.utils.docker.instruction.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.csv.CSVFormat;
@@ -60,6 +58,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public abstract class DockerLockfileTask extends DefaultTask implements ImageBuildable, JFrogCliUsingTask {
@@ -157,16 +156,32 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                                         return instruction;
                                     }
                                 }),
-                        Stream.of(
-                                new SetUser("root"),
-                                DockerDaemonActions.wrapInstallCommand(
-                                        this,
-                                        switch (getOSDistribution().get()) {
-                                            case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
-                                            case CENTOS -> "yum -y upgrade";
-                                            case WOLFI -> "apk upgrade";
-                                        }
-                                )
+                        Stream.concat(
+                            getInputInstructions().get().stream().flatMap(i -> {
+                                if (i instanceof RepoInstall repoInstall) {
+                                    final String packages = repoInstall.getPackages().stream().collect(Collectors.joining(" "));
+                                    return Stream.of(
+                                            new SetUser("root"),
+                                            switch (getOSDistribution().get()) {
+                                                case UBUNTU, DEBIAN -> new Run(List.of("apt-get -y --auto-remove purge " + packages));
+                                                case CENTOS -> new Run(List.of("yum -y --remove-leaves remove " + packages));
+                                                case WOLFI -> throw new GradleException("Wolfi images don't support repoInstall") ;
+                                            }
+                                    );
+                                }
+                                return Stream.empty();
+                            }),
+                            Stream.of(
+                                    new SetUser("root"),
+                                    DockerDaemonActions.wrapInstallCommand(
+                                            this,
+                                            switch (getOSDistribution().get()) {
+                                                case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
+                                                case CENTOS -> "yum -y upgrade";
+                                                case WOLFI -> "apk upgrade";
+                                            }
+                                    )
+                            )
                         )
                 )
                 .toList();
