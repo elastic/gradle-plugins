@@ -47,8 +47,7 @@ function archive_yum_packages() {
 }
 
 function archive_apt_packages() {
-  # We need dpkg-scanpackages
-  apt-get install -y dpkg-dev >&2
+
 
   # Make sure all installed packages are downloaded
   dpkg -l | grep "^ii" | awk ' {print $2} ' | xargs apt-get -y install --reinstall --download-only >&2
@@ -72,6 +71,8 @@ function archive_apt_packages() {
     fi
   done
 
+  # We need dpkg-scanpackages
+  apt-get install -y dpkg-dev >&2
   dpkg-scanpackages . | gzip >Packages.gz
   PACKAGES_VERSION=$(sha256sum Packages.gz | cut -f1 -d' ')
   PACKAGES_ARCH=$(uname -p)
