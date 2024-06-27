@@ -47,12 +47,13 @@ function archive_yum_packages() {
 }
 
 function archive_apt_packages() {
-
-
   # Make sure all installed packages are downloaded
   dpkg -l | grep "^ii" | awk ' {print $2} ' | xargs apt-get -y install --reinstall --download-only >&2
 
-  cd /var/cache/apt/archives/
+  # Move installed packages out of cache directory because apt-get install (below) clears the cache
+  mkdir /tmp/packages
+  cd /tmp/packages
+  mv /var/cache/apt/archives/*.deb .
 
   # Rename some files that have url encoded `:` in their name as jfrog cli would otherwise double encode them
   for name in $(find . -name '*%*'); do mv "$name" "$(echo $name | sed s/%3a/./g)"; done
