@@ -6,7 +6,6 @@ if [[ "$RUNNING_INSIDE_DOCKER" == "true" ]]; then
 
   if [[ "$RUNNING_ROOT" == "true" ]]; then
     echo "Running as root"
-    cat /mnt/docker-base-image.lock | grep 'name: "bash"' -A 2 | grep version:
     BASH_VERSION_LOCKFILE=$(cat /mnt/docker-base-image.lock | grep 'name: "bash"' -A 2 | grep version: | cut -d: -f2 | sed 's/"//g')
     BASH_VERSION_LOCKFILE=$(echo $BASH_VERSION_LOCKFILE)
     BASH_RELEASE_LOCKFILE=$(cat /mnt/docker-base-image.lock | grep 'name: "bash"' -A 2 | grep release: | cut -d: -f2 | sed 's/"//g')
@@ -16,6 +15,10 @@ if [[ "$RUNNING_INSIDE_DOCKER" == "true" ]]; then
       BASH_VERSION=$(echo $BASH_VERSION)
       BASH_RELEASE=$(yum info bash | grep Name -A 3 | grep Release | cut -f2 -d: | tail -n 1)
       BASH_RELEASE=$(echo $BASH_RELEASE)
+    elif which apk ; then
+      BASH_VERSION=$(apk info "bash" -d | awk 'NR==1{print $1}' | sed "s/^bash-//")
+      BASH_VERSION=$(echo $BASH_VERSION)
+      BASH_RELEASE=""
     else
       BASH_VERSION=$(apt list --installed | grep bash | cut -d' ' -f2)
       BASH_RELEASE=""
@@ -47,7 +50,7 @@ if [[ "$RUNNING_INSIDE_DOCKER" == "true" ]]; then
       exit 2
     fi
     # shellcheck disable=SC2010
-    if ! ls -ln /home/foobar/foo.txt | grep "1234 1234"; then
+    if ! ls -ln /home/foobar/foo.txt | grep "1234.*1234"; then
       echo "Expected /home/foobar/foo to be owned by 1234 but it was not"
       ls -ln /home/foobar/
       exit 2
@@ -57,7 +60,7 @@ if [[ "$RUNNING_INSIDE_DOCKER" == "true" ]]; then
       exit 2
     fi
     # shellcheck disable=SC2010
-    if ! ls -ln /home/foobar/build.gradle.kts | grep "0 0"; then
+    if ! ls -ln /home/foobar/build.gradle.kts | grep "0.*0"; then
       ls -ln /home/foobar/
       echo "Expected /home/foobar/build.gradle.kts to be owned by root but it was not"
       exit 2

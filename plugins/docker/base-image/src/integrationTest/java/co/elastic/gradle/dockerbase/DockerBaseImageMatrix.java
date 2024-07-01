@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
 
     @ParameterizedTest
-    @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "debian:11"})
+    @ValueSource(strings = {"docker.elastic.co/wolfi/chainguard-base:20230214", "ubuntu:20.04", "ubuntu:22.04", "debian:11"})
     // Todo Temp disabled. fix centos base image plugin builds
     // @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path gradleHome) throws IOException, InterruptedException {
@@ -103,6 +103,12 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
     private void writeSimpleBuildScript(GradleTestkitHelper helper, String baseImages) {
         final String[] from = baseImages.split(":");
         assertEquals(2, from.length);
+        final String fromType;
+        if (baseImages.contains("chainguard")) {
+            fromType = "Wolfi";
+        } else {
+            fromType = from[0].substring(0, 1).toUpperCase() + from[0].substring(1);
+        }
         helper.buildScript(String.format("""
                 import java.net.URL
                 plugins {
@@ -157,7 +163,7 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
                         "chmod -R 777 /home"
                     ))
                     setUser("foobar")
-                    install("patch", "sudo")
+                    install("patch", "sudo", "bash")
                     if ("%s" == "centos") {
                        install("which")
                     }
@@ -165,7 +171,7 @@ public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
                         "whoami > /home/foobar/whoami",
                     )
                 }
-                """, from[0].substring(0, 1).toUpperCase() + from[0].substring(1), from[0], from[1], from[0])
+                """, fromType, from[0], from[1], from[0])
         );
     }
 

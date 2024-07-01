@@ -260,8 +260,12 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         final String type = extension.getOSDistribution().get()
                 .name().toLowerCase(Locale.ROOT);
         final Map<String, String> dependencyNotation = Map.of(
-                "group", type,
-                "name", pkg.getName(),
+                "group", type + (
+                        extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
+                                "/" + Architecture.current().name().toLowerCase(Locale.ROOT)  :
+                                ""
+                ),
+                "name", pkg.name(),
                 // Gradle has trouble dealing with : in the version, so we rename the
                 // packages to have . instead and use the same here
                 "version", switch (extension.getOSDistribution().get()) {
@@ -270,10 +274,12 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     case CENTOS -> pkg.version() + "-" +
                                    pkg.release() + "." +
                                    pkg.architecture();
+                    case WOLFI -> pkg.version();
                 },
                 "ext", switch (extension.getOSDistribution().get()) {
-                    case DEBIAN, UBUNTU ->  pkg.getName().startsWith("__META__") ? "gz" : "deb";
-                    case CENTOS ->  pkg.getName().startsWith("__META__") ? "tar" : "rpm";
+                    case DEBIAN, UBUNTU -> pkg.name().startsWith("__META__") ? "gz" : "deb";
+                    case CENTOS -> pkg.name().startsWith("__META__") ? "tar" : "rpm";
+                    case WOLFI -> pkg.name().startsWith("__META__") ? "gz" : "apk";
                 }
         );
 

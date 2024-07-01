@@ -58,7 +58,7 @@ public record UnchangingPackage(
     public String getPackageName(OSDistribution distribution) {
         return switch (distribution) {
             case CENTOS -> String.format("%s-%s-%s.%s", name, version, release, architecture);
-            case UBUNTU, DEBIAN -> String.format(
+            case UBUNTU, DEBIAN, WOLFI -> String.format(
                     "%s=%s%s",
                     name,
                     version,

@@ -1,7 +1,4 @@
-#!/usr/bin/env bash
-set -e
-
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+#!/usr/bin/env -e bash
 
 function archive_yum_packages() {
   mkdir -p /var/rpms
@@ -88,10 +85,91 @@ function archive_apt_packages() {
   echo "__META__Packages,$PACKAGES_VERSION,,$PACKAGES_ARCH"
 }
 
+archive_apk_packages() {
+  # Ensure all installed packages are downloaded
+  rm -Rf /var/cache/apk/
+  apk update >&2
+  PACKAGES=$(apk info | grep -v chainguard-baselayout)
+  echo "Installed packages: $PACKAGES" >&2
+  URLS=$(apk fetch --url --simulate $PACKAGES)
+
+  # Initialize an empty string to hold the final package=version list
+  package_version_list=""
+
+  # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
+  # do it explicitly. URLS will point to the last version in the registry.
+  for url in $URLS; do
+    # Extract the package name and version from the URL
+    package_name=$(basename "$url" | cut -d'-' -f1)
+    package_version=$(basename "$url" | cut -d'-' -f2- | sed 's/.apk//')
+
+    # Append the package=version to the package_version_list
+    package_version_list="$package_version_list $package_name=$package_version"
+  done
+  apk add $package_version_list
+
+  if apk info --installed curl > /dev/null ; then
+    KEEP_CURL='yes'
+  else
+    echo "Adding curl so we can use it to download packages" >&2
+    apk add curl >&2
+    KEEP_CURL='no'
+  fi
+
+
+  # Create the target directory if it does not exist
+  PACKAGES_ARCH=$(uname -m)
+  mkdir -p /var/cache/apk/archives/
+  mkdir -p "/var/cache/apk/archives/$PACKAGES_ARCH"
+
+  # Iterate through each URL
+  for URL in $URLS; do
+      FILENAME=$(basename "$URL")
+      echo "Downloading: $URL" >&2
+      curl -q -o "/var/cache/apk/archives/$PACKAGES_ARCH/$FILENAME" "$URL" >&2
+  done
+  if [ "$KEEP_CURL" == 'no' ] ; then
+      echo "Removing curl so it's not part of the image" >&2
+     apk del curl >&2
+  fi
+
+  echo "All files have been downloaded to /var/cache/apk/archives/$PACKAGES_ARCH" >&2
+
+  cd "/var/cache/apk/archives/$PACKAGES_ARCH"
+
+  FILE="/etc/apk/world"
+  if [[ ! -f "$FILE" ]]; then
+    echo "File $FILE not found!" >&2
+    exit 1
+  fi
+  for line in $PACKAGES; do
+    package="$line"
+    version=$(apk info "$package" --installed --description | awk 'NR==1{print $1}' | sed "s/^$package-//")
+    echo "Recording: $package=$version in the lockfile" >&2
+    echo "$package,$version,,$arch"
+  done < "$FILE"
+
+  apk index -o Packages.gz *.apk >&2
+  PACKAGES_VERSION=$(sha256sum Packages.gz | cut -f1 -d' ')
+  echo "__META__Packages,$PACKAGES_VERSION,,$PACKAGES_ARCH"
+
+  mv Packages.gz "__META__Packages-${PACKAGES_VERSION}.gz"
+
+  cd "/var/cache/apk/archives/"
+  # Upload the packages using jfrog-cli
+  # shellcheck disable=SC2086
+  CI=TRUE /mnt/jfrog-cli rt upload \
+    $JFROG_CLI_ARGS \
+    "*.*" . >&2
+}
+
+
 if command -v yum &>/dev/null; then
   archive_yum_packages
 elif command -v apt &>/dev/null; then
   archive_apt_packages
+elif command -v apk &>/dev/null; then
+  archive_apk_packages
 else
   echo "No supported package manager found"
   exit 1

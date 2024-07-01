@@ -37,6 +37,15 @@ versions eagerly as newer versions become available, so there's no guarantee tha
 installable. On the bright side this setup also shields the builds from failures or connectivity issues with the public
 infrastructure.
 
+Supported Base Images
+---------------------
+
+Since the plugin interacts with the package manager inside the image the following base images are supported. The OS specificed
+by using the appropriate DSL method:
+ - use `fromUbuntu(...)` for Ubuntu 
+ - use `fromWolfi(...)` for Chainguard Wolfi (uses apk, alpine images might work but are not tested)
+ - use `fromCentos()` for CentOS - deprecated and untested 
+
 Usage
 -----
 
