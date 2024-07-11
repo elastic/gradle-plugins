@@ -126,7 +126,7 @@ archive_apk_packages() {
   for URL in $URLS; do
       FILENAME=$(basename "$URL")
       echo "Downloading: $URL" >&2
-      curl -q -o "/var/cache/apk/archives/$PACKAGES_ARCH/$FILENAME" "$URL" >&2
+      curl --silent -o "/var/cache/apk/archives/$PACKAGES_ARCH/$FILENAME" "$URL" >&2
   done
   if [ "$KEEP_CURL" == 'no' ] ; then
       echo "Removing curl so it's not part of the image" >&2
