@@ -89,16 +89,15 @@ archive_apk_packages() {
   # Ensure all installed packages are downloaded
   rm -Rf /var/cache/apk/
   apk update >&2
-  PACKAGES=$(apk info | grep -v chainguard-baselayout)
+  PACKAGES=$(apk list --installed)
   echo "Installed packages: $PACKAGES" >&2
-  URLS=$(apk fetch --url --simulate $PACKAGES)
 
   # Initialize an empty string to hold the final package=version list
   package_version_list=""
 
   # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
   # do it explicitly. URLS will point to the last version in the registry.
-  url_pattern='(.*)-((\d+\.)+(\d+)(-.*)).apk'
+  url_pattern='(.*)-((\d+\.)+(\d+)(-.*)?).apk'
   for url in $URLS; do
     # Extract the package name and version from the URL
     if [[ $url =~ $url_pattern ]]; then
