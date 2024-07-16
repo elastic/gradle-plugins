@@ -89,8 +89,9 @@ archive_apk_packages() {
   # Ensure all installed packages are downloaded
   rm -Rf /var/cache/apk/
   apk update >&2
-  PACKAGES=$(apk list --installed)
+  PACKAGES=$(apk info | grep -v chainguard-baselayout)
   echo "Installed packages: $PACKAGES" >&2
+  URLS=$(apk fetch --url --simulate $PACKAGES)
 
   # Initialize an empty string to hold the final package=version list
   package_version_list=""
@@ -108,7 +109,7 @@ archive_apk_packages() {
     else
       echo "Could not parse $url with pattern $url_pattern" >&2
       exit 1
-    done
+    fi
   done
   apk add $package_version_list
 
