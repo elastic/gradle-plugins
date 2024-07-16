@@ -1,4 +1,5 @@
 #!/usr/bin/env -e bash
+set -x
 
 function archive_yum_packages() {
   mkdir -p /var/rpms
@@ -100,16 +101,16 @@ archive_apk_packages() {
   # do it explicitly. URLS will point to the last version in the registry.
   # Regex test cases and validation here
   # https://regex101.com/r/b5FQIj/1
-  url_pattern="^.*\/(.*)-((([0-9]+\.)+([0-9]+)|([0-9]+)|([0-9a-z_.]+))(-.*))?\.apk$"
+  url_pattern=".*\/(.*)-((([0-9]+\.)+([0-9]+)|([0-9]+)|([0-9a-z_.]+))-(.*))?\.apk"
   for url in $URLS; do
     # Extract the package name and version from the URL
     if [[ $url =~ $url_pattern ]]; then
-      package_name=BASH_REMATCH[1]
-      package_version=BASH_REMATCH[2]
+      package_name=${BASH_REMATCH[1]}
+      package_version=${BASH_REMATCH[2]}
       # Append the package=version to the package_version_list
       package_version_list="$package_version_list $package_name=$package_version"
     else
-      echo "Could not parse $url with pattern $url_pattern" >&2
+      echo "Could not parse ${url} with pattern ${url_pattern}" >&2
       exit 1
     fi
   done
