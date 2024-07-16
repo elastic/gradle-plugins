@@ -98,7 +98,9 @@ archive_apk_packages() {
 
   # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
   # do it explicitly. URLS will point to the last version in the registry.
-  url_pattern='(.*)-((\d+\.)+(\d+)(-.*)?).apk'
+  # Regex test cases and validation here
+  # https://regex101.com/r/b5FQIj/1
+  url_pattern="^.*\/(.*)-((([0-9]+\.)+([0-9]+)|([0-9]+)|([0-9a-z_.]+))(-.*))?\.apk$"
   for url in $URLS; do
     # Extract the package name and version from the URL
     if [[ $url =~ $url_pattern ]]; then
