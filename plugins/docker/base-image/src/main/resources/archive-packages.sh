@@ -98,13 +98,18 @@ archive_apk_packages() {
 
   # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
   # do it explicitly. URLS will point to the last version in the registry.
+  url_pattern='(.*)-((\d+\.)+(\d+)(-.*)).apk'
   for url in $URLS; do
     # Extract the package name and version from the URL
-    package_name=$(basename "$url" | cut -d'-' -f1)
-    package_version=$(basename "$url" | cut -d'-' -f2- | sed 's/.apk//')
-
-    # Append the package=version to the package_version_list
-    package_version_list="$package_version_list $package_name=$package_version"
+    if [[ $url =~ $url_pattern ]]; then
+      package_name=BASH_REMATCH[1]
+      package_version=BASH_REMATCH[2]
+      # Append the package=version to the package_version_list
+      package_version_list="$package_version_list $package_name=$package_version"
+    else
+      echo "Could not parse $url with pattern $url_pattern" >&2
+      exit 1
+    done
   done
   apk add $package_version_list
 
