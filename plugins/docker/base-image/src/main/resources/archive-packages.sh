@@ -1,5 +1,4 @@
 #!/usr/bin/env -e bash
-set -x
 
 function archive_yum_packages() {
   mkdir -p /var/rpms
@@ -99,20 +98,9 @@ archive_apk_packages() {
 
   # Packages in the base image don't upgrade with apk upgrade because they are locked in /etc/apk/world so we need to
   # do it explicitly. URLS will point to the last version in the registry.
-  # Regex test cases and validation here
-  # https://regex101.com/r/b5FQIj/1
-  url_pattern=".*\/(.*)-((([0-9]+\.)+([0-9]+)|([0-9]+)|([0-9a-z_.]+))-(.*))?\.apk"
   for url in $URLS; do
     # Extract the package name and version from the URL
-    if [[ $url =~ $url_pattern ]]; then
-      package_name=${BASH_REMATCH[1]}
-      package_version=${BASH_REMATCH[2]}
-      # Append the package=version to the package_version_list
-      package_version_list="$package_version_list $package_name=$package_version"
-    else
-      echo "Could not parse ${url} with pattern ${url_pattern}" >&2
-      exit 1
-    fi
+    package_version_list="$package_version_list $(echo $url | sed 's/.*\/\(.*\)-\(.*-[^-]*\).apk/\1=\2/')"
   done
   apk add $package_version_list
 
@@ -120,7 +108,7 @@ archive_apk_packages() {
     KEEP_CURL='yes'
   else
     echo "Adding curl so we can use it to download packages" >&2
-    apk add curl >&2
+    apk add -q curl >&2
     KEEP_CURL='no'
   fi
 
@@ -138,7 +126,7 @@ archive_apk_packages() {
   done
   if [ "$KEEP_CURL" == 'no' ] ; then
       echo "Removing curl so it's not part of the image" >&2
-     apk del curl >&2
+      apk del -q curl >&2
   fi
 
   echo "All files have been downloaded to /var/cache/apk/archives/$PACKAGES_ARCH" >&2
