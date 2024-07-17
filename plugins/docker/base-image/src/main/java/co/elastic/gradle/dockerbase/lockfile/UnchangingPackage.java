@@ -23,7 +23,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import org.gradle.api.tasks.Input;
 
 import java.io.Serializable;
-import java.lang.IllegalArgumentException;
 
 public record UnchangingPackage(
         String name,
@@ -33,14 +32,7 @@ public record UnchangingPackage(
 ) implements Serializable {
 
     @JsonCreator
-    public UnchangingPackage(String name, String version, String release, String architecture) {
-        this.name = name;
-        this.version = version;
-        this.release = release;
-        if (architecture != null && architecture.trim().length() > 0) {
-            this.architecture = architecture;
-        }
-        throw new IllegalArgumentException("Architecture must be defined");
+    public UnchangingPackage {
     }
 
     @Input
