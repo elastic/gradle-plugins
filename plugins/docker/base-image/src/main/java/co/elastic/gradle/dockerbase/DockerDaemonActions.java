@@ -135,13 +135,13 @@ public abstract class DockerDaemonActions {
                                           "mkdir '" + archDir + "' && " +
                                           "mv *.apk '" + archDir + "' &&" +
                                           "mv __META__Packages* '" + archDir + "/APKINDEX.tar.gz' &&" +
-                                          "apk update -q --allow-untrusted && find /var/packages-from-gradle").filter(s -> requiresCleanLayers),
+                                          "apk update --allow-untrusted && find /var/packages-from-gradle").filter(s -> requiresCleanLayers),
                                 // When building the lock-file we do NOT allow untrusted sources
                                 Stream.of(command).filter(s -> !requiresCleanLayers),
                                 // When we're building the actual image, everything is coming from Gradle, so it's safe
                                 // and already checked (as long as dependency verification is enabled)
                                 // The package db itself is not signed, so we need to allow untrusted
-                                Stream.of(command.replace("apk add -q", "apk add -q --allow-untrusted")).filter(s -> requiresCleanLayers)
+                                Stream.of(command.replace("apk add", "apk add --allow-untrusted")).filter(s -> requiresCleanLayers)
                         ).flatMap(
                                 Function.identity()
                         ).collect(Collectors.toList());
@@ -164,7 +164,7 @@ public abstract class DockerDaemonActions {
                                 case UBUNTU, DEBIAN -> "apt-get install -y " + packagesToInstall;
                                 case CENTOS -> "yum install --setopt=skip_missing_names_on_install=False -y " +
                                                 packagesToInstall;
-                                case WOLFI -> "apk add -q " + packagesToInstall;
+                                case WOLFI -> "apk add " + packagesToInstall;
                             }
                     ),
                     // And we restore the user after that

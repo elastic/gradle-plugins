@@ -178,7 +178,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                                             switch (getOSDistribution().get()) {
                                                 case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
                                                 case CENTOS -> "yum -y upgrade";
-                                                case WOLFI -> "apk -q upgrade";
+                                                case WOLFI -> "apk upgrade";
                                             }
                                     )
                             )
