@@ -34,6 +34,7 @@ import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.FromLocalImageBuild;
 import org.gradle.api.*;
+import org.gradle.api.GradleException;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
 import org.gradle.api.artifacts.repositories.PasswordCredentials;
@@ -262,7 +263,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         final Map<String, String> dependencyNotation = Map.of(
                 "group", type + (
                         extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
-                                "/" + Architecture.current().name().toLowerCase(Locale.ROOT)  :
+                                "/" + fromDockerName(pkg.architecture()).name().toLowerCase(Locale.ROOT) :
                                 ""
                 ),
                 "name", pkg.name(),
@@ -287,6 +288,18 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                 packageConfigurationName,
                 dependencyNotation
         );
+    }
+
+    public static Architecture fromDockerName(String dockerName) {
+        switch (dockerName) {
+            case "amd64":
+            case "x86_64":
+                return Architecture.X86_64;
+            case "aarch64":
+                return Architecture.AARCH64;
+            default:
+                throw new GradleException("Unknown Architecture " + dockerName);
+        }
     }
 
     @NotNull
