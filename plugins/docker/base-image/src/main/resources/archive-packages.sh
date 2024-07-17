@@ -102,7 +102,7 @@ archive_apk_packages() {
     # Extract the package name and version from the URL
     package_version_list="$package_version_list $(echo $url | sed 's/.*\/\(.*\)-\(.*-[^-]*\).apk/\1=\2/')"
   done
-  apk add $package_version_list
+  apk add -q $package_version_list
 
   if apk info --installed curl > /dev/null ; then
     KEEP_CURL='yes'
