@@ -270,7 +270,6 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         }
         try (Reader reader = new StringReader(csvString)) {
             CSVParser parser = CSVParser.parse(reader, CSVFormat.DEFAULT);
-            System.out.println(csvString);
             packages.put(
                     getArchitecture().get(),
                     new Packages(
