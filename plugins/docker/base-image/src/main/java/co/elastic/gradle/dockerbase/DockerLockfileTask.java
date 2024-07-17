@@ -178,7 +178,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                                             switch (getOSDistribution().get()) {
                                                 case UBUNTU, DEBIAN -> "apt-get -y --allow-unauthenticated upgrade";
                                                 case CENTOS -> "yum -y upgrade";
-                                                case WOLFI -> "apk upgrade";
+                                                case WOLFI -> "apk -q upgrade";
                                             }
                                     )
                             )
@@ -270,6 +270,7 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
         }
         try (Reader reader = new StringReader(csvString)) {
             CSVParser parser = CSVParser.parse(reader, CSVFormat.DEFAULT);
+            System.out.println(csvString);
             packages.put(
                     getArchitecture().get(),
                     new Packages(
