@@ -138,7 +138,6 @@ archive_apk_packages() {
     echo "File $FILE not found!" >&2
     exit 1
   fi
-  arch=$PACKAGES_ARCH
   for line in $PACKAGES; do
     package="$line"
     version=$(apk info "$package" --installed --description | awk 'NR==1{print $1}' | sed "s/^$package-//")
