@@ -229,7 +229,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                         if (lockfilePackages.containsKey(configuration.getKey())) {
                             lockfilePackages.get(configuration.getKey()).getPackages()
                                     .stream()
-                                    .forEach(pkg -> addPackageAsDependency(target, extension, configuration.getValue().getName(), pkg));
+                                    .forEach(pkg -> addPackageAsDependency(target, extension, configuration, pkg));
                         }
                     }
                 } catch (IOException e) {
@@ -257,13 +257,13 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         }
     }
 
-    protected static void addPackageAsDependency(Project target, BaseImageExtension extension, String packageConfigurationName, UnchangingPackage pkg) {
+    protected static void addPackageAsDependency(Project target, BaseImageExtension extension, Map.Entry<Architecture, Configuration> packageConfiguration, UnchangingPackage pkg) {
         final String type = extension.getOSDistribution().get()
                 .name().toLowerCase(Locale.ROOT);
         final Map<String, String> dependencyNotation = Map.of(
                 "group", type + (
                         extension.getOSDistribution().get().equals(OSDistribution.WOLFI) ?
-                                "/" + fromDockerName(pkg.architecture()).name().toLowerCase(Locale.ROOT) :
+                                "/" + packageConfiguration.getKey().toString().toLowerCase(Locale.ROOT) :
                                 ""
                 ),
                 "name", pkg.name(),
@@ -285,21 +285,9 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         );
 
         target.getDependencies().add(
-                packageConfigurationName,
+                packageConfiguration.getValue().getName(),
                 dependencyNotation
         );
-    }
-
-    public static Architecture fromDockerName(String dockerName) {
-        switch (dockerName) {
-            case "amd64":
-            case "x86_64":
-                return Architecture.X86_64;
-            case "aarch64":
-                return Architecture.AARCH64;
-            default:
-                throw new GradleException("Unknown Architecture " + dockerName);
-        }
     }
 
     @NotNull
