@@ -34,7 +34,6 @@ import co.elastic.gradle.utils.docker.UnchangingContainerReference;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.FromLocalImageBuild;
 import org.gradle.api.*;
-import org.gradle.api.GradleException;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
 import org.gradle.api.artifacts.repositories.PasswordCredentials;
