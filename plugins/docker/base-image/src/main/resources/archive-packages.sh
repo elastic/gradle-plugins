@@ -100,19 +100,15 @@ archive_apk_packages() {
   # do it explicitly. URLS will point to the last version in the registry.
   for url in $URLS; do
     # Extract the package name and version from the URL
-    package_name=$(basename "$url" | cut -d'-' -f1)
-    package_version=$(basename "$url" | cut -d'-' -f2- | sed 's/.apk//')
-
-    # Append the package=version to the package_version_list
-    package_version_list="$package_version_list $package_name=$package_version"
+    package_version_list="$package_version_list $(echo $url | sed 's/.*\/\(.*\)-\(.*-[^-]*\).apk/\1=\2/')"
   done
-  apk add $package_version_list
+  apk add -q $package_version_list
 
   if apk info --installed curl > /dev/null ; then
     KEEP_CURL='yes'
   else
     echo "Adding curl so we can use it to download packages" >&2
-    apk add curl >&2
+    apk add -q curl >&2
     KEEP_CURL='no'
   fi
 
@@ -130,7 +126,7 @@ archive_apk_packages() {
   done
   if [ "$KEEP_CURL" == 'no' ] ; then
       echo "Removing curl so it's not part of the image" >&2
-     apk del curl >&2
+      apk del -q curl >&2
   fi
 
   echo "All files have been downloaded to /var/cache/apk/archives/$PACKAGES_ARCH" >&2
