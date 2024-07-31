@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class DockerBaseImageMatrix extends TestkitIntegrationTest  {
 
     @ParameterizedTest
-    @ValueSource(strings = {"docker.elastic.co/wolfi/chainguard-base:20230214", "ubuntu:20.04", "ubuntu:22.04", "debian:11"})
+    @ValueSource(strings = {"docker.elastic.co/wolfi/chainguard-base:latest", "ubuntu:20.04", "ubuntu:22.04", "debian:11"})
     // Todo Temp disabled. fix centos base image plugin builds
     // @ValueSource(strings = {"ubuntu:20.04", "ubuntu:22.04", "centos:7", "debian:11"})
     public void testSingleProject(String baseImages, @TempDir Path gradleHome) throws IOException, InterruptedException {
