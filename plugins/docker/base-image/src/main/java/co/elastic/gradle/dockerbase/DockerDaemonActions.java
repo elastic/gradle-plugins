@@ -367,7 +367,6 @@ public abstract class DockerDaemonActions {
                 spec.commandLine("docker", "image", "build", "--platform", "linux/" + buildable.getArchitecture().get().dockerName(),
                         "--quiet=false",
                         "--progress=plain",
-                        "--network=host",
                         "--iidfile=" + buildable.getImageIdFile().get().getAsFile(), ".", "-t",
                         uuid
                 );
@@ -376,7 +375,6 @@ public abstract class DockerDaemonActions {
                         "--quiet=false",
                         "--no-cache",
                         "--progress=plain",
-                        "--network=host",
                         "--iidfile=" + buildable.getImageIdFile().get().getAsFile(), ".", "-t",
                         uuid
                 );
