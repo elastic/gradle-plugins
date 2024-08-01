@@ -137,7 +137,7 @@ public abstract class DockerDaemonActions {
                                           "mv __META__Packages* '" + archDir + "/APKINDEX.tar.gz' &&" +
                                           "apk update --allow-untrusted && find /var/packages-from-gradle").filter(s -> requiresCleanLayers),
                                 // When building the lock-file we do NOT allow untrusted sources
-                                Stream.of(command).filter(s -> !requiresCleanLayers),
+                                Stream.of(command.replace("apk add", "apk add --no-cache")).filter(s -> !requiresCleanLayers),
                                 // When we're building the actual image, everything is coming from Gradle, so it's safe
                                 // and already checked (as long as dependency verification is enabled)
                                 // The package db itself is not signed, so we need to allow untrusted
