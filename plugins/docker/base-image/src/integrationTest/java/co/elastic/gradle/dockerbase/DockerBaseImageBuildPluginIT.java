@@ -359,6 +359,55 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    public void testLockfileWithEmulationWolfi() throws IOException {
+        assumeTrue(
+                System.getenv().getOrDefault("BUILDKITE", "false").equals("false"),
+                "Test will be skipped in CI because there's no emulation support"
+        );
+        helper.buildScript("""
+        import java.net.URL
+            plugins {
+               id("co.elastic.docker-base")
+               id("co.elastic.cli.jfrog")
+               id("co.elastic.vault")
+            }
+            vault {
+                  address.set("https://vault-ci-prod.elastic.dev")
+                  auth {
+                    ghTokenFile()
+                    ghTokenEnv()
+                    tokenEnv()
+                    roleAndSecretEnv()
+                  }
+            }
+            val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+            cli {
+                jfrog {
+                    username.set(creds["username"])
+                    password.set(creds["plaintext"])
+                }
+            }
+            dockerBaseImage {
+                osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
+                fromWolfi("docker.elastic.co/wolfi/chainguard-base", "20230214")
+                install("patch")
+            }
+        """);
+        final BuildResult result = runGradleTask("dockerBaseImageLockfileAllWithEmulation");
+        System.out.println(result.getOutput());
+        assertNotNull(result.task(":dockerBaseImageLockfile"), "Expected task dockerBaseImageLockfile to have run");
+        switch (Architecture.current()) {
+            case X86_64 -> {
+                assertNotNull(result.task(":dockerBaseImageLockfilearm64"), "Expected task dockerBaseImageLockfilearm64 to have run.");
+            }
+            case AARCH64 -> {
+                assertNotNull(result.task(":dockerBaseImageLockfileamd64"), "Expected task dockerBaseImageLockfileamd64 to have run.");
+            }
+        }
+
+    }
+
+    @Test
     public void testVerificationMetadata() throws IOException, XPathExpressionException, ParserConfigurationException, TransformerException, SAXException {
         Files.copy(
                 Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
