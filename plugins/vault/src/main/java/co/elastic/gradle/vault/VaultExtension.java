@@ -18,7 +18,6 @@
  */
 package co.elastic.gradle.vault;
 
-import co.elastic.gradle.utils.CacheUtils;
 import co.elastic.gradle.vault.VaultAuthenticationExtension.VaultTokenFile;
 import com.bettercloud.vault.Vault;
 import com.bettercloud.vault.VaultException;
@@ -38,8 +37,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.*;
 
@@ -101,7 +102,7 @@ abstract public class VaultExtension implements ExtensionAware {
         final Path leaseExpiration = cacheDir.toPath().resolve(path).resolve("leaseExpiration");
         final Path dataPath = cacheDir.toPath().resolve(path).resolve("data");
 
-        final Map<String, String> cachedData = CacheUtils.tryReadCache(leaseExpiration, dataPath);
+        final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath);
         if (cachedData != null) {
             return getProviderFactory().provider(() -> cachedData);
         }
@@ -111,7 +112,7 @@ abstract public class VaultExtension implements ExtensionAware {
 
             LogicalResponse response = getDataFromVault(path);
 
-            CacheUtils.writeCacheDir(
+            writeCacheDir(
                     leaseExpiration,
                     String.valueOf(
                             System.currentTimeMillis() + MILLISECONDS.convert(
@@ -124,7 +125,7 @@ abstract public class VaultExtension implements ExtensionAware {
             );
             final Map<String, String> data = response.getData();
             data.forEach((key, value) -> {
-                CacheUtils.writeCacheDir(dataPath.resolve(key), value);
+                writeCacheDir(dataPath.resolve(key), value);
             });
 
             return data;
@@ -156,6 +157,46 @@ abstract public class VaultExtension implements ExtensionAware {
         return response;
     }
 
+    private Map<String, String> tryReadCache(Path leaseExpiration, Path data) {
+        if (Files.exists(leaseExpiration)) {
+            try {
+                final long expireMillis = Long.parseLong(Files.readString(leaseExpiration));
+                if (isValidLease(expireMillis)) {
+                    return Files.list(data).collect(Collectors.toMap(
+                            path -> path.getFileName().toString(),
+                            path -> {
+                                try {
+                                    return Files.readString(path);
+                                } catch (IOException e) {
+                                    throw new UncheckedIOException(e);
+                                }
+                            }
+                    ));
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+        return null;
+    }
+
+    private void writeCacheDir(Path path, String content) {
+        try {
+            Files.createDirectories(path.getParent());
+            Files.writeString(path, content);
+            if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(
+                        path,
+                        PosixFilePermissions.fromString("rw-------")
+                );
+            } else {
+                logger.warn("Not able to set {} to read only because the filesystem is not posix.", path);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private Vault getDriver() {
         if (getAuthExtension().getAuthMethods().isEmpty()) {
             throw new GradleException("No authentication configured to access " + getAddress().get() +
@@ -176,7 +217,7 @@ abstract public class VaultExtension implements ExtensionAware {
         final VaultTokenFile cachedToken = getAuthExtension().internalCachedTokenFile(
                 tokenValue.toFile()
         );
-        if (cachedToken.isMethodUsable() && CacheUtils.isValidLease(expiration)) {
+        if (cachedToken.isMethodUsable() && isValidLease(expiration)) {
             return (new VaultAccessStrategy()).access(this, cachedToken, (token, expireMillis) -> {});
         }
         logger.lifecycle("Authenticating to vault at " + getAddress().get());
@@ -184,11 +225,15 @@ abstract public class VaultExtension implements ExtensionAware {
             logger.lifecycle(authMethod.getExplanation());
             if (authMethod.isMethodUsable()) {
                 return (new VaultAccessStrategy()).access(this, authMethod, (token, expireMillis) -> {
-                    CacheUtils.writeCacheDir(tokenValue, token);
-                    CacheUtils.writeCacheDir(cachedTokenExpiration, expireMillis.toString());
+                    writeCacheDir(tokenValue, token);
+                    writeCacheDir(cachedTokenExpiration, expireMillis.toString());
                 });
             }
         }
         throw new GradleException("Could not find a suitable auth strategy");
+    }
+
+    private boolean isValidLease(Long expirationMillis) {
+        return expirationMillis - EXPIRATION_BUFFER > System.currentTimeMillis();
     }
 }
