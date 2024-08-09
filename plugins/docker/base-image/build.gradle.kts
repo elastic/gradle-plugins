@@ -20,7 +20,7 @@ dependencies {
     implementation(project(":plugins:docker:docker-lib"))
     implementation(project(":plugins:lifecycle"))
 
-    val jacksonVersion = "2.17.1"
+    val jacksonVersion = "2.17.2"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("org.jetbrains:annotations:23.0.0")
