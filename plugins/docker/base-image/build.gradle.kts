@@ -29,7 +29,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.0-4")
 
     // Fixme: remove dependency from base image
-    implementation("com.google.cloud.tools:jib-core:0.27.0")
+    implementation("com.google.cloud.tools:jib-core:0.27.1")
 
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:vault"))
