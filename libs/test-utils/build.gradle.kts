@@ -3,6 +3,6 @@ plugins {
 }
 
 dependencies {
-    implementation("org.junit.jupiter:junit-jupiter-api:5.7.2")
+    implementation("org.junit.jupiter:junit-jupiter-api:5.10.3")
     implementation(gradleTestKit())
 }
