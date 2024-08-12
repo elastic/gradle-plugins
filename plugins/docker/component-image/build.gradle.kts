@@ -25,7 +25,7 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.google.cloud.tools:jib-core:0.27.0")
     implementation("com.google.jimfs:jimfs:1.3.0")
-    runtimeOnly("com.github.luben:zstd-jni:1.5.0-4")
+    runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
     implementation("org.apache.commons:commons-compress:1.26.1")
     implementation("commons-io:commons-io:2.11.0")
     implementation("org.jetbrains:annotations:23.0.0")
