@@ -12,7 +12,7 @@ steps:
           diskSizeGb: 80
           machineType: 'custom-6-18432'
         plugins:
-          - elastic/vault-docker-login#v0.3.0:
+          - elastic/vault-docker-login#v0.5.2:
               secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
       - label: ":pipeline: :gcloud: Build examples: docker-full"
         commands:
@@ -42,7 +42,7 @@ steps:
           imagePrefix: cloud-ubuntu-2204-aarch64
           diskName: "/dev/xvda"
         plugins:
-          - elastic/vault-docker-login#v0.3.0:
+          - elastic/vault-docker-login#v0.5.2:
               secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
       - label: ":pipeline: :aws-logo:  Build examples: docker-full"
         commands:
