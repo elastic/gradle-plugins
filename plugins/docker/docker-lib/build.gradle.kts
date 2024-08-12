@@ -14,5 +14,5 @@ dependencies {
     implementation(project(":libs:utils"))
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
     implementation("org.apache.commons:commons-compress:1.27.0")
-    implementation("commons-io:commons-io:2.11.0")
+    implementation("commons-io:commons-io:2.16.1")
 }
