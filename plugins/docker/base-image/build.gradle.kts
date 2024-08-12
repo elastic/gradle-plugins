@@ -12,7 +12,7 @@ gradlePlugin {
 
 dependencies {
     implementation("org.apache.commons:commons-compress:1.27.0")
-    implementation("commons-io:commons-io:2.11.0")
+    implementation("commons-io:commons-io:2.16.1")
     implementation(project(":libs:docker"))
     implementation(project(":libs:utils"))
 
@@ -37,7 +37,7 @@ dependencies {
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
 
-    integrationTestImplementation("commons-io:commons-io:2.11.0")
+    integrationTestImplementation("commons-io:commons-io:2.16.1")
     integrationTestImplementation("com.squareup.okhttp:okhttp:2.7.5")
     integrationTestImplementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     integrationTestImplementation(project(":libs:utils"))
