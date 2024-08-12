@@ -24,7 +24,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("org.jetbrains:annotations:23.0.0")
-    implementation("org.apache.commons:commons-csv:1.9.0")
+    implementation("org.apache.commons:commons-csv:1.11.0")
 
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
 
