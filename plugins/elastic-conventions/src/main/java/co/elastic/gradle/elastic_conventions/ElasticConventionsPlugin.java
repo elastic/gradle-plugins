@@ -25,6 +25,7 @@ import co.elastic.gradle.dockerbase.BaseImageExtension;
 import co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;
+import co.elastic.gradle.utils.CacheUtils;
 import co.elastic.gradle.vault.VaultAuthenticationExtension;
 import co.elastic.gradle.vault.VaultExtension;
 import co.elastic.gradle.vault.VaultPlugin;
@@ -50,13 +51,53 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
+    private final File GRADLE_AUTH_PROPS_FILE =
+            Paths.get(System.getProperty("user.home") + "/.elastic/gradle-auth.properties").toFile();
+
     public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
+
+    Properties props = new Properties();
+
+    private Map<String, String> getArtifactoryCreds(VaultExtension vault, Project target) {
+        if (CacheUtils.IS_CI)
+            return vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
+        else {
+            try {
+                props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
+                return Map.of("username", props.getProperty("username"), "plaintext", props.getProperty("plaintext"));
+            } catch (IOException ex) {
+                throw new GradleException("""
+                        Error while reading Artifactory secrets from ${authPropertiesFile.absolutePath}! 
+                        |   Please make sure you've followed our initial setup guide:
+                        |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
+                        |Exception thrown:""".trim(), ex);
+            }
+        }
+    }
+
+    private String getSnykCreds(VaultExtension vault, Project target) {
+        if (CacheUtils.IS_CI)
+            return vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey");
+        else {
+            try {
+                props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
+                return props.getProperty("snykApiKey");
+            } catch (IOException ex) {
+                throw new GradleException("""
+                                    Error while reading snykApiKey from ${authPropertiesFile.absolutePath}! 
+                                    |   Please make sure you've followed our initial setup guide:
+                                    |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
+                                    |Exception thrown:""".trim(), ex);
+            }
+        }
+    }
 
     private String getVaultArtifactoryPath(Project target) {
 
@@ -104,7 +145,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                     target.getLogger().info("Configuring Snyk token env var for " + task.getPath());
                     task.environment(
                             "SNYK_TOKEN",
-                            vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey")
+                            getSnykCreds(vault, target)
                     );
                 });
         });
@@ -112,7 +153,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
             target.getPlugins().apply(VaultPlugin.class);
             final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
+            var creds = getArtifactoryCreds(vault, target);
             try {
                 extension.getOsPackageRepository().set(new URL(
                         "https://" + creds.get("username") + ":" + creds.get("plaintext") +
@@ -135,7 +176,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                         listOfNames.add(extensionSchema.getName());
                     }
                 }
-                var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
+                var creds = getArtifactoryCreds(vault, target);
                 for (String name : listOfNames) {
                     final BaseCLiExtension extension = (BaseCLiExtension) cliExtension.getExtensions().getByName(name);
                     extension.getUsername().set(creds.get("username"));
@@ -163,9 +204,8 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
         buildScan.publishAlways();
 
-        boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
         // Don't publish in the background on CI since we use ephemeral workers
-        buildScan.setUploadInBackground(!isCI);
+        buildScan.setUploadInBackground(!CacheUtils.IS_CI);
         buildScan.setServer("https://gradle-enterprise.elastic.co");
         obfuscation.ipAddresses(ip -> ip.stream().map(it -> "0.0.0.0").toList());
 
@@ -178,7 +218,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         var jobName = getFirsEnvVar("JOB_NAME", "BUILDKITE_PIPELINE_NAME");
         var nodeName = getFirsEnvVar("NODE_NAME", "BUILDKITE_AGENT_NAME");
 
-        if (isCI) {
+        if (CacheUtils.IS_CI) {
             buildScan.tag("CI");
         }
 

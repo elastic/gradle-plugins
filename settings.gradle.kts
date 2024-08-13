@@ -10,21 +10,6 @@ plugins {
 val vault:VaultExtension = extensions.findByType()!!
 val creds:Map<String, String> = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/cloud-build-cache-us-east1").get()
 
-gradleEnterprise {
-    buildCache {
-        val isRunningInCI = System.getenv("BUILD_URL") != null || System.getenv("CI") == "true"
-        remote<HttpBuildCache> {
-            isEnabled = true
-            url = uri("https://cloud-gradle-cache-us-east1.elastic.dev/cache/")
-            isPush = isRunningInCI
-            credentials {
-                username = creds["username"]
-                password = creds["password"]
-            }
-        }
-    }
-}
-
 
 include("libs")
 include("libs:test-utils")
