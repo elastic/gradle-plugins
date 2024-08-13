@@ -28,7 +28,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
     implementation("org.apache.commons:commons-compress:1.27.0")
     implementation("commons-io:commons-io:2.16.1")
-    implementation("org.jetbrains:annotations:23.1.0")
+    implementation("org.jetbrains:annotations:24.1.0")
 
     integrationTestImplementation("commons-io:commons-io:2.16.1")
     integrationTestImplementation("com.squareup.okhttp:okhttp:2.7.5")
