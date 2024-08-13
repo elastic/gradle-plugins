@@ -23,7 +23,7 @@ dependencies {
     val jacksonVersion = "2.17.2"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
-    implementation("org.jetbrains:annotations:23.1.0")
+    implementation("org.jetbrains:annotations:24.1.0")
     implementation("org.apache.commons:commons-csv:1.11.0")
 
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
