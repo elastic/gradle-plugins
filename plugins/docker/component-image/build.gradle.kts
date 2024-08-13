@@ -20,7 +20,7 @@ dependencies {
     implementation(project(":plugins:cli:manifest-tool"))
     implementation(project(":plugins:cli:snyk"))
 
-    val jacksonVersion = "2.17.1"
+    val jacksonVersion = "2.17.2"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.google.cloud.tools:jib-core:0.27.1")
