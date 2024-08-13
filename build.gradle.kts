@@ -5,7 +5,7 @@ import co.elastic.gradle.utils.Architecture
 
 plugins {
     id("com.gradle.plugin-publish").version("1.2.1").apply(false)
-    id("com.github.jk1.dependency-license-report").version("2.5")
+    id("com.github.jk1.dependency-license-report").version("2.8")
 
     // self-loop
     val versionReleased:String = File("version-released").readText().trim()
