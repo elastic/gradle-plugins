@@ -6,7 +6,7 @@ dependencies {
     implementation(gradleApi())
     implementation("org.apache.commons:commons-compress:1.27.0")
     implementation("commons-io:commons-io:2.16.1")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.3")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
 }
 
 tasks.test {
