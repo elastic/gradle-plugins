@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Map;
 import java.util.Objects;
 
 import static co.elastic.gradle.AssertContains.assertContains;
@@ -39,19 +40,24 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void withLifecycle() {
-        helper.settings("""
+        helper.settings(String.format("""
+                import %s
                 plugins {
+                    id("co.elastic.vault")
                     id("co.elastic.elastic-conventions")
                 }
-                """);
-        helper.buildScript("""
+                """, VaultExtension.class.getName()));
+        helper.buildScript(String.format("""
+                import %s
                 plugins {
+                    id("co.elastic.vault")
                     id("co.elastic.elastic-conventions")
                 }
-                """);
+                """, VaultExtension.class.getName()));
 
         final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "check")
+                .withEnvironment(Map.of("BUILDKITE", "true"))
+                .withArguments("--warning-mode", "fail", "-s", "check", getVaultPrefixProperty())
                 .build();
         System.out.println(result.getOutput());
     }
@@ -83,7 +89,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "help")
+                .withEnvironment(Map.of("BUILDKITE", "true"))
+                .withArguments("--warning-mode", "fail", "-s", "help", getVaultPrefixProperty())
                 .build();
 
         assertContains(result.getOutput(), "settings secret is test");
@@ -114,6 +121,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult result = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
                 .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies", getVaultPrefixProperty())
                 .build();
 
@@ -151,6 +159,7 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         );
 
         final BuildResult result = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
                 .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies")
                 .buildAndFail();
 
@@ -167,11 +176,13 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
     public void withCliMultiProject() {
-        helper.buildScript("""
-        plugins {               
+        helper.buildScript(String.format("""
+        import %s
+        plugins {
+            id("co.elastic.vault")
             id("co.elastic.elastic-conventions")
-        }    
-        """);
+        }
+        """, VaultExtension.class.getName()));
         helper.buildScript("p1", String.format("""
                 import %s
                 import %s
@@ -211,15 +222,18 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
         ));
 
-        helper.settings("""
+        helper.settings(String.format("""
+                      import %s
                       include("p1")
                       include("p2")
                       plugins {
+                       id("co.elastic.vault")
                        id("co.elastic.elastic-conventions")
-                      }                      
-                  """);
+                      }
+                  """, VaultExtension.class.getName()));
 
         final BuildResult result = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
                 .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies", getVaultPrefixProperty())
                 .build();
 
@@ -275,16 +289,18 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 }                
                 """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
         ));
-
-        helper.settings("""
-                      include("p1")
-                      include("p2")
-                      plugins {
-                       id("co.elastic.elastic-conventions")
-                      }                      
-                  """);
+        helper.settings(String.format("""
+                import %s
+                include("p1")
+                include("p2")
+                plugins {
+                    id("co.elastic.vault")
+                    id("co.elastic.elastic-conventions")
+                }
+                """, VaultExtension.class.getName()));
 
         final BuildResult result = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
                 .withArguments("--warning-mode", "fail", "-s", "check", "--refresh-dependencies", getVaultPrefixProperty())
                 .build();
 
@@ -313,7 +329,6 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                        id("co.elastic.docker-component")
                        id("co.elastic.elastic-conventions")
                    }
-                   
                    dockerBaseImage {
                        fromUbuntu("ubuntu", "20.04")
                    }
@@ -325,12 +340,17 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 """
         );
 
-        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
+        final BuildResult scanResult = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
+                .withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
                 .buildAndFail();
 
         assertContains(scanResult.getOutput(), "[snyk] Tested ");
 
-        gradleRunner.withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty()).build();
+        gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
+                .withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty())
+                .build();
     }
 
     @Test
@@ -344,9 +364,8 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                    plugins {
                        id("co.elastic.elastic-conventions")
                        id("co.elastic.docker-base")
-                       id("co.elastic.docker-component")                       
+                       id("co.elastic.docker-component")
                    }
-                   
                    dockerBaseImage {
                        fromUbuntu("ubuntu", "20.04")
                    }
@@ -358,7 +377,9 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 """
         );
 
-        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
+        final BuildResult scanResult = gradleRunner
+                .withEnvironment(Map.of("BUILDKITE", "true"))
+                .withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
                 .buildAndFail();
 
         assertContains(scanResult.getOutput(), "[snyk] Tested ");

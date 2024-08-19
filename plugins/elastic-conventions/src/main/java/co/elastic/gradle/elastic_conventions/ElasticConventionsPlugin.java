@@ -34,6 +34,7 @@ import com.gradle.enterprise.gradleplugin.GradleEnterprisePlugin;
 import com.gradle.scan.plugin.BuildResult;
 import com.gradle.scan.plugin.BuildScanDataObfuscation;
 import com.gradle.scan.plugin.BuildScanExtension;
+import org.gradle.StartParameter;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
@@ -59,14 +60,23 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("unused")
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
-    private final boolean IS_CI = System.getenv("BUILDKITE").equals("true");
-    
-    private final File GRADLE_AUTH_PROPS_FILE =
+    private final boolean IS_CI = "true".equals(System.getenv("BUILDKITE"));
+
+    private final File DEFAULT_GRADLE_AUTH_PROPS_FILE =
             Paths.get(System.getProperty("user.home") + "/.elastic/gradle-auth.properties").toFile();
+    private final String GRADLE_AUTH_PROPERTIES_OVERRIDE = System.getenv("GRADLE_AUTH_PROPERTIES_OVERRIDE");
+    private final File GRADLE_AUTH_PROPS_FILE =
+            GRADLE_AUTH_PROPERTIES_OVERRIDE != null ? Paths.get(GRADLE_AUTH_PROPERTIES_OVERRIDE).toFile() : DEFAULT_GRADLE_AUTH_PROPS_FILE;
 
     public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
 
     private Properties props = new Properties();
+
+    private final String FAILURE_TO_FIND_PROPS_MSG = String.format("""
+                        Error while reading Artifactory secrets from %s! 
+                        |   Please make sure you've followed our initial setup guide:
+                        |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
+                        |Exception thrown:""".trim(), GRADLE_AUTH_PROPS_FILE.getAbsolutePath());
 
     private Map<String, String> getArtifactoryCreds(VaultExtension vault, Project target) {
         if (IS_CI)
@@ -74,13 +84,9 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         else {
             try {
                 props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
-                return Map.of("username", props.getProperty("username"), "plaintext", props.getProperty("plaintext"));
+                return Map.of("username", props.getProperty("email"), "plaintext", props.getProperty("artifactory.apikey"));
             } catch (IOException ex) {
-                throw new GradleException("""
-                        Error while reading Artifactory secrets from ${GRADLE_AUTH_PROPS_FILE.absolutePath}! 
-                        |   Please make sure you've followed our initial setup guide:
-                        |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
-                        |Exception thrown:""".trim(), ex);
+                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
             }
         }
     }
@@ -93,11 +99,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                 props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
                 return props.getProperty("snykApiKey");
             } catch (IOException ex) {
-                throw new GradleException("""
-                                    Error while reading snykApiKey from ${GRADLE_AUTH_PROPS_FILE.absolutePath}! 
-                                    |   Please make sure you've followed our initial setup guide:
-                                    |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
-                                    |Exception thrown:""".trim(), ex);
+                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
             }
         }
     }
@@ -108,13 +110,9 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         else {
             try {
                 props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
-                return Map.of("username", props.getProperty("username"), "password", props.getProperty("password"));
+                return Map.of("username", props.getProperty("email"), "password", props.getProperty("gradleBuildCache.apikey"));
             } catch (IOException ex) {
-                throw new GradleException("""
-                                    Error while reading Gradle Enterprise Credentials from ${GRADLE_AUTH_PROPS_FILE.absolutePath}! 
-                                    |   Please make sure you've followed our initial setup guide:
-                                    |   https://github.com/elastic/cloud/blob/master/wiki/develop-build-test-ci/Gradle.md#initial-setup
-                                    |Exception thrown:""".trim(), ex);
+                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
             }
         }
     }
@@ -133,12 +131,10 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     }
 
     private String getVaultPrefixForSettings(Settings target) {
-        String settingsFileName = target.DEFAULT_SETTINGS_FILE;
-        File settingsDir = target.getSettings().getSettingsDir();
-        try {
-            props.load(new FileInputStream(settingsDir + settingsFileName));
-            return props.getProperty(PROPERTY_NAME_VAULT_PREFIX);
-        } catch (IOException ex) {
+        Map<String, String> projectProperties = target.getStartParameter().getProjectProperties();
+        if (projectProperties.containsKey(PROPERTY_NAME_VAULT_PREFIX)) {
+            return projectProperties.get(PROPERTY_NAME_VAULT_PREFIX);
+        } else {
             throw new GradleException("This plugin requires the co.elastic.vault_prefix to be set for the vault integration. " +
                     "Most of the time this needs to be set in the gradle.properties in your repo to `secret/ci/elastic-<name of your repo>`.");
         }

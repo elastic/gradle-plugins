@@ -1,4 +1,3 @@
-import co.elastic.gradle.vault.VaultExtension
 import java.io.File
 
 plugins {
@@ -6,10 +5,6 @@ plugins {
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
     id("co.elastic.vault").version(File("version-released").readText().trim())
 }
-
-val vault:VaultExtension = extensions.findByType()!!
-val creds:Map<String, String> = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/cloud-build-cache-us-east1").get()
-
 
 include("libs")
 include("libs:test-utils")
