@@ -62,15 +62,10 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
     private final boolean IS_CI = "true".equals(System.getenv("BUILDKITE"));
 
-    private final File DEFAULT_GRADLE_AUTH_PROPS_FILE =
-            Paths.get(System.getProperty("user.home") + "/.elastic/gradle-auth.properties").toFile();
-    private final String GRADLE_AUTH_PROPERTIES_OVERRIDE = System.getenv("GRADLE_AUTH_PROPERTIES_OVERRIDE");
     private final File GRADLE_AUTH_PROPS_FILE =
-            GRADLE_AUTH_PROPERTIES_OVERRIDE != null ? Paths.get(GRADLE_AUTH_PROPERTIES_OVERRIDE).toFile() : DEFAULT_GRADLE_AUTH_PROPS_FILE;
+            Paths.get(System.getProperty("user.home") + "/.elastic/gradle-auth.properties").toFile();
 
     public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
-
-    private Properties props = new Properties();
 
     private final String FAILURE_TO_FIND_PROPS_MSG = String.format("""
                         Error while reading Artifactory secrets from %s! 
@@ -82,12 +77,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         if (IS_CI)
             return vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
         else {
-            try {
-                props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
-                return Map.of("username", props.getProperty("email"), "plaintext", props.getProperty("artifactory.apikey"));
-            } catch (IOException ex) {
-                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
-            }
+            return getGradleAuthProperties(CredentialsFor.ARTIFACTORY);
         }
     }
 
@@ -95,12 +85,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         if (IS_CI)
             return vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey");
         else {
-            try {
-                props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
-                return props.getProperty("snykApiKey");
-            } catch (IOException ex) {
-                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
-            }
+            return getGradleAuthProperties(CredentialsFor.SNYK).get("apikey");
         }
     }
 
@@ -108,17 +93,40 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         if (IS_CI)
             return vault.readAndCacheSecret(getGradleEnterprisePath(target)).get();
         else {
-            try {
-                props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
-                return Map.of("username", props.getProperty("email"), "password", props.getProperty("gradleBuildCache.apikey"));
-            } catch (IOException ex) {
-                throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
+            return getGradleAuthProperties(CredentialsFor.GRADLE);
+        }
+    }
+
+    enum CredentialsFor {
+        ARTIFACTORY,
+        GRADLE,
+        SNYK
+    }
+
+    private Map<String, String> getGradleAuthProperties(CredentialsFor credentialsFor) {
+        try {
+            Properties props = new Properties();
+            props.load(new FileInputStream(GRADLE_AUTH_PROPS_FILE));
+            switch (credentialsFor) {
+                case ARTIFACTORY:
+                    return Map.of("username", props.getProperty("email"), "plaintext", props.getProperty("artifactory.apikey"));
+                case GRADLE:
+                    return Map.of("username", props.getProperty("email"), "password", props.getProperty("gradleBuildCache.apikey"));
+                case SNYK:
+                    return Map.of("apikey", props.getProperty("snykApiKey"));
+                default:
+                    throw new GradleException(
+                            String.format(
+                                    "Failure to extract properties for CredentialsFor enum, please ensure there is" +
+                                            " an implementation for %s", credentialsFor));
             }
+
+        } catch (IOException ex) {
+            throw new GradleException(FAILURE_TO_FIND_PROPS_MSG, ex);
         }
     }
 
     private String getVaultArtifactoryPath(Project target) {
-
         return getVaultPrefix(target) + "/artifactory_creds";
     }
 
