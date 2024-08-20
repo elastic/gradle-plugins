@@ -3,7 +3,7 @@ import java.io.File
 
 plugins {
     id("co.elastic.vault").version(File("version-released").readText().trim())
-    id("com.gradle.enterprise").version("3.9")
+    id("com.gradle.enterprise").version("3.17.6")
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
 }
 

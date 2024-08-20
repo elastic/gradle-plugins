@@ -13,7 +13,7 @@ gradlePlugin {
 dependencies {
     implementation(project(":libs:utils"))
     integrationTestImplementation(project(":libs:utils"))
-    integrationTestImplementation("commons-io:commons-io:2.11.0")
+    integrationTestImplementation("commons-io:commons-io:2.16.1")
 }
 
 tasks.integrationTest {

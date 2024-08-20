@@ -14,6 +14,6 @@ dependencies {
     implementation(project(":libs:utils"))
     implementation("com.bettercloud:vault-java-driver:5.1.0")
     integrationTestImplementation("com.bettercloud:vault-java-driver:5.1.0")
-    integrationTestImplementation("org.testcontainers:vault:1.17.6")
+    integrationTestImplementation("org.testcontainers:vault:1.20.1")
 }
 
