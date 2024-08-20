@@ -167,7 +167,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
         Assertions.assertFalse(
                 getImagesInDaemon().contains("local/gradle-docker-component/just-a-test:latest"),
                 "Expected image local/gradle-docker-component/just-a-test:latest to be cleaned from the docker " +
-                "daemon but it was not"
+                        "daemon but it was not"
         );
     }
 
@@ -356,6 +356,93 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "test").build();
 
         assertContains(result.getOutput(), "tasks.register<SandboxDockerExecTask>(\"test\")");
+    }
+
+    @Test
+    public void testLockfileWithEmulationWolfiFromProject() throws IOException {
+        helper.settings("""
+                include("p1")
+                include("p2")
+                """);
+        helper.buildScript("p1", """
+                    import java.net.URL
+                    plugins {
+                        id("co.elastic.cli.jfrog")
+                        id("co.elastic.vault")
+                        id("co.elastic.docker-base")
+                        id("co.elastic.docker-component")
+                    }
+                    
+                                vault {
+                      address.set("https://vault-ci-prod.elastic.dev")
+                      auth {
+                        ghTokenFile()
+                        ghTokenEnv()
+                        tokenEnv()
+                        roleAndSecretEnv()
+                      }
+                }
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
+                    
+                    dockerBaseImage {
+                        osPackageRepository.set(
+                            URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
+                        )
+                        dockerTagLocalPrefix.set("docker.elastic.co/gradle")
+                        dockerTagPrefix.set("docker.elastic.co/cloud-ci")
+                        fromWolfi("docker.elastic.co/wolfi/chainguard-base", "latest")
+                    }
+                    """);
+        helper.buildScript("p2", """
+                    import java.net.URL
+                    plugins {
+                        id("co.elastic.cli.jfrog")
+                        id("co.elastic.vault")
+                        id("co.elastic.docker-base")
+                        id("co.elastic.docker-component")
+                    }
+                    
+                    vault {
+                      address.set("https://vault-ci-prod.elastic.dev")
+                      auth {
+                        ghTokenFile()
+                        ghTokenEnv()
+                        tokenEnv()
+                        roleAndSecretEnv()
+                      }
+                }
+                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
+                cli {
+                    jfrog {
+                        username.set(creds["username"])
+                        password.set(creds["plaintext"])
+                    }
+                }
+                    
+                    dockerBaseImage {
+                        osPackageRepository.set(
+                            URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
+                        ) 
+                        dockerTagLocalPrefix.set("docker.elastic.co/gradle")
+                        dockerTagPrefix.set("docker.elastic.co/cloud-ci")
+                        from(project(":p1"))
+                    }
+                    """);
+        System.out.println(runGradleTask("p1:dockerBaseImageLockfileAllWithEmulation").getOutput());
+        System.out.println(
+                gradleRunner.withArguments(
+                        "--warning-mode", "fail",
+                        "-s",
+                        "--write-verification-metadata", "sha256,sha512",
+                        "help"
+                ).build().getOutput());
+        System.out.println(runGradleTask("p2:dockerBaseImageLockfileAllWithEmulation").getOutput());
     }
 
     private Set<String> getImagesInDaemon() throws IOException {
