@@ -14,7 +14,7 @@ dependencies {
     implementation(project(":plugins:cli:cli-lib"))
     implementation(project(":plugins:lifecycle"))
     implementation(project(":libs:utils"))
-    runtimeOnly("org.tukaani:xz:1.8")
+    runtimeOnly("org.tukaani:xz:1.10")
     // This is really only needed for the test runtime, but if declared like that it's not found by buildkit
     implementation(project(":plugins:vault"))
 }

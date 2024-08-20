@@ -1,8 +1,8 @@
 dependencies {
     implementation(project(":libs:utils"))
     implementation(project(":plugins:lifecycle"))
-    implementation("org.apache.commons:commons-compress:1.26.2")
-    implementation("commons-io:commons-io:2.11.0")
+    implementation("org.apache.commons:commons-compress:1.27.0")
+    implementation("commons-io:commons-io:2.16.1")
 }
 
 

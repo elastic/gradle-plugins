@@ -11,8 +11,8 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation("org.apache.commons:commons-compress:1.26.2")
-    implementation("commons-io:commons-io:2.11.0")
+    implementation("org.apache.commons:commons-compress:1.27.0")
+    implementation("commons-io:commons-io:2.16.1")
     implementation(project(":libs:docker"))
     implementation(project(":libs:utils"))
 
@@ -20,11 +20,11 @@ dependencies {
     implementation(project(":plugins:docker:docker-lib"))
     implementation(project(":plugins:lifecycle"))
 
-    val jacksonVersion = "2.17.1"
+    val jacksonVersion = "2.17.2"
     implementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
-    implementation("org.jetbrains:annotations:23.0.0")
-    implementation("org.apache.commons:commons-csv:1.9.0")
+    implementation("org.jetbrains:annotations:24.1.0")
+    implementation("org.apache.commons:commons-csv:1.11.0")
 
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
 
@@ -37,7 +37,7 @@ dependencies {
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
 
-    integrationTestImplementation("commons-io:commons-io:2.11.0")
+    integrationTestImplementation("commons-io:commons-io:2.16.1")
     integrationTestImplementation("com.squareup.okhttp:okhttp:2.7.5")
     integrationTestImplementation("com.fasterxml.jackson.core:jackson-databind:$jacksonVersion")
     integrationTestImplementation(project(":libs:utils"))
