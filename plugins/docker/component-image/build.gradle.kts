@@ -39,6 +39,7 @@ dependencies {
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
     implementation(project(":plugins:vault"))
+    integrationTestImplementation(project(":plugins:docker:base-image"))
     integrationTestImplementation(project(":plugins:vault"))
     integrationTestImplementation(project(":plugins:lifecycle"))
 }
