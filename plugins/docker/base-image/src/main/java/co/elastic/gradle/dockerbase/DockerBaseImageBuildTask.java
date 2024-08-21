@@ -140,12 +140,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
                                     throw new GradleException("Missing image in lockfile, does it need to be regenerated?");
                                 }
                                 UnchangingContainerReference lockedImage = lockfile.getImage().get(Architecture.current());
-                                if (from.getReference().get().contains("@")) {
-                                    throw new IllegalStateException(
-                                            "The sha should come from the lockfile and thus should " +
-                                            "not be specified in the input instructions."
-                                    );
-                                }
                                 if (!from.getReference().get().contains(lockedImage.getRepository()) ||
                                     !from.getReference().get().contains(lockedImage.getTag())
                                 ) {

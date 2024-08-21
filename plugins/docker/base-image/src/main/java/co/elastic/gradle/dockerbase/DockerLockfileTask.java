@@ -131,6 +131,21 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
     @Nested
     public abstract ListProperty<ContainerImageBuildInstruction> getInputInstructions();
 
+    private String getTagWithDigest(String imageReference) {
+        final String[] split = imageReference.split(":", 2);
+        if (split.length == 2 && split[1].contains("@")) {
+            return imageReference;
+        } else if (split.length == 2 && !split[1].contains("@")) {
+            return String.format(
+                    "%s:%s@%s",
+                    split[0],
+                    split[1],
+                    getManifestDigest(imageReference));
+        } else {
+            throw new IllegalStateException(String.format("Image reference %s unrecognized, must have a tag with our without a digest", imageReference));
+        }
+    }
+
     @Override
     @Nested
     public List<ContainerImageBuildInstruction> getActualInstructions() {
@@ -139,19 +154,8 @@ public abstract class DockerLockfileTask extends DefaultTask implements ImageBui
                         getInputInstructions().get().stream()
                                 .map(instruction -> {
                                     if (instruction instanceof From from) {
-                                        if (from.getReference().get().contains("@")) {
-                                            throw new IllegalStateException("Input instruction can't have a digest");
-                                        }
                                         return new From(getProviderFactory().provider(() ->
-                                        {
-                                            final String[] split = from.getReference().get().split(":");
-                                            return String.format(
-                                                    "%s:%s@%s",
-                                                    split[0],
-                                                    split[1],
-                                                    getManifestDigest(from.getReference().get())
-                                            );
-                                        }));
+                                                getTagWithDigest(from.getReference().get())));
                                     } else {
                                         return instruction;
                                     }
