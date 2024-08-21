@@ -2,5 +2,14 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>elastic/renovate-config:platform-devflow"
+  ],
+  "packageRules": [
+    {
+      "groupName": "Gradle Enterprise Plugin",
+      "matchDepNames": [
+        "com.gradle.enterprise",
+        "com.gradle.enterprise:com.gradle.enterprise.gradle.plugin"
+      ]
+    }
   ]
 }
