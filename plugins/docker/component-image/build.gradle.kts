@@ -26,7 +26,7 @@ dependencies {
     implementation("com.google.cloud.tools:jib-core:0.27.1")
     implementation("com.google.jimfs:jimfs:1.3.0")
     runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
-    implementation("org.apache.commons:commons-compress:1.27.0")
+    implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("commons-io:commons-io:2.16.1")
     implementation("org.jetbrains:annotations:24.1.0")
 

@@ -11,7 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation("org.apache.commons:commons-compress:1.27.0")
+    implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("commons-io:commons-io:2.16.1")
     implementation(project(":libs:docker"))
     implementation(project(":libs:utils"))
