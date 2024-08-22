@@ -167,7 +167,7 @@ public class DockerComponentPluginIT extends TestkitIntegrationTest {
         Assertions.assertFalse(
                 getImagesInDaemon().contains("local/gradle-docker-component/just-a-test:latest"),
                 "Expected image local/gradle-docker-component/just-a-test:latest to be cleaned from the docker " +
-                "daemon but it was not"
+                        "daemon but it was not"
         );
     }
 

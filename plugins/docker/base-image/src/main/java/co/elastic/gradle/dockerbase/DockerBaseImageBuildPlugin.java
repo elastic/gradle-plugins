@@ -61,7 +61,8 @@ import java.util.stream.Collectors;
 public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
     public static final String BUILD_TASK_NAME = "dockerBaseImageBuild";
-    public static final String LOCAL_IMPORT_TASK_NAME = "dockerBaseImageLocalImport";
+    public static final String DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME = "dockerBaseImageLocalImport";
+    public static final String LOCAL_IMPORT_TASK_NAME = DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME;
     public static final String LOCKFILE_TASK_NAME = "dockerBaseImageLockfile";
 
     @Override
@@ -81,30 +82,42 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
         final Configuration dockerEphemeralConfiguration = target.getConfigurations().create("dockerEphemeral");
 
-        TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = target.getTasks().register(
-                BUILD_TASK_NAME,
-                DockerBaseImageBuildTask.class
-        );
-        dockerBaseImageBuild.configure(task -> {
-            task.getOSDistribution().set(extension.getOSDistribution());
-            task.getMirrorRepositories().set(extension.getMirrorRepositories());
-            task.getLockFile().set(extension.getLockFile());
-            task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
-            task.getInputInstructions().set(extension.getInstructions());
-            task.getMaxOutputSizeMB().set(extension.getMaxOutputSizeMB());
-            task.getInputInstructions().set(extension.getInstructions());
-            task.onlyIf(runningOnSupportedArchitecture(extension));
-            task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
-            task.getOSPackagesConfiguration().set(osPackageConfigurations.get(Architecture.current()));
-            task.dependsOn(osPackageConfigurations.get(Architecture.current()));
+        Arrays.stream(Architecture.values()).forEach( arch -> {
+                    TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = target.getTasks().register(
+                            BUILD_TASK_NAME + dockerNameIfNotCurrent(arch),
+                            DockerBaseImageBuildTask.class
+                    );
+                    dockerBaseImageBuild.configure(task -> {
+                        task.getArchitecture().set(arch);
+                        task.getOSDistribution().set(extension.getOSDistribution());
+                        task.getMirrorRepositories().set(extension.getMirrorRepositories());
+                        task.getLockFile().set(extension.getLockFile());
+                        task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
+                        task.getInputInstructions().set(extension.getInstructions());
+                        task.getMaxOutputSizeMB().set(extension.getMaxOutputSizeMB());
+                        task.getInputInstructions().set(extension.getInstructions());
+                        task.onlyIf(runningOnSupportedArchitecture(extension));
+                        task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
+                        task.getOSPackagesConfiguration().set(osPackageConfigurations.get(arch));
+                        task.dependsOn(osPackageConfigurations.get(arch));
+                    });
         });
+
+        TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = target.getTasks()
+                .withType(DockerBaseImageBuildTask.class)
+                .named(BUILD_TASK_NAME);
+
         MultiArchLifecyclePlugin.assembleForPlatform(target, dockerBaseImageBuild);
 
-        TaskProvider<DockerLocalImportArchiveTask> dockerBaseImageLocalImport = registerLocalImportTask(
-                target,
-                extension,
-                dockerBaseImageBuild
-        );
+        Arrays.stream(Architecture.values()).forEach( arch -> {
+                    registerLocalImportTask(
+                            target, arch,
+                            extension,
+                            target.getTasks()
+                                    .withType(DockerBaseImageBuildTask.class)
+                                    .named(BUILD_TASK_NAME + dockerNameIfNotCurrent(arch))
+                    );
+        });
 
         registerCleanTask(target, extension);
 
@@ -112,9 +125,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
         Arrays.stream(Architecture.values()).forEach( arch -> {
                     target.getTasks().register(
-                            LOCKFILE_TASK_NAME + (
-                                    arch.equals(Architecture.current()) ? "" : arch.dockerName()
-                                    ),
+                            LOCKFILE_TASK_NAME + dockerNameIfNotCurrent(arch),
                             DockerLockfileTask.class,
                             task -> task.getArchitecture().set(arch)
                     );
@@ -150,7 +161,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             task.setGroup("containers");
         });
         GradleUtils.registerOrGet(target, "dockerLocalImport").configure(task -> {
-            task.dependsOn(dockerBaseImageLocalImport);
+            task.dependsOn(target.getTasks().named(DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME));
             task.setGroup("containers");
         });
 
@@ -173,15 +184,17 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     .filter(each -> each instanceof FromLocalImageBuild)
                     .map(each -> (FromLocalImageBuild) each)
                     .map(FromLocalImageBuild::otherProjectPath)
-                    .forEach(projectPath -> {
+                    .forEach(otherProjectPath -> {
                         dockerBaseImageBuild.configure(task ->
-                                task.dependsOn(projectPath + ":" + LOCAL_IMPORT_TASK_NAME)
+                                task.dependsOn(otherProjectPath + ":" + LOCAL_IMPORT_TASK_NAME)
                         );
-                        // We don't force lock-files to be updated at the same time, but if they are, we need to order
-                        // them for correct results
-                        target.getTasks().withType(DockerLockfileTask.class).configureEach(task -> {
-                            task.dependsOn(projectPath + ":" + LOCAL_IMPORT_TASK_NAME);
-                            task.mustRunAfter(projectPath + ":" + LOCKFILE_TASK_NAME);
+                        Arrays.stream(Architecture.values()).forEach( arch -> {
+                            target.getTasks().withType(DockerLockfileTask.class)
+                                    .named(LOCKFILE_TASK_NAME + dockerNameIfNotCurrent(arch)).configure(task -> {
+                                task.dependsOn(otherProjectPath + ":" + LOCAL_IMPORT_TASK_NAME + dockerNameIfNotCurrent(arch));
+                                // We don't force lock-files to be updated at the same time, but if they are, we need to order them for correct results
+                                task.mustRunAfter(otherProjectPath + ":" + LOCKFILE_TASK_NAME + dockerNameIfNotCurrent(arch));
+                            });
                         });
                     });
 
@@ -236,6 +249,11 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                 }
             }
         });
+    }
+
+    @NotNull
+    protected static String dockerNameIfNotCurrent(Architecture arch) {
+        return arch.equals(Architecture.current()) ? "" : arch.dockerName();
     }
 
     protected static void configureRepoForConfiguration(URL repoUrl, Action<? super PasswordCredentials> credentialsAction, IvyArtifactRepository repo, String configurationName) {
@@ -348,9 +366,9 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
     }
 
     @NotNull
-    private TaskProvider<DockerLocalImportArchiveTask> registerLocalImportTask(@NotNull Project target, BaseImageExtension extension, TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild) {
-        TaskProvider<DockerLocalImportArchiveTask> dockerBaseImageLocalImport = target.getTasks().register(
-                LOCAL_IMPORT_TASK_NAME,
+    private void registerLocalImportTask(@NotNull Project target, Architecture arch, BaseImageExtension extension, TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild) {
+        target.getTasks().register(
+                LOCAL_IMPORT_TASK_NAME + dockerNameIfNotCurrent(arch),
                 DockerLocalImportArchiveTask.class,
                 task -> {
                     task.getTag().set(localImportTag(target, extension));
@@ -363,7 +381,6 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     task.onlyIf(runningOnSupportedArchitecture(extension));
                 }
         );
-        return dockerBaseImageLocalImport;
     }
 
     @NotNull

@@ -96,7 +96,16 @@ abstract public class SandboxDockerExecTask extends SandboxExecBaseTask {
         if (!getProject().equals(other)) {
             getProject().evaluationDependsOn(other.getPath());
         }
-        final TaskCollection<ContainerImageProviderTask> tasks = other.getTasks().withType(ContainerImageProviderTask.class);
+        final TaskCollection<ContainerImageProviderTask> tasks = other.getTasks()
+                .withType(ContainerImageProviderTask.class)
+                // HACK: Projects have an emulated build to work with lock-file updates of dependent projects, so unless
+                //       we rule out the emulated one we'll break projects that specified this by project as this will
+                //       never work since there will be 2 tasks, but used to work before we made this change.
+                //       Sandbox exec will only ever run the non emulated arch, so we can actually pick here, but would
+                //       need to make the architecture part of the emulation, that would mean making it more of a first
+                //       class citizen. We work around it by going by naming convention here
+                .matching(task -> Arrays.stream(Architecture.values()).noneMatch(it -> task.getName().contains(it.dockerName())));
+
         if (tasks.isEmpty()) {
             throw new GradleException("Can't use image build by " + other.getPath() + " as it doesn't define any " + ContainerImageProviderTask.class.getName());
         }
@@ -104,6 +113,7 @@ abstract public class SandboxDockerExecTask extends SandboxExecBaseTask {
             throw new GradleException("Can't use image build by " + other.getPath() + " as it defines " +
                                       tasks.size() + " " + ContainerImageProviderTask.class.getName() + ", pass in the required task instead.");
         }
+
         final ContainerImageProviderTask singleTask = tasks.iterator().next();
         dependsOn(singleTask);
         getImage().set(singleTask.getTag());
