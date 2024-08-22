@@ -85,8 +85,6 @@ public abstract class DockerBaseImageBuildTask extends DefaultTask implements Im
         );
         getIsolateFromExternalRepos().convention(true);
 
-        getArchitecture().convention(Architecture.current());
-
         rootCopySpec = getProject().getObjects().newInstance(DefaultCopySpec.class);
         rootCopySpec.addChildSpecListener(DockerPluginConventions.mapCopySpecToTaskInputs(this));
     }
