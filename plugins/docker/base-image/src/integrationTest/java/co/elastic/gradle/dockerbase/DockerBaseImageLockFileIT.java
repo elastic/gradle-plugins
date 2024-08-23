@@ -1,8 +1,11 @@
 package co.elastic.gradle.dockerbase;
 
 import co.elastic.gradle.TestkitIntegrationTest;
+import co.elastic.gradle.utils.Architecture;
 import org.apache.commons.io.IOUtils;
 import org.gradle.testkit.runner.BuildResult;
+import org.gradle.testkit.runner.BuildTask;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +13,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -37,7 +41,7 @@ public class DockerBaseImageLockFileIT extends TestkitIntegrationTest {
                     plugins {
                         id("co.elastic.cli.jfrog")
                         id("co.elastic.vault")
-                        id("co.elastic.docker-base")                       
+                        id("co.elastic.docker-base")
                     }
                     
                                 vault {
@@ -94,7 +98,7 @@ public class DockerBaseImageLockFileIT extends TestkitIntegrationTest {
                     dockerBaseImage {
                         osPackageRepository.set(
                             URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages")
-                        ) 
+                        )
                         dockerTagLocalPrefix.set("docker.elastic.co/gradle")
                         dockerTagPrefix.set("docker.elastic.co/cloud-ci")
                         from(project(":p1"))
@@ -102,14 +106,35 @@ public class DockerBaseImageLockFileIT extends TestkitIntegrationTest {
                     """);
         System.out.println(runGradleTask("p1:dockerBaseImageLockfileAllWithEmulation").getOutput());
 
-        System.out.println(
-                gradleRunner.withArguments(
-                        "--warning-mode", "fail",
-                        "-s",
-                        "--write-verification-metadata", "sha256,sha512",
-                        "help"
-                ).build().getOutput());
-        System.out.println(runGradleTask("p2:dockerBaseImageLockfileAllWithEmulation").getOutput());
+        final BuildResult result = runGradleTask("p2:dockerBaseImageLockfileAllWithEmulation");
+        System.out.println(result.getOutput());
+
+        final BuildResult dockerBaseImageBuild = runGradleTask("dockerBaseImageBuild");
+        System.out.println("==== dockerBaseImageBuild ====");
+        System.out.println(dockerBaseImageBuild.getOutput());
+        //Building the image should not build the emulation tasks
+        Arrays.stream(Architecture.values()).map(Architecture::dockerName).forEach(arch ->
+                {
+                    Assertions.assertFalse(
+                            dockerBaseImageBuild.getTasks().stream().map(BuildTask::getPath).anyMatch(it -> it.contains(arch)),
+                            "Expected that with dockerBaseImageBuild tasks requiring emulation did not run, but they did"
+                    );
+                }
+        );
+
+        final BuildResult dockerBaseImageLocalImport = runGradleTask("dockerBaseImageLocalImport");
+        System.out.println("==== dockerBaseImageLocalImport ====");
+        System.out.println(dockerBaseImageLocalImport.getOutput());
+        //Building the image should not build the emulation tasks
+        Arrays.stream(Architecture.values()).map(Architecture::dockerName).forEach(arch ->
+                {
+                    Assertions.assertFalse(
+                            dockerBaseImageLocalImport.getTasks().stream().map(BuildTask::getPath).anyMatch(it -> it.contains(arch)),
+                            "Expected that with dockerBaseImageLocalImport tasks requiring emulation did not run, but they did"
+                    );
+                }
+        );
+
     }
 
     private BuildResult runGradleTask(String task) throws IOException {

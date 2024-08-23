@@ -31,6 +31,7 @@ import co.elastic.gradle.utils.OS;
 import co.elastic.gradle.utils.RegularFileUtils;
 import co.elastic.gradle.utils.docker.InstructionCopySpecMapper;
 import co.elastic.gradle.utils.docker.UnchangingContainerReference;
+import co.elastic.gradle.utils.docker.instruction.ContainerImageBuildInstruction;
 import co.elastic.gradle.utils.docker.instruction.From;
 import co.elastic.gradle.utils.docker.instruction.FromLocalImageBuild;
 import org.gradle.api.*;
@@ -52,6 +53,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -61,8 +63,7 @@ import java.util.stream.Collectors;
 public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
 
     public static final String BUILD_TASK_NAME = "dockerBaseImageBuild";
-    public static final String DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME = "dockerBaseImageLocalImport";
-    public static final String LOCAL_IMPORT_TASK_NAME = DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME;
+    public static final String LOCAL_IMPORT_TASK_NAME = "dockerBaseImageLocalImport";
     public static final String LOCKFILE_TASK_NAME = "dockerBaseImageLockfile";
 
     @Override
@@ -83,11 +84,10 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         final Configuration dockerEphemeralConfiguration = target.getConfigurations().create("dockerEphemeral");
 
         Arrays.stream(Architecture.values()).forEach( arch -> {
-                    TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = target.getTasks().register(
-                            BUILD_TASK_NAME + dockerNameIfNotCurrent(arch),
-                            DockerBaseImageBuildTask.class
-                    );
-                    dockerBaseImageBuild.configure(task -> {
+            target.getTasks().register(
+                    BUILD_TASK_NAME + dockerNameIfNotCurrent(arch),
+                    DockerBaseImageBuildTask.class
+            ).configure(task -> {
                         task.getArchitecture().set(arch);
                         task.getOSDistribution().set(extension.getOSDistribution());
                         task.getMirrorRepositories().set(extension.getMirrorRepositories());
@@ -95,7 +95,9 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                         task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
                         task.getInputInstructions().set(extension.getInstructions());
                         task.getMaxOutputSizeMB().set(extension.getMaxOutputSizeMB());
-                        task.getInputInstructions().set(extension.getInstructions());
+                        task.getInputInstructions().set(
+                                instructionsFilteredForArch(target, extension, arch)
+                        );
                         task.onlyIf(runningOnSupportedArchitecture(extension));
                         task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
                         task.getOSPackagesConfiguration().set(osPackageConfigurations.get(arch));
@@ -127,7 +129,10 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                     target.getTasks().register(
                             LOCKFILE_TASK_NAME + dockerNameIfNotCurrent(arch),
                             DockerLockfileTask.class,
-                            task -> task.getArchitecture().set(arch)
+                            task -> {
+                                task.getArchitecture().set(arch);
+                                task.getInputInstructions().set(instructionsFilteredForArch(target, extension, arch));
+                            }
                     );
                 }
         );
@@ -136,15 +141,12 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             task.dependsOn(target.getTasks().withType(DockerLockfileTask.class));
         });
 
-
-
         target.getTasks().withType(DockerLockfileTask.class).configureEach(task -> {
                     task.setGroup("containers");
                     task.setDescription("Generates a new lockfile with the latest version of all packages");
                     task.getOSDistribution().set(extension.getOSDistribution());
                     task.getLockFileLocation().set(extension.getLockFileLocation());
                     task.getDockerEphemeralMount().set(extension.getDockerEphemeralMount());
-                    task.getInputInstructions().set(extension.getInstructions());
                     task.getOsPackageRepository().set(extension.getOsPackageRepository());
                     task.getMirrorRepositories().set(extension.getMirrorRepositories());
                     task.getDockerEphemeralConfiguration().set(dockerEphemeralConfiguration);
@@ -161,7 +163,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
             task.setGroup("containers");
         });
         GradleUtils.registerOrGet(target, "dockerLocalImport").configure(task -> {
-            task.dependsOn(target.getTasks().named(DOCKER_BASE_IMAGE_LOCAL_IMPORT_NAME));
+            task.dependsOn(target.getTasks().named("dockerBaseImageLocalImport"));
             task.setGroup("containers");
         });
 
@@ -251,8 +253,24 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
         });
     }
 
+    protected static Provider<List<ContainerImageBuildInstruction>> instructionsFilteredForArch(Project target, BaseImageExtension extension, Architecture arch) {
+        System.out.println(extension.getInstructions());
+        return target.provider(() -> {
+            return extension.getInstructions().stream()
+                    .filter(instruction -> {
+                        if (!(instruction instanceof FromLocalImageBuild)) {
+                            return true;
+                        }
+                        // keep only the instruction for the current arch
+                        final boolean instructionForThisArch = ((FromLocalImageBuild) instruction).getArchitecture().equals(arch);
+                        return instructionForThisArch;
+                    })
+                    .toList();
+        });
+    }
+
     @NotNull
-    protected static String dockerNameIfNotCurrent(Architecture arch) {
+    static String dockerNameIfNotCurrent(Architecture arch) {
         return arch.equals(Architecture.current()) ? "" : arch.dockerName();
     }
 
@@ -347,20 +365,22 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
     }
 
     private void registerCleanTask(@NotNull Project target, BaseImageExtension extension) {
-        final TaskProvider<DockerLocalCleanTask> dockerBaseImageClean = target.getTasks().register(
-                "dockerBaseImageClean",
-                DockerLocalCleanTask.class,
-                task -> {
-                    task.getImageTag().set(localImportTag(target, extension));
-                    task.onlyIf(runningOnSupportedArchitecture(extension));
-                }
-        );
-        LifecyclePlugin.clean(target, dockerBaseImageClean);
+        for (Architecture arch : Architecture.values()) {
+            final TaskProvider<DockerLocalCleanTask> dockerBaseImageClean = target.getTasks().register(
+                    "dockerBaseImageClean" + dockerNameIfNotCurrent(arch),
+                    DockerLocalCleanTask.class,
+                    task -> {
+                        task.getImageTag().set(localImportTag(target, extension, arch));
+                        task.onlyIf(runningOnSupportedArchitecture(extension));
+                    }
+            );
+            LifecyclePlugin.clean(target, dockerBaseImageClean);
+        }
     }
 
-    private Provider<String> localImportTag(Project target, BaseImageExtension extension) {
+    private Provider<String> localImportTag(Project target, BaseImageExtension extension, Architecture arch) {
         return extension.getDockerTagLocalPrefix().map(value -> value + "/" +
-                                                                target.getName() + "-base" +
+                                                                target.getName() + "-base" + dockerNameIfNotCurrent(arch) +
                                                                 ":latest"
         );
     }
@@ -371,7 +391,7 @@ public abstract class DockerBaseImageBuildPlugin implements Plugin<Project> {
                 LOCAL_IMPORT_TASK_NAME + dockerNameIfNotCurrent(arch),
                 DockerLocalImportArchiveTask.class,
                 task -> {
-                    task.getTag().set(localImportTag(target, extension));
+                    task.getTag().set(localImportTag(target, extension, arch));
                     task.getImageArchive().set(
                             dockerBaseImageBuild.flatMap(DockerBaseImageBuildTask::getImageArchive)
                     );
