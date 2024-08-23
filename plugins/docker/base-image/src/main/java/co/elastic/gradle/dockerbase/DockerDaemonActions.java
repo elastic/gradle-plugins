@@ -135,7 +135,7 @@ public abstract class DockerDaemonActions {
                                           "mkdir '" + archDir + "' && " +
                                           "mv *.apk '" + archDir + "' &&" +
                                           "mv __META__Packages* '" + archDir + "/APKINDEX.tar.gz' &&" +
-                                          "apk update --allow-untrusted && find /var/packages-from-gradle").filter(s -> requiresCleanLayers),
+                                          "apk update --allow-untrusted").filter(s -> requiresCleanLayers),
                                 // When building the lock-file we do NOT allow untrusted sources
                                 Stream.of(command.replace("apk add", "apk add --no-cache")).filter(s -> !requiresCleanLayers),
                                 // When we're building the actual image, everything is coming from Gradle, so it's safe
@@ -178,7 +178,7 @@ public abstract class DockerDaemonActions {
         if (instruction instanceof From from) {
             return "FROM " + from.getReference().get();
         } else if (instruction instanceof final FromLocalImageBuild fromLocalImageBuild) {
-            return "# " + fromLocalImageBuild.otherProjectPath() + "\n" +
+            return "# " + fromLocalImageBuild.otherProjectPath() + " (" + fromLocalImageBuild.getArchitecture() +")\n" +
                    "FROM " + fromLocalImageBuild.tag().get();
         } else if (instruction instanceof Copy copySpec) {
             return "COPY " + Optional.ofNullable(copySpec.getOwner()).map(s -> "--chown=" + s + " ").orElse("") +
@@ -330,7 +330,7 @@ public abstract class DockerDaemonActions {
                     .filter(each -> each instanceof FromImageReference)
                     .map(each -> ((FromImageReference) each).getReference().get())
                     .findFirst()
-                    .orElseThrow(() -> new GradleException("A base image is not configured"));
+                    .orElseThrow(() -> new GradleException("A base image is not configured "));
             final ByteArrayOutputStream whoAmIOut = new ByteArrayOutputStream();
             dockerUtils.exec(execSpec -> {
                 execSpec.setStandardOutput(whoAmIOut);

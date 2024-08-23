@@ -145,16 +145,26 @@ public abstract class BaseImageExtension implements ExtensionAware {
     }
 
     public void from(Project otherProject) {
-        final TaskProvider<ContainerImageProviderTask> localImport = otherProject.getTasks()
-                .named(DockerBaseImageBuildPlugin.LOCAL_IMPORT_TASK_NAME, ContainerImageProviderTask.class);
-        final TaskProvider<DockerBaseImageBuildTask> build = otherProject.getTasks()
-                .named(DockerBaseImageBuildPlugin.BUILD_TASK_NAME, DockerBaseImageBuildTask.class);
-        instructions.add(new FromLocalImageBuild(
-                otherProject.getPath(),
-                localImport.flatMap(ContainerImageProviderTask::getTag),
-                localImport.flatMap(ContainerImageProviderTask::getImageId)
-        ));
-        getOSDistribution().set(build.flatMap(DockerBaseImageBuildTask::getOSDistribution));
+        // Add an instruction for both architectures and pick the proper one lather on
+        for (Architecture arch : Architecture.values()) {
+            final TaskProvider<ContainerImageProviderTask> localImport = otherProject.getTasks()
+                    .named(
+                            DockerBaseImageBuildPlugin.LOCAL_IMPORT_TASK_NAME + DockerBaseImageBuildPlugin.dockerNameIfNotCurrent(arch),
+                            ContainerImageProviderTask.class
+                    );
+            final TaskProvider<DockerBaseImageBuildTask> build = otherProject.getTasks()
+                    .named(
+                            DockerBaseImageBuildPlugin.BUILD_TASK_NAME + DockerBaseImageBuildPlugin.dockerNameIfNotCurrent(arch),
+                            DockerBaseImageBuildTask.class
+                    );
+            instructions.add(new FromLocalImageBuild(
+                    otherProject.getPath(),
+                    localImport.flatMap(ContainerImageProviderTask::getTag),
+                    localImport.flatMap(ContainerImageProviderTask::getImageId),
+                    arch
+            ));
+            getOSDistribution().set(build.flatMap(DockerBaseImageBuildTask::getOSDistribution));
+        }
     }
 
     public void run(List<String> commands) {
