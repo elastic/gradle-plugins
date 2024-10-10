@@ -389,7 +389,7 @@ public class DockerBaseImageBuildPluginIT extends TestkitIntegrationTest {
             }
             dockerBaseImage {
                 osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
-                fromWolfi("docker.elastic.co/wolfi/chainguard-base", "20230214")
+                fromWolfi("docker.elastic.co/wolfi/chainguard-base", "latest")
                 install("patch")
             }
         """);
