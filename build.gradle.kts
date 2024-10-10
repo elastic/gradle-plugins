@@ -4,7 +4,7 @@ import com.github.jk1.license.render.InventoryMarkdownReportRenderer
 import co.elastic.gradle.utils.Architecture
 
 plugins {
-    id("com.gradle.plugin-publish").version("1.2.1").apply(false)
+    id("com.gradle.plugin-publish").version("1.2.2").apply(false)
     id("com.github.jk1.dependency-license-report").version("2.9")
 
     // self-loop
