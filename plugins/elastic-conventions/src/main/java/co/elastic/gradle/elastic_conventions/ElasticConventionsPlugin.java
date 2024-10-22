@@ -29,11 +29,11 @@ import co.elastic.gradle.vault.VaultAuthenticationExtension;
 import co.elastic.gradle.vault.VaultExtension;
 import co.elastic.gradle.vault.VaultPlugin;
 import com.gradle.CommonCustomUserDataGradlePlugin;
-import com.gradle.enterprise.gradleplugin.GradleEnterpriseExtension;
-import com.gradle.enterprise.gradleplugin.GradleEnterprisePlugin;
-import com.gradle.scan.plugin.BuildResult;
-import com.gradle.scan.plugin.BuildScanDataObfuscation;
-import com.gradle.scan.plugin.BuildScanExtension;
+import com.gradle.develocity.agent.gradle.DevelocityConfiguration;
+import com.gradle.develocity.agent.gradle.DevelocityPlugin;
+import com.gradle.develocity.agent.gradle.scan.BuildResult;
+import com.gradle.develocity.agent.gradle.scan.BuildScanConfiguration;
+import com.gradle.develocity.agent.gradle.scan.BuildScanDataObfuscationConfiguration;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
@@ -154,19 +154,17 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     }
 
     private void configureGradleEnterprise(Settings target) {
-        target.getPlugins().apply(GradleEnterprisePlugin.class);
+        target.getPlugins().apply(DevelocityPlugin.class);
         target.getPlugins().apply(CommonCustomUserDataGradlePlugin.class);
-        final GradleEnterpriseExtension gradleEnterprise = target.getExtensions().getByType(GradleEnterpriseExtension.class);
-        final BuildScanExtension buildScan = gradleEnterprise.getBuildScan();
-        final BuildScanDataObfuscation obfuscation = buildScan.getObfuscation();
-        final CustomValueSearchLinker customValueSearchLinker = CustomValueSearchLinker.registerWith(buildScan);
-
-        buildScan.publishAlways();
+        final DevelocityConfiguration develocity = target.getExtensions().getByType(DevelocityConfiguration.class);
+        final BuildScanConfiguration buildScan = develocity.getBuildScan();
+        final BuildScanDataObfuscationConfiguration obfuscation = buildScan.getObfuscation();
+        final CustomValueSearchLinker customValueSearchLinker = CustomValueSearchLinker.registerWith(develocity, buildScan);
 
         boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
         // Don't publish in the background on CI since we use ephemeral workers
-        buildScan.setUploadInBackground(!isCI);
-        buildScan.setServer("https://gradle-enterprise.elastic.co");
+        buildScan.getUploadInBackground().set(!isCI);
+        develocity.getServer().set("https://gradle-enterprise.elastic.co");
         obfuscation.ipAddresses(ip -> ip.stream().map(it -> "0.0.0.0").toList());
 
         final Jvm jvm = Jvm.current();
@@ -265,16 +263,18 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
      */
     private static final class CustomValueSearchLinker implements Action<BuildResult> {
 
-        private final BuildScanExtension buildScan;
+        private final BuildScanConfiguration buildScan;
+        private final DevelocityConfiguration develocity;
         private final Map<String, String> customValueLinks;
 
-        private CustomValueSearchLinker(BuildScanExtension buildScan) {
+        private CustomValueSearchLinker(DevelocityConfiguration develocity, BuildScanConfiguration buildScan) {
+            this.develocity = develocity;
             this.buildScan = buildScan;
             this.customValueLinks = new LinkedHashMap<>();
         }
 
-        private static CustomValueSearchLinker registerWith(BuildScanExtension buildScan) {
-            CustomValueSearchLinker customValueSearchLinker = new CustomValueSearchLinker(buildScan);
+        private static CustomValueSearchLinker registerWith(DevelocityConfiguration develocity, BuildScanConfiguration buildScan) {
+            CustomValueSearchLinker customValueSearchLinker = new CustomValueSearchLinker(develocity, buildScan);
             buildScan.buildFinished(customValueSearchLinker);
             return customValueSearchLinker;
         }
@@ -296,7 +296,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
         @Override
         public synchronized void execute(BuildResult buildResult) {
-            String server = buildScan.getServer();
+            String server = develocity.getServer().get();
             if (server != null) {
                 customValueLinks.forEach((linkLabel, searchParams) -> {
                     String url = appendIfMissing(server, "/") + "scans?" + searchParams + "#selection.buildScanB=" + urlEncode("{SCAN_ID}");

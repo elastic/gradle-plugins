@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.gradle.enterprise:com.gradle.enterprise.gradle.plugin:3.17")
+    implementation("com.gradle.develocity:com.gradle.develocity.gradle.plugin:3.18.1")
     implementation("com.gradle:common-custom-user-data-gradle-plugin:2.0.2")
     implementation(project(":libs:utils"))
     implementation(project(":plugins:lifecycle"))
