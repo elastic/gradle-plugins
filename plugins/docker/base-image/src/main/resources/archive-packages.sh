@@ -145,7 +145,7 @@ archive_apk_packages() {
     echo "$package,$version,,$arch"
   done < "$FILE"
 
-  apk index -o Packages.gz *.apk >&2
+  apk index --allow-untrusted -o Packages.gz *.apk >&2
   PACKAGES_VERSION=$(sha256sum Packages.gz | cut -f1 -d' ')
   echo "__META__Packages,$PACKAGES_VERSION,,$PACKAGES_ARCH"
 
