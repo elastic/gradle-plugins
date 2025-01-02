@@ -2,7 +2,7 @@ import co.elastic.gradle.vault.VaultExtension
 import java.io.File
 
 plugins {
-    id("com.gradle.develocity").version("3.18.1")
+    id("com.gradle.develocity").version("3.18.2")
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
     id("co.elastic.vault").version(File("version-released").readText().trim())
 }
