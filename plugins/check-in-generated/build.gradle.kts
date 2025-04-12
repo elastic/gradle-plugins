@@ -11,5 +11,5 @@ gradlePlugin {
 }
 
 dependencies {
-    implementation("commons-io:commons-io:2.16.1")
+    implementation("commons-io:commons-io:2.19.0")
 }

@@ -16,7 +16,7 @@ dependencies {
     // We only use this for integration tests, but buildkit needs it here
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
-    integrationTestImplementation("commons-io:commons-io:2.16.1")
+    integrationTestImplementation("commons-io:commons-io:2.19.0")
 }
 
 tasks.processIntegrationTestResources {
