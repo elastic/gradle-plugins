@@ -251,10 +251,11 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         extension.getAddress().set("https://vault-ci-prod.elastic.dev");
         final VaultAuthenticationExtension auth = extension.getExtensions()
                 .getByType(VaultAuthenticationExtension.class);
-        auth.ghTokenFile();
-        auth.ghTokenEnv();
+        // NOTE that this is in order of precedence
         auth.tokenEnv();
         auth.roleAndSecretEnv();
+        auth.ghTokenEnv();
+        auth.ghTokenFile();
     }
 
     /**
