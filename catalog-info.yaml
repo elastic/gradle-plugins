@@ -9,7 +9,7 @@ metadata:
   annotations:
     backstage.io/source-location: url:https://github.com/elastic/gradle-plugins/
     github.com/project-slug: elastic/gradle-plugins
-    github.com/team-slug: elastic/release-eng
+    github.com/team-slug: elastic/platform-dev-flow
 
   tags:
     - buildkite
@@ -23,7 +23,7 @@ metadata:
       url: https://docs.elastic.dev/release/cloud-ci/admin
 spec:
   type: Library
-  owner: group:release-eng
+  owner: group:platform-dev-flow
   lifecycle: beta
   dependsOn:
     - resource:github-repository-elastic-gradle-plugins
@@ -47,7 +47,7 @@ metadata:
 
 spec:
   type: buildkite-pipeline
-  owner: group:release-eng
+  owner: group:platform-dev-flow
   system: buildkite
   implementation:
     apiVersion: buildkite.elastic.dev/v1
@@ -62,4 +62,4 @@ spec:
       teams:
         everyone:
           access_level: BUILD_AND_READ
-        release-eng: {}
+        platform-dev-flow: {}
