@@ -305,7 +305,8 @@ public class VaultPluginIT extends TestkitIntegrationTest {
         final BuildResult result = gradleRunner
                 .withEnvironment(Map.of(
                         "VAULT_ROLE_ID", roleId,
-                        "VAULT_SECRET_ID", secret_id
+                        "VAULT_SECRET_ID", secret_id,
+                        "VAULT_AUTH_PATH", "approle"
                 ))
                 .withArguments("--warning-mode", "fail", "-s", "help")
                 .build();

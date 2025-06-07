@@ -123,21 +123,23 @@ abstract public class VaultAuthenticationExtension {
     }
 
 
-    public void roleAndSecretEnv(String roleId, String secretId) {
-        authMethods.add(new VaultRoleAndSecretID(roleId, secretId));
+    public void roleAndSecretEnv(String roleId, String secretId, String vaultAuthPath) {
+        authMethods.add(new VaultRoleAndSecretID(roleId, secretId, vaultAuthPath));
     }
     @SuppressWarnings("unused")
     public void roleAndSecretEnv() {
-        roleAndSecretEnv("VAULT_ROLE_ID", "VAULT_SECRET_ID");
+        roleAndSecretEnv("VAULT_ROLE_ID", "VAULT_SECRET_ID", "VAULT_AUTH_PATH");
     }
     public class VaultRoleAndSecretID implements VaultAuthMethod {
 
         private final String roleIdName;
         private final String secretIdName;
+        private final String vaultAuthPathName;
 
-        public VaultRoleAndSecretID(String roleIdName, String secretIdName) {
+        public VaultRoleAndSecretID(String roleIdName, String secretIdName, String vaultAuthPathName) {
             this.roleIdName = roleIdName;
             this.secretIdName = secretIdName;
+            this.vaultAuthPathName = vaultAuthPathName;
         }
 
         public Provider<String> getRoleId() {
@@ -146,6 +148,12 @@ abstract public class VaultAuthenticationExtension {
 
         public Provider<String> getSecretId() {
             return getProviderFactory().environmentVariable(secretIdName);
+        }
+
+        public Provider<String> getVaultAuthPath() {
+            return getProviderFactory()
+            .environmentVariable("VAULT_AUTH_PATH")
+            .orElse(getProviderFactory().provider(() -> "approle"));
         }
 
         @Override
@@ -157,15 +165,15 @@ abstract public class VaultAuthenticationExtension {
         public String getExplanation() {
             if (getRoleId().isPresent()) {
                 if (getSecretId().isPresent()) {
-                    return "Using environment variable `" + roleIdName + "` for role id and `" + secretIdName + "` for secret id" ;
+                    return "Using environment variable `" + roleIdName + "` for role id and `" + secretIdName + "` for secret id, on path `" + vaultAuthPathName + "`" ;
                 } else {
-                    return "Tried to use environment variable `" + roleIdName + "` for role id, but environment variable `" + secretIdName + "` for secret id is not defined" ;
+                    return "Tried to use environment variable `" + roleIdName + "` for role id, but environment variable `" + secretIdName + "` for secret id is not defined, on path `" + vaultAuthPathName + "`";
                 }
             } else {
                 if (getSecretId().isPresent()) {
-                    return "Tried to use environment variable `" + secretIdName + "` for secret id, but environment variable `" + roleIdName + "` for role id is not defined" ;
+                    return "Tried to use environment variable `" + secretIdName + "` for secret id, but environment variable `" + roleIdName + "` for role id is not defined, on path `" + vaultAuthPathName + "`";
                 } else {
-                    return "Tried to use environment variable `" + roleIdName + "` for role id, and environment variable `" + secretIdName + "` but neither are defined";
+                    return "Tried to use environment variable `" + roleIdName + "` for role id, and environment variable `" + secretIdName + "` but neither are defined, on path `" + vaultAuthPathName + "`";
                 }
             }
         }
@@ -237,6 +245,7 @@ abstract public class VaultAuthenticationExtension {
                 } else {
                     return "Tried to read github token from " + ghTokenPath + " but the file is not readable.";
                 }
+
             } else {
                 return "Tried to read github token from " + ghTokenPath + " but the file does not exist.";
             }
