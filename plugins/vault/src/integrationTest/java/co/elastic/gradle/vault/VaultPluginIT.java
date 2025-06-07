@@ -60,7 +60,10 @@ public class VaultPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
-    void canReadVaultSecretsWithTokenAndTheyCacheCorrectly() {
+    void // The code appears to be a test case method name in Java. It suggests that the method is
+    // testing the functionality of reading vault secrets with a token and ensuring that they are
+    // cached correctly.
+    canReadVaultSecretsWithTokenAndTheyCacheCorrectly() {
         final var host = vaultContainer.getHost();
         final var firstMappedPort = vaultContainer.getFirstMappedPort();
         helper.settings(String.format("""
@@ -76,7 +79,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                       address.set("http://%s:%s/")
                       auth {
                         tokenFile(file("no/such/token"))
-                        roleAndSecretEnv("JUST_A", "LIE")
+                        roleAndSecretEnv("IT_IS","JUST_A", "LIE")
                         roleAndSecretEnv()
                         ghTokenEnv("SOME_GH_TOKEN")
                         ghTokenEnv()
@@ -146,7 +149,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                               address.set("http://%s:%s/")
                               auth {
                                 tokenFile(file("no/such/token"))
-                                roleAndSecretEnv("JUST_A", "LIE")
+                                roleAndSecretEnv("IT_IS","JUST_A", "LIE")
                                 roleAndSecretEnv()
                                 ghTokenEnv("SOME_GH_TOKEN")
                                 ghTokenEnv()
@@ -220,7 +223,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                       address.set("http://%s:%s/")
                       auth {
                         tokenFile(file("no/such/token"))
-                        roleAndSecretEnv("JUST_A", "LIE")
+                        roleAndSecretEnv("IT_IS","JUST_A", "LIE")
                         roleAndSecretEnv()
                         ghTokenEnv("SOME_GH_TOKEN")
                         ghTokenEnv()
