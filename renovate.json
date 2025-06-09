@@ -3,6 +3,9 @@
   "extends": [
     "local>elastic/renovate-config:platform-devflow"
   ],
+  "addLabels": [
+    "dependencies"
+  ],
   "packageRules": [
     {
       "groupName": "Gradle Enterprise Plugin",
