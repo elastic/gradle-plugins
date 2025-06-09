@@ -44,6 +44,7 @@ public class VaultAccessStrategy {
                         try {
                             final VaultAuthenticationExtension.VaultRoleAndSecretID roleAndSecret = (VaultAuthenticationExtension.VaultRoleAndSecretID) authMethod;
                             return driver.auth().loginByAppRole(
+                                    roleAndSecret.getAuthPath().getOrElse(VaultAuthenticationExtension.VaultRoleAndSecretID.DEFAULT_VAULT_AUTH_PATH),
                                     roleAndSecret.getRoleId().get(),
                                     roleAndSecret.getSecretId().get()
                             );
