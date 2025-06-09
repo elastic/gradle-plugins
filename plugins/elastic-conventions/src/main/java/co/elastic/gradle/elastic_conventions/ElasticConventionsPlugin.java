@@ -246,7 +246,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     }
 
     public void configureVaultPlugin(VaultExtension extension) {
-        extension.getAddress().set("https://vault-ci-prod.elastic.dev");
+        extension.getAddress().convention("https://vault-ci-prod.elastic.dev");
         final VaultAuthenticationExtension auth = extension.getExtensions()
                 .getByType(VaultAuthenticationExtension.class);
         // NOTE that this is in order of precedence
