@@ -122,22 +122,29 @@ abstract public class VaultAuthenticationExtension {
         }
     }
 
-
     public void roleAndSecretEnv(String roleId, String secretId) {
-        authMethods.add(new VaultRoleAndSecretID(roleId, secretId));
+        authMethods.add(new VaultRoleAndSecretID(roleId, secretId, VaultRoleAndSecretID.DEFAULT_VAULT_AUTH_PATH));
     }
+
+    public void roleAndSecretEnv(String roleId, String secretId, String authPath) {
+        authMethods.add(new VaultRoleAndSecretID(roleId, secretId, authPath));
+    }
+
     @SuppressWarnings("unused")
     public void roleAndSecretEnv() {
-        roleAndSecretEnv("VAULT_ROLE_ID", "VAULT_SECRET_ID");
+        roleAndSecretEnv("VAULT_ROLE_ID", "VAULT_SECRET_ID", "VAULT_AUTH_PATH");
     }
     public class VaultRoleAndSecretID implements VaultAuthMethod {
+        public static final String DEFAULT_VAULT_AUTH_PATH = "approle";
 
         private final String roleIdName;
         private final String secretIdName;
+        private final String authPathName;
 
-        public VaultRoleAndSecretID(String roleIdName, String secretIdName) {
+        public VaultRoleAndSecretID(String roleIdName, String secretIdName, String authPathName) {
             this.roleIdName = roleIdName;
             this.secretIdName = secretIdName;
+            this.authPathName= authPathName;
         }
 
         public Provider<String> getRoleId() {
@@ -146,6 +153,10 @@ abstract public class VaultAuthenticationExtension {
 
         public Provider<String> getSecretId() {
             return getProviderFactory().environmentVariable(secretIdName);
+        }
+
+        public Provider<String> getAuthPath() {
+            return getProviderFactory().environmentVariable(authPathName);
         }
 
         @Override
@@ -157,7 +168,7 @@ abstract public class VaultAuthenticationExtension {
         public String getExplanation() {
             if (getRoleId().isPresent()) {
                 if (getSecretId().isPresent()) {
-                    return "Using environment variable `" + roleIdName + "` for role id and `" + secretIdName + "` for secret id" ;
+                    return "Using environment variable `" + roleIdName + "` for role id and `" + secretIdName + "` for secret id (for auth path `" + authPathName + "`)";
                 } else {
                     return "Tried to use environment variable `" + roleIdName + "` for role id, but environment variable `" + secretIdName + "` for secret id is not defined" ;
                 }

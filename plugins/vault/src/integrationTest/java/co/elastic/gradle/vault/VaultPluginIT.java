@@ -329,6 +329,89 @@ public class VaultPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    void canReadVaultSecretsWithRolesOnASeparatePath() throws VaultException {
+        final var host = vaultContainer.getHost();
+        final var firstMappedPort = vaultContainer.getFirstMappedPort();
+
+        final Vault vault = new Vault(
+                new VaultConfig()
+                        .token("my-root-token")
+                        .address("http://" + host + ":" + firstMappedPort)
+                        .engineVersion(1)
+                        .build()
+        );
+
+        // Enable app role auth
+        vault.logical().write("sys/auth/new_path", Map.of("type", "approle"));
+
+        // Create a custom policy so we can access the secrets
+        vault.logical().write(
+                "sys/policy/custom_policy",
+                Map.of("policy", """
+                        path "secret/*" {
+                          capabilities = ["create", "read", "update", "delete", "list"]
+                        }
+                        """)
+        );
+
+        // Create a role and secret ID for testing
+        final Map<String, Object> data = new HashMap<>();
+        data.put("secret_id_ttl", "10m");
+        data.put("token_num_uses", 10);
+        data.put("token_ttl", "20m");
+        data.put("token_max_ttl", "30m");
+        data.put("secret_id_num_uses", 40);
+        data.put("policies", "custom_policy");
+        vault.logical().write("auth/new_path/role/my-role", data);
+        final String roleId = vault.logical().read("auth/new_path/role/my-role/role-id").getData().get("role_id");
+        final String secret_id = vault.logical().write("auth/new_path/role/my-role/secret-id", Collections.emptyMap()).getData().get("secret_id");
+
+        helper.settings(String.format("""
+                   import %s
+                   rootProject.name = "integration-test"
+                   plugins {
+                       id("co.elastic.vault")
+                   }
+                   configure<VaultExtension> {
+                      engineVersion.set(2)
+                      address.set("http://%s:%s/")
+                      auth {
+                        roleAndSecretEnv()
+                      }
+                   }
+                   val vault = the<VaultExtension>()
+                   logger.lifecycle("top_secret is {}", vault.readSecret("secret/testing").get()["top_secret"])
+                   logger.lifecycle("db_password is {}", vault.readAndCacheSecret("secret/testing2").get()["db_password"])
+                """, VaultExtension.class.getName(), host, firstMappedPort));
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(Map.of(
+                        "VAULT_ROLE_ID", roleId,
+                        "VAULT_SECRET_ID", secret_id,
+                        "VAULT_AUTH_PATH", "new_path"
+                ))
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+        assertContains(result.getOutput(), "top_secret is password1");
+        assertContains(result.getOutput(), "db_password is dbpassword1");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/data");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/data/db_password");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/data/top_secret");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/data/top_secret");
+
+        // Run it again, this time without any credentials passed in, it should still work because the token is cached
+        final BuildResult result2 = gradleRunner
+                .withEnvironment(Collections.emptyMap())
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+        System.out.println(result2.getOutput());
+        assertContains(result2.getOutput(), "top_secret is password1");
+        assertContains(result2.getOutput(), "db_password is dbpassword1");
+    }
+
+    @Test
     void noAuthConfiguredAndSecretRequested() {
         final var host = vaultContainer.getHost();
         final var firstMappedPort = vaultContainer.getFirstMappedPort();
