@@ -26,7 +26,7 @@ dependencies {
     implementation("org.jetbrains:annotations:24.1.0")
     implementation("org.apache.commons:commons-csv:1.11.0")
 
-    runtimeOnly("com.github.luben:zstd-jni:1.5.6-4")
+    runtimeOnly("com.github.luben:zstd-jni:1.5.7-4")
 
     // Fixme: remove dependency from base image
     implementation("com.google.cloud.tools:jib-core:0.27.1")
