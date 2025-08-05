@@ -36,7 +36,7 @@ function archive_yum_packages() {
   mv repodata.tar "__META__repodata-${REPODATA_VERSION}-meta.${REPODATA_ARCH}.tar"
 
   # shellcheck disable=SC2086
-  CI=TRUE /mnt/jfrog-cli rt upload \
+  CI=TRUE /mnt/jfrog-cli rt upload  --fail-no-op \
       $JFROG_CLI_ARGS \
       "*.*" . >&2
 
@@ -78,7 +78,7 @@ function archive_apt_packages() {
   mv Packages.gz "__META__Packages-${PACKAGES_VERSION}-${PACKAGES_ARCH}.gz"
 
   # shellcheck disable=SC2086
-  CI=TRUE /mnt/jfrog-cli rt upload \
+  CI=TRUE /mnt/jfrog-cli rt upload  --fail-no-op \
     $JFROG_CLI_ARGS \
     "*.*" . >&2
 
@@ -154,7 +154,7 @@ archive_apk_packages() {
   cd "/var/cache/apk/archives/"
   # Upload the packages using jfrog-cli
   # shellcheck disable=SC2086
-  CI=TRUE /mnt/jfrog-cli rt upload \
+  CI=TRUE /mnt/jfrog-cli rt upload  --fail-no-op \
     $JFROG_CLI_ARGS \
     "*.*" . >&2
 }
