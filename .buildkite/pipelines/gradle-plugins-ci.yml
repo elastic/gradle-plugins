@@ -1,11 +1,11 @@
-# gradle-plugins-ci.yml 
+# gradle-plugins-ci.yml
 
 steps:
   - group: "amd64 Tests"
     steps:
       - label: ":pipeline: :gcloud: Gradle Check"
         commands:
-          - "./gradlew check --continue"
+          - "./gradlew check --continue --info"
         agents:
           provider: "gcp"
           image: family/cloud-ubuntu-2204
