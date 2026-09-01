@@ -17,8 +17,6 @@ steps:
               path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
               field: "accesskey"
               env_var: "DEVELOCITY_API_ACCESS_KEY"
-          - elastic/vault-docker-login#v0.5.2:
-              secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
   - group: "arm64 Test"
     steps:
       - label: ":pipeline: :aws-logo:  Gradle Check"
@@ -36,5 +34,3 @@ steps:
               path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
               field: "accesskey"
               env_var: "DEVELOCITY_API_ACCESS_KEY"
-          - elastic/vault-docker-login#v0.5.2:
-              secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'

@@ -20,7 +20,6 @@ package co.elastic.gradle.cli.base;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream;
 import org.apache.commons.io.IOUtils;
 import org.gradle.api.GradleException;
@@ -72,21 +71,6 @@ public abstract class ExtractAndSetExecutableTransform implements TransformActio
                     } else {
                         IOUtils.skip(archive, entry.getSize());
                     }
-                }
-            }
-        } else if (inputFile.getName().contains("manifest-tool") && !inputFile.getName().contains("v1")) {
-            try (TarArchiveInputStream archive = new TarArchiveInputStream(
-                    new GzipCompressorInputStream(
-                            new BufferedInputStream(new FileInputStream(inputFile))
-                    ))
-            ) {
-                TarArchiveEntry entry;
-                while ((entry = archive.getNextTarEntry()) != null) {
-                    final File outputFile = outputs.file(entry.getName());
-                    try (OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile))) {
-                        out.write(IOUtils.toByteArray(archive, entry.getSize()));
-                    }
-                    setExecutableBit(outputFile);
                 }
             }
         } else {

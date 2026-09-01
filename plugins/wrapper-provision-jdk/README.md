@@ -1,4 +1,4 @@
-Docker Wrapper JDK provision Plugin
+Gradle Wrapper JDK provision Plugin
 ====================================
 
 About

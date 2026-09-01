@@ -11,9 +11,7 @@ gradlePlugin {
 }
 
 dependencies {
-    api(project(":libs:docker"))
     implementation(project(":libs:utils"))
-    implementation(project(":plugins:lifecycle"))
 }
 
 tasks.integrationTest {

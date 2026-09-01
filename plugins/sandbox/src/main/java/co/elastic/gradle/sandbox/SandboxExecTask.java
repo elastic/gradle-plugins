@@ -18,10 +18,7 @@
  */
 package co.elastic.gradle.sandbox;
 
-import co.elastic.gradle.utils.docker.DockerUtils;
-import org.gradle.api.Action;
 import org.gradle.api.GradleException;
-import org.gradle.api.Task;
 import org.gradle.api.tasks.*;
 import org.gradle.process.ExecResult;
 
@@ -32,7 +29,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.stream.Stream;
 
 @CacheableTask
 abstract public class SandboxExecTask extends SandboxExecBaseTask {
@@ -44,29 +40,6 @@ abstract public class SandboxExecTask extends SandboxExecBaseTask {
     public SandboxExecTask() {
         super();
         pathDir = sandbox.resolve(".bin");
-    }
-
-    public void runsDockerCompose() {
-        Stream.of(
-                "docker-compose",
-                "docker-compose-v1"
-        ).flatMap(binaryName -> Stream.of(
-                                Paths.get("/", "usr", "bin"),
-                                Paths.get("/", "usr", "local", "bin")
-                        )
-                        .map(dir -> dir.resolve(binaryName).toAbsolutePath())
-                        .filter(Files::exists)
-                        .findFirst()
-                        .stream()
-        ).forEach(path -> {
-            this.doLast(new Action<Task>() {
-                @Override
-                public void execute(Task t) {
-                    getLogger().lifecycle("Using docker-compose {}", path);
-                }
-            });
-            runs(path.toFile());
-        });
     }
 
     public void runs(File executable) {
@@ -118,9 +91,7 @@ abstract public class SandboxExecTask extends SandboxExecBaseTask {
         Map<String, String> env = new HashMap<>(environment);
         env.put("PATH", pathDir.toAbsolutePath().toString());
 
-        // Run this with the docker utils to benefit from the docker for mac workaround in case we are running docker or
-        // docker-compose.
-        return new DockerUtils(getExecOperations()).exec(spec -> {
+        return getExecOperations().exec(spec -> {
             spec.setWorkingDir(workingDirectory);
             spec.setEnvironment(env);
             spec.setCommandLine(commandLine);
