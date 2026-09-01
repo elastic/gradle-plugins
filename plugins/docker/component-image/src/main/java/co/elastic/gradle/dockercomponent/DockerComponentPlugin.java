@@ -19,7 +19,7 @@
 package co.elastic.gradle.dockercomponent;
 
 import co.elastic.gradle.cli.manifest.ManifestToolPlugin;
-import co.elastic.gradle.dockerbase.DockerLocalCleanTask;
+import co.elastic.gradle.docker.base.DockerLocalCleanTask;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.lifecycle.MultiArchLifecyclePlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;

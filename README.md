@@ -15,7 +15,6 @@ Gradle plugins
 - [co.elastic.build-scan.xunit](plugins/build-scan-xunit/README.md): import xunit files into build scan test results
 - [co.elastic.check-in-generated](plugins/check-in-generated/README.md): Support for keeping checked in generated code up to date
 - [co.elastic.cli](plugins/cli/README.md): Efficiently provision and run various cli tools
-- [co.elastic.docker-base](plugins/docker/base-image/README.md): Building reproducible Docker base images
 - [co.elastic.docker-component](plugins/docker/component-image/README.md): Building multi-platform Docker images for applications
 - [co.elastic.license-headers](plugins/license-headers/README.md): Enforce license headers in source files
 - [co.elastic.lifecycle](plugins/lifecycle/README.md): extended lifecycle tasks

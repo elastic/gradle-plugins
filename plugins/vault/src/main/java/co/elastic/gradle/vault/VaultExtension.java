@@ -87,7 +87,6 @@ abstract public class VaultExtension implements ExtensionAware {
     public Provider<Map<String, String>> readSecret(String path) {
         return getProviderFactory().provider(() -> {
             logger.lifecycle("Reading " + path + " from vault");
-            final Vault driver = getDriver();
             LogicalResponse response = getDataFromVault(path);
             final Map<String, String> data = response.getData();
             if (data.isEmpty()) {
@@ -99,6 +98,14 @@ abstract public class VaultExtension implements ExtensionAware {
 
     @SuppressWarnings("unused")
     public Provider<Map<String, String>> readAndCacheSecret(String path) {
+        return readAndCacheSecret(path, getEngineVersion().get());
+    }
+
+    /**
+     * Reads a secret using a specific KV engine version without changing the extension-wide default.
+     */
+    @SuppressWarnings("unused")
+    public Provider<Map<String, String>> readAndCacheSecret(String path, int engineVersion) {
         final Path leaseExpiration = cacheDir.toPath().resolve(path).resolve("leaseExpiration");
         final Path dataPath = cacheDir.toPath().resolve(path).resolve("data");
 
@@ -110,7 +117,7 @@ abstract public class VaultExtension implements ExtensionAware {
         return getProviderFactory().provider(() -> {
             logger.lifecycle("Reading " + path + " from vault (cached value not available or expired)");
 
-            LogicalResponse response = getDataFromVault(path);
+            LogicalResponse response = getDataFromVault(path, engineVersion);
 
             writeCacheDir(
                     leaseExpiration,
@@ -133,7 +140,11 @@ abstract public class VaultExtension implements ExtensionAware {
     }
 
     protected LogicalResponse getDataFromVault(String path) throws VaultException {
-        final Vault driver = getDriver();
+        return getDataFromVault(path, getEngineVersion().get());
+    }
+
+    protected LogicalResponse getDataFromVault(String path, int engineVersion) throws VaultException {
+        final Vault driver = getDriver(engineVersion);
         LogicalResponse response = null;
         for (int retries = 0; retries < 5; retries++) {
             response = driver.logical().read(path);
@@ -197,7 +208,7 @@ abstract public class VaultExtension implements ExtensionAware {
         }
     }
 
-    private Vault getDriver() {
+    private Vault getDriver(int engineVersion) {
         if (getAuthExtension().getAuthMethods().isEmpty()) {
             throw new GradleException("No authentication configured to access " + getAddress().get() +
                     "\nUse an `auth {}` block to configure at least one authentication method");
@@ -218,7 +229,7 @@ abstract public class VaultExtension implements ExtensionAware {
                 tokenValue.toFile()
         );
         if (cachedToken.isMethodUsable() && isValidLease(expiration)) {
-            return (new VaultAccessStrategy()).access(this, cachedToken, (token, expireMillis) -> {});
+            return (new VaultAccessStrategy()).access(this, cachedToken, (token, expireMillis) -> {}, engineVersion);
         }
         logger.lifecycle("Authenticating to vault at " + getAddress().get());
         for (VaultAuthenticationExtension.VaultAuthMethod authMethod : getAuthExtension().getAuthMethods()) {
@@ -227,7 +238,7 @@ abstract public class VaultExtension implements ExtensionAware {
                 return (new VaultAccessStrategy()).access(this, authMethod, (token, expireMillis) -> {
                     writeCacheDir(tokenValue, token);
                     writeCacheDir(cachedTokenExpiration, expireMillis.toString());
-                });
+                }, engineVersion);
             }
         }
         throw new GradleException("Could not find a suitable auth strategy");

@@ -21,8 +21,6 @@ package co.elastic.gradle.elastic_conventions;
 import co.elastic.gradle.cli.base.BaseCLiExtension;
 import co.elastic.gradle.cli.base.BaseCliPlugin;
 import co.elastic.gradle.cli.base.CliExtension;
-import co.elastic.gradle.dockerbase.BaseImageExtension;
-import co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;
 import co.elastic.gradle.vault.VaultAuthenticationExtension;
@@ -45,8 +43,6 @@ import org.gradle.api.plugins.PluginContainer;
 import org.gradle.internal.jvm.Jvm;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +53,11 @@ import java.util.concurrent.TimeUnit;
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
     public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
+    public static final String DEVELOCITY_SERVER = "https://gradle-enterprise.elastic.co";
+    public static final String DEVELOCITY_ACCESS_KEY_ENV = "DEVELOCITY_ACCESS_KEY";
+    public static final String DEVELOCITY_ACCESS_KEY_VAULT_PATH =
+            "kv/ci-shared/develocity/gradle-build-cache-access-key";
+    public static final String DEVELOCITY_ACCESS_KEY_VAULT_FIELD = "accesskey";
 
     private String getVaultArtifactoryPath(Project target) {
 
@@ -109,19 +110,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                 });
         });
 
-        target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
-            target.getPlugins().apply(VaultPlugin.class);
-            final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
-            try {
-                extension.getOsPackageRepository().set(new URL(
-                        "https://" + creds.get("username") + ":" + creds.get("plaintext") +
-                        "@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"
-                ));
-            } catch (MalformedURLException e) {
-                throw new GradleException("Can't configure os package repository", e);
-            }
-        });
     }
 
     private void configureCliPlugins(Project target) {
@@ -162,9 +150,17 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         final CustomValueSearchLinker customValueSearchLinker = CustomValueSearchLinker.registerWith(develocity, buildScan);
 
         boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
+        if (isCI && isBlank(System.getenv(DEVELOCITY_ACCESS_KEY_ENV))) {
+            configureDevelocityAccessKeyFromVault(target, develocity);
+        }
+        target.getBuildCache().remote(develocity.getBuildCache(), remote -> {
+            remote.setEnabled(true);
+            remote.setPush(isCI);
+        });
+
         // Don't publish in the background on CI since we use ephemeral workers
         buildScan.getUploadInBackground().set(!isCI);
-        develocity.getServer().set("https://gradle-enterprise.elastic.co");
+        develocity.getServer().set(DEVELOCITY_SERVER);
         obfuscation.ipAddresses(ip -> ip.stream().map(it -> "0.0.0.0").toList());
 
         final Jvm jvm = Jvm.current();
@@ -194,6 +190,36 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         getFirsEnvVar("NODE_LABELS", "BUILDKITE_AGENT_META_DATA_QUEUE").map(it -> it.split(" ")).ifPresent(labels ->
                 Arrays.stream(labels).forEach(label -> customValueSearchLinker.addCustomValueAndSearchLink("CI Worker Label", label))
         );
+    }
+
+    private void configureDevelocityAccessKeyFromVault(Settings target, DevelocityConfiguration develocity) {
+        target.getPlugins().apply(VaultPlugin.class);
+        final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+        try {
+            final String accessKey = vault
+                    .readAndCacheSecret(DEVELOCITY_ACCESS_KEY_VAULT_PATH, 2)
+                    .get()
+                    .get(DEVELOCITY_ACCESS_KEY_VAULT_FIELD);
+            if (isBlank(accessKey)) {
+                throw new GradleException(
+                        "Vault secret field '" + DEVELOCITY_ACCESS_KEY_VAULT_FIELD + "' is missing or empty"
+                );
+            }
+            develocity.getAccessKey().set(accessKey);
+        } catch (Exception e) {
+            throw new GradleException(
+                    "Unable to load the shared Develocity access key from Vault path '" +
+                            DEVELOCITY_ACCESS_KEY_VAULT_PATH + "'. CI pipelines applying " +
+                            "co.elastic.elastic-conventions must be granted read access to " +
+                            "kv/ci-shared/develocity/* in Terrazzo, or provide " +
+                            DEVELOCITY_ACCESS_KEY_ENV + " during plugin bootstrap.",
+                    e
+            );
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     // copied from https://github.com/gradle/common-custom-user-data-gradle-plugin/blob/main/src/main/java/com/gradle/Utils.java

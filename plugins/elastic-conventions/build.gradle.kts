@@ -26,8 +26,6 @@ dependencies {
     implementation(project(":plugins:cli:manifest-tool"))
     implementation(project(":plugins:cli:shellcheck"))
     implementation(project(":plugins:cli:snyk"))
-    implementation(project(":plugins:docker:base-image"))
-    implementation(project(":plugins:docker:component-image"))
 
     integrationTestImplementation(project(":plugins:vault"))
     integrationTestImplementation(project(":plugins:cli:jfrog"))

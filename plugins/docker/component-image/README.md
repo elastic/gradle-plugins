@@ -4,8 +4,7 @@ Docker Component Image Build Plugin
 About
 -----
 
-This plugin complements the [Base ImagePlugin](../base-image/README.md)
-by providing a fast, cross-platform way of building multi-platform docker images meant to run a service/application. It
+This plugin provides a fast, cross-platform way of building multi-platform docker images meant to run a service/application. It
 uses
 [jib-core](https://github.com/GoogleContainerTools/jib/tree/master/jib-core)
 under the hood, and draws inspiration from the
@@ -101,53 +100,6 @@ To push images for all platforms and a manifest list:
 ```
 
 Credentials used are the ones configured for `docker login`.
-
-### Building an image from a base image built in the same build
-
-Occasionally, one might need to customize the base image in a specific way for the component, e.g. to install some
-operating system package dependencies, or customize the image in a way that is not supported by the plugin and thus
-requires a script to run. To support this the component image can use an image created with the
-[Docker Base Image Plugin](../base-image/README.md).
-
-```kotlin
-import java.net.URL
-
-plugins {
-    id("co.elastic.docker-component")
-    id("co.elastic.docker-base")
-    id("co.elastic.vault")
-}
-project.version = "myversion"
-vault {
-    address.set("https://vault-ci-prod.elastic.dev")
-    auth {
-        ghTokenFile()
-        ghTokenEnv()
-        tokenEnv()
-        roleAndSecretEnv()
-    }
-}
-cli {
-    manifestTool {
-        val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
-        username.set(credentials["username"])
-        password.set(credentials["plaintext"])
-    }
-}
-val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
-dockerBaseImage {
-    dockerTagPrefix.set("docker.elastic.co/employees/alpar-t")
-    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
-    fromUbuntu("ubuntu", "20.04")
-    install("patch")
-}
-dockerComponentImage {
-    buildOnly(listOf(Architecture.current())) {
-        dockerTagPrefix.set("docker.elastic.co/employees/alpar-t")
-        from(project)
-    }
-}
-```
 
 #### copySpec([owner UID:owner GUID])
 

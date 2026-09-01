@@ -15,8 +15,8 @@ dependencies {
     implementation(project(":libs:utils"))
 
     implementation(project(":plugins:lifecycle"))
+    implementation(project(":plugins:docker:docker-lib"))
 
-    implementation(project(":plugins:docker:base-image"))
     implementation(project(":plugins:cli:manifest-tool"))
     implementation(project(":plugins:cli:snyk"))
 
@@ -39,7 +39,6 @@ dependencies {
     implementation(project(":plugins:sandbox"))
     integrationTestImplementation(project(":plugins:sandbox"))
     implementation(project(":plugins:vault"))
-    integrationTestImplementation(project(":plugins:docker:base-image"))
     integrationTestImplementation(project(":plugins:vault"))
     integrationTestImplementation(project(":plugins:lifecycle"))
 }

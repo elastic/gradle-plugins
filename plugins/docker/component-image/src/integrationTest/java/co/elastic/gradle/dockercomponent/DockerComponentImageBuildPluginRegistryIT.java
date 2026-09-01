@@ -25,8 +25,6 @@ import com.squareup.okhttp.Request;
 import com.squareup.okhttp.Response;
 import org.gradle.internal.impldep.com.fasterxml.jackson.databind.ObjectMapper;
 import org.gradle.testkit.runner.BuildResult;
-import org.gradle.testkit.runner.TaskOutcome;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +36,6 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import static co.elastic.gradle.AssertContains.assertContains;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegrationTest {
@@ -145,96 +142,6 @@ public class DockerComponentImageBuildPluginRegistryIT extends TestkitIntegratio
                 "Monitoring docker.elastic.co/employees/alpar-t/just-a-test:myversion"
         );
 
-    }
-
-    @Test
-    public void testPushWithBasePluginImage() throws IOException {
-        helper.settings("""
-                     rootProject.name = "just-another-test"
-                """);
-
-        helper.buildScript(String.format("""
-                import java.net.URL
-                import %s
-                               
-                plugins {
-                   id("co.elastic.docker-component")
-                   id("co.elastic.docker-base")
-                   id("co.elastic.vault")
-                }
-                project.version = "myversion"
-                vault {
-                      address.set("https://vault-ci-prod.elastic.dev")
-                      auth {
-                        ghTokenFile()
-                        ghTokenEnv()
-                        tokenEnv()
-                        roleAndSecretEnv()
-                      }
-                }
-                cli {
-                    val credentials = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()                      
-                    manifestTool {
-                       username.set(credentials["username"])
-                       password.set(credentials["plaintext"])
-                    }
-                    snyk {
-                       username.set(credentials["username"])
-                       password.set(credentials["plaintext"])
-                    }
-                    jfrog {
-                        username.set(credentials["username"])
-                        password.set(credentials["plaintext"])
-                    }
-                }
-                val creds = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/artifactory_creds").get()
-                dockerBaseImage {
-                    dockerTagPrefix.set("docker.elastic.co/employees/%s")
-                    osPackageRepository.set(URL("https://${creds["username"]}:${creds["plaintext"]}@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"))
-                    fromUbuntu("ubuntu", "20.04")
-                }
-                dockerComponentImage {
-                    buildOnly(listOf(Architecture.current())) {
-                        dockerTagPrefix.set("docker.elastic.co/employees/%s")
-                        from(project)
-                    }
-                }
-                """, Architecture.class.getName(), ghHandle, ghHandle
-        ));
-
-        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImageLockfile")
-                .build();
-
-        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerBaseImagePush")
-                .build();
-
-        gradleRunner.withArguments("--warning-mode", "fail", "-s", "dockerComponentImageBuild")
-                .build();
-
-        final BuildResult pushManifest = gradleRunner.withArguments("--warning-mode", "fail", "-s", "pushManifestList")
-                .build();
-
-        assertContains(
-                pushManifest.getOutput(),
-                String.format(
-                        "Pushed image docker.elastic.co/employees/%s/just-another-test:myversion-%s",
-                        ghHandle,  Architecture.current().dockerName()
-                )
-        );
-        assertContains(
-                pushManifest.getOutput(),
-                String.format(
-                        "Pushed manifest list to docker.elastic.co/employees/%s/just-another-test:myversion",
-                        ghHandle
-                )
-        );
-        assertEquals(TaskOutcome.UP_TO_DATE, pushManifest.task(":dockerComponentImageBuild").getOutcome());
-        Assertions.assertFalse(
-                Files.exists(
-                        helper.projectDir().resolve("docker-component-image.lock")
-                ),
-                "Did not expect a lockfile to exist"
-        );
     }
 
 }

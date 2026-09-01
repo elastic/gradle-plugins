@@ -18,16 +18,12 @@
  */
 package co.elastic.gradle.dockercomponent;
 
-import co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin;
-import co.elastic.gradle.dockerbase.DockerBaseImageBuildTask;
 import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.docker.instruction.*;
 import kotlin.Pair;
 import org.gradle.api.Action;
-import org.gradle.api.Project;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.provider.ProviderFactory;
-import org.gradle.api.tasks.TaskProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,20 +53,6 @@ public class ComponentBuildDSL {
         instructions.add(new From(
                 providerFactory.provider(() -> String.format("%s:%s", image, version))
         ));
-    }
-
-    public void from(Project otherProject) {
-        final TaskProvider<DockerBaseImageBuildTask> dockerBaseImageBuild = otherProject.getTasks()
-                .named("dockerBaseImageBuild", DockerBaseImageBuildTask.class);
-        // For this use-case either a local image or a remote reference can be used, so we add both instructions and
-        // expect tasks to filter as they need
-        instructions.add(
-                new FromLocalArchive(
-                        dockerBaseImageBuild.flatMap(task -> task.getImageArchive().getAsFile()),
-                        dockerBaseImageBuild.flatMap(DockerBaseImageBuildTask::getImageId)
-                )
-        );
-        instructions.add(new From(DockerBaseImageBuildPlugin.pushedTagConvention(otherProject, architecture)));
     }
 
     @SuppressWarnings("unused")
