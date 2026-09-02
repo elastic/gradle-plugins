@@ -5,7 +5,7 @@ steps:
     steps:
       - label: ":pipeline: :gcloud: Gradle Check"
         commands:
-          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=${DEVELOCITY_API_ACCESS_KEY}"'
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "gcp"
@@ -21,7 +21,7 @@ steps:
     steps:
       - label: ":pipeline: :aws-logo:  Gradle Check"
         commands:
-          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=${DEVELOCITY_API_ACCESS_KEY}"'
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "aws"
