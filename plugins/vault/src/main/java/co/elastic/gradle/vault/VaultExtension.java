@@ -106,8 +106,9 @@ abstract public class VaultExtension implements ExtensionAware {
      */
     @SuppressWarnings("unused")
     public Provider<Map<String, String>> readAndCacheSecret(String path, int engineVersion) {
-        final Path leaseExpiration = cacheDir.toPath().resolve(path).resolve("leaseExpiration");
-        final Path dataPath = cacheDir.toPath().resolve(path).resolve("data");
+        final Path versionedCacheDir = cacheDir.toPath().resolve(path).resolve("v" + engineVersion);
+        final Path leaseExpiration = versionedCacheDir.resolve("leaseExpiration");
+        final Path dataPath = versionedCacheDir.resolve("data");
 
         final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath);
         if (cachedData != null) {

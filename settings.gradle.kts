@@ -5,6 +5,8 @@ plugins {
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
 }
 
+// Bootstrap this repository with the cache behavior implemented by the plugin being built below.
+// Remove this block once version-released contains that implementation.
 develocity {
     buildCache {
         val isRunningInCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null

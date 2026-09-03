@@ -148,6 +148,7 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         final BuildScanConfiguration buildScan = develocity.getBuildScan();
         final BuildScanDataObfuscationConfiguration obfuscation = buildScan.getObfuscation();
         final CustomValueSearchLinker customValueSearchLinker = CustomValueSearchLinker.registerWith(develocity, buildScan);
+        develocity.getServer().set(DEVELOCITY_SERVER);
 
         boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
         if (isCI && isBlank(System.getenv(DEVELOCITY_ACCESS_KEY_ENV))) {
@@ -160,7 +161,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
         // Don't publish in the background on CI since we use ephemeral workers
         buildScan.getUploadInBackground().set(!isCI);
-        develocity.getServer().set(DEVELOCITY_SERVER);
         obfuscation.ipAddresses(ip -> ip.stream().map(it -> "0.0.0.0").toList());
 
         final Jvm jvm = Jvm.current();
@@ -195,17 +195,12 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
     private void configureDevelocityAccessKeyFromVault(Settings target, DevelocityConfiguration develocity) {
         target.getPlugins().apply(VaultPlugin.class);
         final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
+        final String accessKey;
         try {
-            final String accessKey = vault
+            accessKey = vault
                     .readAndCacheSecret(DEVELOCITY_ACCESS_KEY_VAULT_PATH, 2)
                     .get()
                     .get(DEVELOCITY_ACCESS_KEY_VAULT_FIELD);
-            if (isBlank(accessKey)) {
-                throw new GradleException(
-                        "Vault secret field '" + DEVELOCITY_ACCESS_KEY_VAULT_FIELD + "' is missing or empty"
-                );
-            }
-            develocity.getAccessKey().set(accessKey);
         } catch (Exception e) {
             throw new GradleException(
                     "Unable to load the shared Develocity access key from Vault path '" +
@@ -216,6 +211,13 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                     e
             );
         }
+        if (isBlank(accessKey)) {
+            throw new GradleException(
+                    "Vault secret field '" + DEVELOCITY_ACCESS_KEY_VAULT_FIELD + "' at path '" +
+                            DEVELOCITY_ACCESS_KEY_VAULT_PATH + "' is missing or empty"
+            );
+        }
+        develocity.getAccessKey().set(accessKey);
     }
 
     private static boolean isBlank(String value) {
