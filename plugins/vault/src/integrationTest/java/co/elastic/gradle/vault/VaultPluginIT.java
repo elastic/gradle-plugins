@@ -165,6 +165,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                     id("co.elastic.vault")
                 }
                 vault {
+                    engineVersion.set(2)
                     address.set("http://127.0.0.1:8200/")
                     auth {
                      tokenEnv()
@@ -178,6 +179,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                     id("co.elastic.vault")
                 }
                 vault {
+                    engineVersion.set(2)
                     address.set("http://127.0.0.1:8200/")
                     auth {
                      tokenEnv()
