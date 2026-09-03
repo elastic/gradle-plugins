@@ -6,8 +6,8 @@ About
 This repository hosts a collection of Gradle plugins meant to extend the capabilities of Gradle and 
 implement [hermetic builds](https://sre.google/sre-book/release-engineering/#hermetic-builds-nqslhnid).
 
-The plugins are likely to work best if Gradle is the build system of choice, but can be used integrated 
-with other build systems too, e.g. just to build docker images.
+The plugins are likely to work best if Gradle is the build system of choice, but can also be integrated
+with other build systems.
 
 Gradle plugins 
 ==============
@@ -15,8 +15,6 @@ Gradle plugins
 - [co.elastic.build-scan.xunit](plugins/build-scan-xunit/README.md): import xunit files into build scan test results
 - [co.elastic.check-in-generated](plugins/check-in-generated/README.md): Support for keeping checked in generated code up to date
 - [co.elastic.cli](plugins/cli/README.md): Efficiently provision and run various cli tools
-- [co.elastic.docker-base](plugins/docker/base-image/README.md): Building reproducible Docker base images
-- [co.elastic.docker-component](plugins/docker/component-image/README.md): Building multi-platform Docker images for applications
 - [co.elastic.license-headers](plugins/license-headers/README.md): Enforce license headers in source files
 - [co.elastic.lifecycle](plugins/lifecycle/README.md): extended lifecycle tasks
 - [co.elastic.lifecycle-multi-arch](plugins/lifecycle/README.md): support for building on multiple architectures
@@ -52,9 +50,9 @@ Where practical plugins should not break when applied to Windows and should be s
 or degrade gracefully. Windows support is on a best-effort basis and not something we continuously test. This being the 
 JVM most things should work, but there are no guarantees.
 
-Assumptions about the machine include but are not limited to the availability of software. A JVM will be available as 
-that's running Gradle, but nothing else should be taken for granted. As a convention and enabler plugins can assume that 
-docker will be available and use it, or otherwise provision required tools and libraries.
+Assumptions about the machine include but are not limited to the availability of software. A JVM will be available as
+that's running Gradle, but nothing else should be taken for granted. Plugins should provision any additional required
+tools and libraries.
 
 By doing so, it will be easy to change the versions of these requirements without changes having to be matched by developers 
 and CI infrastructure, and it will be easy to reproduce failures from CI locally. 

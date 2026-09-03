@@ -19,7 +19,6 @@
 package co.elastic.gradle.sandbox;
 
 import co.elastic.gradle.TestkitIntegrationTest;
-import co.elastic.gradle.utils.docker.ContainerImageProviderTask;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,40 +89,6 @@ class SandboxPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
-    void noDockerSandboxTaskWithoutPlugin() {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox").apply(false)
-                }
-                tasks.register<SandboxDockerExecTask>("test")
-                """, SandboxDockerExecTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "test")
-                .buildAndFail();
-        assertContains(result.getOutput(), "Task :test can only be used if the sandbox plugin is applied");
-    }
-
-    @Test
-    void taskWithNoArguments() {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                }
-                tasks.register<SandboxDockerExecTask>("test")
-                """, SandboxDockerExecTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test")
-                .buildAndFail();
-        assertContains(result.getOutput(), " property 'image' doesn't have a configured value");
-    }
-
-    @Test
     void sandboxExec() {
         helper.settings("""
                 buildCache {
@@ -159,47 +124,11 @@ class SandboxPluginIT extends TestkitIntegrationTest {
         BuildResult result = runAndVerifyOutput();
 
         assertContains(result.getOutput(), "Path is: /.bin");
-        // Env variable specific to docker utils
-        assertContains(result.getOutput(), "DOCKER_BUILDKIT=1");
-
         final BuildResult upToDateResult = gradleRunner
                 .withArguments("--warning-mode", "fail", "-s", "test")
                 .build();
 
         assertEquals(TaskOutcome.UP_TO_DATE, Objects.requireNonNull(upToDateResult.task(":test")).getOutcome());
-    }
-
-    @Test
-    void sandboxDockerExec() {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                }
-                tasks.register<SandboxDockerExecTask>("test") {
-                    image("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-                    setWorkingDir("samples")
-                    setCommandLine(listOf("../scripts/test.sh", "arg1", "arg2"))
-                    reads(file("scripts/test.sh"))
-                    reads(file("samples/file1"))
-                    reads(fileTree("samples/dir"))
-                    writes(file("build/script_out/output_file"))
-                    writes(fileTree("build/script_out_dir"))
-                    environment("ENV_VAR1", "value1")
-                    environment(mapOf("ENV_VAR2" to "value2"))
-                }
-                """, SandboxDockerExecTask.class.getName()
-        ));
-
-        BuildResult result = runAndVerifyOutput();
-        assertContains(result.getOutput(), "PWD=/sandbox/samples");
-        assertContains(result.getOutput(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
-
-        final BuildResult upToDateResult = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test")
-                .build();
-
-        assertEquals(Objects.requireNonNull(upToDateResult.task(":test")).getOutcome(), TaskOutcome.UP_TO_DATE);
     }
 
     private BuildResult runAndVerifyOutput() {
@@ -219,116 +148,6 @@ class SandboxPluginIT extends TestkitIntegrationTest {
         assertPathExists(helper.projectDir().resolve("build/script_out_dir/sub-dir/sub-dir/output_file"));
 
         return result;
-    }
-
-    @Test
-    void testThatImagesArePulled() {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                    id("base")
-                }
-                                
-                tasks.register<SandboxDockerExecTask>("test1") {
-                    image("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-                    setCommandLine(listOf("uname", "-r", "-s"))
-                }
-                                
-                tasks.register<SandboxDockerExecTask>("test2") {
-                    image("ubuntu:18.04@sha256:42cd9143b6060261187a72716906187294b8b66653b50d70bc7a90ccade5c984")
-                    setCommandLine(listOf("uname", "-r", "-s"))
-                }
-                                
-                """, SandboxDockerExecTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test1", "test2")
-                .build();
-
-        assertContains(
-                result.getOutput(),
-                "Pulling docker image: ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9"
-        );
-        assertContains(
-                result.getOutput(),
-                "Pulling docker image: ubuntu:18.04@sha256:42cd9143b6060261187a72716906187294b8b66653b50d70bc7a90ccade5c984"
-        );
-
-        final BuildResult upToDateResult = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test1", "test2")
-                .build();
-        assertEquals(Objects.requireNonNull(upToDateResult.task(":resolveSandboxDockerDependencies")).getOutcome(), TaskOutcome.UP_TO_DATE);
-
-        final BuildResult runResult = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "clean", "test1", "test2")
-                .build();
-        assertEquals(Objects.requireNonNull(runResult.task(":resolveSandboxDockerDependencies")).getOutcome(), TaskOutcome.SUCCESS);
-    }
-
-    @Test
-    void testWithLocallyBuiltImage() {
-        helper.settings("""
-                include("subproject")
-                """
-        );
-
-        helper.buildScript("subproject", String.format("""
-                        import %s
-                        abstract class BuildDockerImage : DefaultTask(), ContainerImageProviderTask {
-                            init {
-                                tag.convention("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-                                imageId.convention("test")
-                            }
-                            abstract override fun getTag(): Property<String>
-                            abstract override fun getImageId(): Property<String>
-                        }
-                        val dockerTask by tasks.registering(BuildDockerImage::class)
-                """, ContainerImageProviderTask.class.getName()
-        ));
-        helper.buildScript(String.format("""
-                import %s
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                }
-                                
-                abstract class BuildDockerImage : DefaultTask(), ContainerImageProviderTask {
-                    init {
-                        tag.convention("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-                        imageId.convention("test")
-                    }
-                    abstract override fun getTag(): Property<String>
-                    abstract override fun getImageId(): Property<String>
-                }
-                                
-                val dockerTask by tasks.registering(BuildDockerImage::class)
-                                
-                tasks.register<SandboxDockerExecTask>("test1") {
-                    image(dockerTask)
-                    setCommandLine(listOf("uname", "-r", "-s"))
-                }
-                tasks.register<SandboxDockerExecTask>("test2") {
-                    image(project(":subproject"))
-                    setCommandLine(listOf("uname", "-r", "-s"))
-                }
-                """, SandboxDockerExecTask.class.getName(), ContainerImageProviderTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test1", "test2")
-                .build();
-
-        assertDoesNotContain(
-                result.getOutput(),
-                "Pulling docker image: ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9"
-        );
-        assertContains(result.getOutput(), "Linux ");
-
-        // Assert that the dependent tasks ran. These will be up-to-date as they don't have any task actions
-        assertEquals(Objects.requireNonNull(result.task(":dockerTask")).getOutcome(), TaskOutcome.UP_TO_DATE);
-        assertEquals(Objects.requireNonNull(result.task(":subproject:dockerTask")).getOutcome(), TaskOutcome.UP_TO_DATE);
     }
 
     @Test
@@ -404,45 +223,6 @@ class SandboxPluginIT extends TestkitIntegrationTest {
         assertContains(result.getOutput(), "== Command failed on try 2, but 3 are allowed, going to retry ==");
         assertContains(result.getOutput(), "Running try: 3");
         assertContains(result.getOutput(), "Sandbox exec :test failed with exit code 3");
-    }
-
-    @Test
-    void retriesDockerSandbox() {
-        helper.writeScript(
-                "scripts/test.sh",
-                """
-                        #!/bin/bash
-                        echo Running try: $GRADLE_SANDBOX_TRY_NR!
-                        if ! [ $GRADLE_SANDBOX_TRY_NR -eq 3 ] ; then
-                            exit $GRADLE_SANDBOX_TRY_NR
-                        fi
-                        """
-        );
-
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                }
-                tasks.register<SandboxDockerExecTask>("test") {
-                    image("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-                    setCommandLine(listOf("./scripts/test.sh", "arg1", "arg2"))
-                    reads(file("scripts/test.sh"))
-                    maxTries(3)
-                }
-                """, SandboxDockerExecTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "test")
-                .build();
-
-        assertDoesNotContain(result.getOutput(), "Running try: 0");
-        assertContains(result.getOutput(), "Running try: 1");
-        assertContains(result.getOutput(), "== Command failed on try 1, but 3 are allowed, going to retry ==");
-        assertContains(result.getOutput(), "Running try: 2");
-        assertContains(result.getOutput(), "== Command failed on try 2, but 3 are allowed, going to retry ==");
-        assertContains(result.getOutput(), "Running try: 3");
     }
 
     @Test
@@ -593,27 +373,5 @@ class SandboxPluginIT extends TestkitIntegrationTest {
                 "File from p2!"
         );
     }
-
-    @Test
-    void worksWithLifecyclePlugin() {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                    id("co.elastic.sandbox")
-                    id("co.elastic.lifecycle")
-                }              
-                """, SandboxExecTask.class.getName()
-        ));
-
-        final BuildResult result = gradleRunner
-                .withArguments("--warning-mode", "fail", "-s", "resolveAllDependencies")
-                .build();
-
-        assertEquals(
-                TaskOutcome.SUCCESS,
-                Objects.requireNonNull(result.task(":resolveSandboxDockerDependencies")).getOutcome()
-        );
-    }
-
 
 }

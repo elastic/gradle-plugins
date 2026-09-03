@@ -35,10 +35,19 @@ public class VaultAccessStrategy {
             VaultAuthenticationExtension.VaultAuthMethod authMethod,
             BiConsumer<String, Long> tokenAction
     ) {
+        return access(vault, authMethod, tokenAction, vault.getEngineVersion().get());
+    }
+
+    public Vault access(
+            VaultExtension vault,
+            VaultAuthenticationExtension.VaultAuthMethod authMethod,
+            BiConsumer<String, Long> tokenAction,
+            int engineVersion
+    ) {
         if (authMethod instanceof VaultAuthenticationExtension.VaultTokenEnvVar) {
-            return authWithToken(vault, ((VaultAuthenticationExtension.VaultTokenEnvVar) authMethod).getToken().get());
+            return authWithToken(vault, ((VaultAuthenticationExtension.VaultTokenEnvVar) authMethod).getToken().get(), engineVersion);
         } else if (authMethod instanceof VaultAuthenticationExtension.VaultTokenFile) {
-            return authWithToken(vault, ((VaultAuthenticationExtension.VaultTokenFile) authMethod).getToken().get());
+            return authWithToken(vault, ((VaultAuthenticationExtension.VaultTokenFile) authMethod).getToken().get(), engineVersion);
         } else if (authMethod instanceof VaultAuthenticationExtension.VaultRoleAndSecretID) {
             return authAndStoreToken(vault, (driver) -> {
                         try {
@@ -52,7 +61,8 @@ public class VaultAccessStrategy {
                             throw new GradleException("Failed to authenticate to vault", e);
                         }
                     },
-                    tokenAction
+                    tokenAction,
+                    engineVersion
             );
         } else if (authMethod instanceof VaultAuthenticationExtension.GithubTokenFile) {
             return authAndStoreToken(vault, (driver) -> {
@@ -62,7 +72,8 @@ public class VaultAccessStrategy {
                             throw new GradleException("Failed to authenticate to vault", e);
                         }
                     },
-                    tokenAction
+                    tokenAction,
+                    engineVersion
             );
         } else if (authMethod instanceof VaultAuthenticationExtension.GithubTokenEnv) {
             return authAndStoreToken(vault, (driver) -> {
@@ -72,7 +83,8 @@ public class VaultAccessStrategy {
                             throw new GradleException("Failed to authenticate to vault", e);
                         }
                     },
-                    tokenAction
+                    tokenAction,
+                    engineVersion
             );
         } else {
             throw new IllegalStateException("Unsupported auth method " + authMethod.getClass());
@@ -82,12 +94,13 @@ public class VaultAccessStrategy {
     private Vault authAndStoreToken(
             VaultExtension vault,
             Function<Vault, AuthResponse> authResponseSupplier,
-            BiConsumer<String, Long> tokenAction) {
+            BiConsumer<String, Long> tokenAction,
+            int engineVersion) {
         try {
             final Vault driver = new Vault(
                     new VaultConfig()
                             .address(vault.getAddress().get())
-                            .engineVersion(vault.getEngineVersion().get())
+                            .engineVersion(engineVersion)
                             .build()
             ).withRetries(vault.getRetries().get(), vault.getRetryDelayMillis().get());
             final AuthResponse authResponse = authResponseSupplier.apply(driver);
@@ -99,18 +112,18 @@ public class VaultAccessStrategy {
                             TimeUnit.SECONDS
                     )
             );
-            return authWithToken(vault, authClientToken);
+            return authWithToken(vault, authClientToken, engineVersion);
         } catch (VaultException e) {
             throw new GradleException("Failed to connect to vault", e);
         }
     }
 
-    private Vault authWithToken(VaultExtension vault, String token) {
+    private Vault authWithToken(VaultExtension vault, String token, int engineVersion) {
         try {
             return new Vault(
                     new VaultConfig()
-                            .address(vault.getAddress().get())
-                            .engineVersion(vault.getEngineVersion().get())
+                        .address(vault.getAddress().get())
+                        .engineVersion(engineVersion)
                             .token(token)
                             .build()
             )
