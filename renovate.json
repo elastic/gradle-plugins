@@ -3,6 +3,9 @@
   "extends": [
     "local>elastic/renovate-config:platform-devflow"
   ],
+  "pre-commit": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "groupName": "Gradle Enterprise Plugin",
