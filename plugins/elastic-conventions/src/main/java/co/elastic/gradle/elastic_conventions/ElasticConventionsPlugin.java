@@ -53,11 +53,6 @@ import java.util.concurrent.TimeUnit;
 public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
     public static final String PROPERTY_NAME_VAULT_PREFIX = "co.elastic.vault_prefix";
-    public static final String DEVELOCITY_SERVER = "https://gradle-enterprise.elastic.co";
-    public static final String DEVELOCITY_ACCESS_KEY_ENV = "DEVELOCITY_ACCESS_KEY";
-    public static final String DEVELOCITY_ACCESS_KEY_VAULT_PATH =
-            "kv/ci-shared/develocity/gradle-build-cache-access-key";
-    public static final String DEVELOCITY_ACCESS_KEY_VAULT_FIELD = "accesskey";
 
     private String getVaultArtifactoryPath(Project target) {
 
@@ -148,19 +143,11 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         final BuildScanConfiguration buildScan = develocity.getBuildScan();
         final BuildScanDataObfuscationConfiguration obfuscation = buildScan.getObfuscation();
         final CustomValueSearchLinker customValueSearchLinker = CustomValueSearchLinker.registerWith(develocity, buildScan);
-        develocity.getServer().set(DEVELOCITY_SERVER);
 
         boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
-        if (isCI && isBlank(System.getenv(DEVELOCITY_ACCESS_KEY_ENV))) {
-            configureDevelocityAccessKeyFromVault(target, develocity);
-        }
-        target.getBuildCache().remote(develocity.getBuildCache(), remote -> {
-            remote.setEnabled(true);
-            remote.setPush(isCI);
-        });
-
         // Don't publish in the background on CI since we use ephemeral workers
         buildScan.getUploadInBackground().set(!isCI);
+        develocity.getServer().set("https://gradle-enterprise.elastic.co");
         obfuscation.ipAddresses(ip -> ip.stream().map(it -> "0.0.0.0").toList());
 
         final Jvm jvm = Jvm.current();
@@ -190,38 +177,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
         getFirsEnvVar("NODE_LABELS", "BUILDKITE_AGENT_META_DATA_QUEUE").map(it -> it.split(" ")).ifPresent(labels ->
                 Arrays.stream(labels).forEach(label -> customValueSearchLinker.addCustomValueAndSearchLink("CI Worker Label", label))
         );
-    }
-
-    private void configureDevelocityAccessKeyFromVault(Settings target, DevelocityConfiguration develocity) {
-        target.getPlugins().apply(VaultPlugin.class);
-        final VaultExtension vault = target.getExtensions().getByType(VaultExtension.class);
-        final String accessKey;
-        try {
-            accessKey = vault
-                    .readAndCacheSecret(DEVELOCITY_ACCESS_KEY_VAULT_PATH, 2)
-                    .get()
-                    .get(DEVELOCITY_ACCESS_KEY_VAULT_FIELD);
-        } catch (Exception e) {
-            throw new GradleException(
-                    "Unable to load the shared Develocity access key from Vault path '" +
-                            DEVELOCITY_ACCESS_KEY_VAULT_PATH + "'. CI pipelines applying " +
-                            "co.elastic.elastic-conventions must be granted read access to " +
-                            "kv/ci-shared/develocity/* in Terrazzo, or provide " +
-                            DEVELOCITY_ACCESS_KEY_ENV + " during plugin bootstrap.",
-                    e
-            );
-        }
-        if (isBlank(accessKey)) {
-            throw new GradleException(
-                    "Vault secret field '" + DEVELOCITY_ACCESS_KEY_VAULT_FIELD + "' at path '" +
-                            DEVELOCITY_ACCESS_KEY_VAULT_PATH + "' is missing or empty"
-            );
-        }
-        develocity.getAccessKey().set(accessKey);
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     // copied from https://github.com/gradle/common-custom-user-data-gradle-plugin/blob/main/src/main/java/com/gradle/Utils.java

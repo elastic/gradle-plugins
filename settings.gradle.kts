@@ -1,18 +1,26 @@
+import co.elastic.gradle.vault.VaultExtension
 import java.io.File
 
 plugins {
     id("com.gradle.develocity").version("3.18.1")
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
+    id("co.elastic.vault").version(File("version-released").readText().trim())
 }
 
-// Bootstrap this repository with the cache behavior implemented by the plugin being built below.
-// Remove this block once version-released contains that implementation.
+val vault:VaultExtension = extensions.findByType()!!
+val creds:Map<String, String> = vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/cloud-build-cache-us-east1").get()
+
 develocity {
     buildCache {
-        val isRunningInCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null
-        remote(develocity.buildCache) {
+        val isRunningInCI = System.getenv("BUILD_URL") != null || System.getenv("CI") == "true"
+        remote<HttpBuildCache> {
             isEnabled = true
+            url = uri("https://cloud-gradle-cache-us-east1.elastic.dev/cache/")
             isPush = isRunningInCI
+            credentials {
+                username = creds["username"]
+                password = creds["password"]
+            }
         }
     }
 }
