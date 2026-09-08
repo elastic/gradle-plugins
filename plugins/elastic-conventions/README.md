@@ -4,7 +4,6 @@ Applies the following conventions:
 - configures the vault address and a common authentication scheme
 - configures Develocity build scans and its remote Gradle build cache
 - cli plugins and snyk api token
-- Os package repo for base images
 
 The remote cache at `https://gradle-enterprise.elastic.co` is enabled for all builds.
 Local builds read from it but do not push; Jenkins and Buildkite builds both read and push.

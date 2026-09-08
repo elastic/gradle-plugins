@@ -13,22 +13,11 @@ hard-link the original files there. This is similar to the result of `cp -l`. Th
 run that it's running in the project directory, but accessing any file that is not specifically declared with `reads`
 will result in a file not found error.
 
-The docker variant offers stronger sandbox guarantees by using docker containers. The tag of the image being used is
-tracked as input, so anything inside the image is safe in regard to build avoidance. Note that the input is the tag
-itself, not the contents of the image so the task will not be re-run if the underlying image changes without the tag.
-It's recommended to use a message digest as part of the image identification to prevent over-caching.
-
-The plugin will create a `resolveSandboxDockerDependencies` task to try to pull any docker image being used multiple times 
-before creating the container. This can also be used to warm up docker or bake images into CI workers to prevent relying 
-on the network when building.
-
 Limitations
 -----------
 
-- `SandboxDockerExec` task doesn't use any OS level namespacing, as such it allows files to be accessed by absolute path
-  and these will not be considered inputs. This is true for executables too, they can run without being declared if called 
-  with an absolute path. Consider using the docker variant if stringer sandbox guarantees are
-  required. 
+- `SandboxExecTask` doesn't use any OS-level namespacing, so files can be accessed by absolute path and will not be
+  considered inputs. Executables can also run without being declared if called with an absolute path.
 - The task does not account for any side effects of running the command, other than files or directories being created
   that must be declared with `writes`. Anything declared with `writes` will be available even if the task
   is `FROM_CACHE`, but any side effects will not. Make sure not to relay on command lines with side effects, or not to
@@ -53,28 +42,6 @@ tasks.register<SandboxExecTask>("test") {
     runsSystemBinary("env")
     runs(file("/usr/bin/find"))
     runsSystemBinary("sed")
-    reads(file("samples/file1"))
-    reads(fileTree("samples/dir"))
-    writes(file("build/script_out/output_file"))
-    writes(fileTree("build/script_out_dir"))
-    environment("ENV_VAR1", "value1")
-    environment(mapOf("ENV_VAR2" to "value2"))
-}
-```
-
-### SandboxDockerExecTask
-
-```kotlin
-import co.elastic.gradle.sandbox.SandboxDockerExecTask
-
-plugins {
-    id("co.elastic.sandbox")
-}
-tasks.register<SandboxDockerExecTask>("test") {
-    image("ubuntu:20.04@sha256:8ae9bafbb64f63a50caab98fd3a5e37b3eb837a3e0780b78e5218e63193961f9")
-    setWorkingDir("samples")
-    setCommandLine(listOf("../scripts/test.sh", "arg1", "arg2"))
-    reads(file("scripts/test.sh"))
     reads(file("samples/file1"))
     reads(fileTree("samples/dir"))
     writes(file("build/script_out/output_file"))
@@ -129,8 +96,8 @@ and then access the file as `../p2/some_file` in the sandbox.
 Note that while possible, it's not recommended having inner dependencies between projects at the file level. Consider 
 implementing better encapsulation and using project dependencies or at least task dependencies instead. 
 
-Methods Specific to SandboxExecTask
------------------------------------
+Methods on SandboxExecTask
+--------------------------
 
 ### runsSystemBinary(String name)
 
@@ -152,26 +119,6 @@ For example `runs(file(".gradle/bin/node"))` means that a script can call `node`
 
 The file passed as an argument is considered an input to the task, so the task will re-run if the contents of the file 
 changes.  
-
-Methods Specific to SandboxDockerExecTask
------------------------------------------
-
-### image(String tag)
-
-Use a docker image from a registry. It's recommended to include the digest too.  
-
-### image(ContainerImageProviderTask task)
-
-Use a docker image from built by a task locally that implements the `ContainerImageProviderTask` interface.
-A dependency on this task is automatically added.
-
-### image(Project project)
-
-Us a docker image built by a different gradle subproject. The subproject must have a single task that implements the 
-`ContainerImageProviderTask` interface.
-
-Methods available on both tasks
--------------------------------
 
 ### setWorkingDir(String relativePath)
 
