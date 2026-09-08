@@ -5,6 +5,7 @@ steps:
     steps:
       - label: ":pipeline: :gcloud: Gradle Check"
         commands:
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "gcp"
@@ -12,6 +13,10 @@ steps:
           diskSizeGb: 80
           machineType: 'custom-6-18432'
         plugins:
+          - elastic/vault-secrets#v0.0.3:
+              path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
+              field: "accesskey"
+              env_var: "DEVELOCITY_API_ACCESS_KEY"
           - elastic/vault-docker-login#v0.5.2:
               secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
       - label: ":pipeline: :gcloud: Build examples: docker-full"
@@ -34,6 +39,7 @@ steps:
     steps:
       - label: ":pipeline: :aws-logo:  Gradle Check"
         commands:
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "aws"
@@ -42,6 +48,10 @@ steps:
           imagePrefix: cloud-ubuntu-2204-aarch64
           diskName: "/dev/xvda"
         plugins:
+          - elastic/vault-secrets#v0.0.3:
+              path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
+              field: "accesskey"
+              env_var: "DEVELOCITY_API_ACCESS_KEY"
           - elastic/vault-docker-login#v0.5.2:
               secret_path: 'secret/ci/elastic-gradle-plugins/container-registry/dockerhub'
       - label: ":pipeline: :aws-logo:  Build examples: docker-full"
