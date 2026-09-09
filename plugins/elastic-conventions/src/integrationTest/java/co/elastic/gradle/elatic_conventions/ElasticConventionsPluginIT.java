@@ -27,11 +27,13 @@ import co.elastic.gradle.vault.VaultExtension;
 import org.gradle.testkit.runner.BuildResult;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
 import static co.elastic.gradle.AssertContains.assertContains;
 import static co.elastic.gradle.AssertFiles.assertPathExists;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
@@ -80,6 +82,41 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 .build();
 
         assertContains(result.getOutput(), "Develocity remote build cache push: true");
+    }
+
+    @Test
+    public void ciLoadsDevelocityAccessKeyFromVault() {
+        final String secretPath = ElasticConventionsPlugin.DEVELOCITY_ACCESS_KEY_VAULT_PATH;
+        final String cachedKeyPath = ".gradle/secrets/" + secretPath + "/v2/data/accesskey";
+        assertFalse(Files.exists(helper.projectDir().resolve(cachedKeyPath)));
+
+        helper.settings("""
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                val accessKey = develocity.accessKey.get()
+                check(accessKey.isNotBlank()) { "Vault fallback did not configure a Develocity access key" }
+                check(file("%s").readText() == accessKey) {
+                    "Develocity access key does not match the cached Vault secret"
+                }
+                val remoteCache = buildCache.remote as com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache
+                check(remoteCache.isEnabled && remoteCache.isPush) { "CI remote cache is not enabled for reads and writes" }
+                logger.lifecycle("Develocity access key loaded from Vault successfully")
+                """.formatted(cachedKeyPath));
+
+        final Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.put("BUILDKITE_BUILD_URL", "https://buildkite.example/build/1");
+        environment.remove("DEVELOCITY_ACCESS_KEY");
+        environment.remove("DEVELOCITY_API_ACCESS_KEY");
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(environment)
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+
+        assertContains(result.getOutput(), "Reading " + secretPath + " from vault (cached value not available or expired)");
+        assertContains(result.getOutput(), "Develocity access key loaded from Vault successfully");
+        assertPathExists(helper.projectDir().resolve(cachedKeyPath));
     }
 
     @Test
