@@ -20,8 +20,7 @@ Limitations
   considered inputs. Executables can also run without being declared if called with an absolute path.
 - The task does not account for any side effects of running the command, other than files or directories being created
   that must be declared with `writes`. Anything declared with `writes` will be available even if the task
-  is `FROM_CACHE`, but any side effects will not. Make sure not to relay on command lines with side effects, or not to
-  rely on those side effects.
+  is `FROM_CACHE`, but any side effects will not. Avoid relying on command-line side effects unless they are represented by declared outputs.
 
 Usage
 -----
