@@ -82,7 +82,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     .replace(version, "");
         }
         for (Architecture value : Architecture.values()) {
-            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT))
+            targetName = targetName.replace(value.platformName(), value.name().toLowerCase(Locale.ROOT))
                     .replace(value.name(), value.name().toLowerCase(Locale.ROOT));
         }
         targetName = targetName.replace("macos", "darwin")
@@ -96,7 +96,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                         value.getName().toLowerCase(Locale.ROOT)
                                 .contains(arch.name().toLowerCase(Locale.ROOT)) ||
                         value.getName().toLowerCase(Locale.ROOT)
-                                .contains(arch.dockerName().toLowerCase(Locale.ROOT)) ||
+                                .contains(arch.platformName().toLowerCase(Locale.ROOT)) ||
                         value.getName().contains(OS.current().map(
                                 Map.of(OS.DARWIN, "mac")
                         ))
@@ -111,7 +111,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     if (value.getName().toLowerCase(Locale.ROOT)
                                 .contains(arch.name().toLowerCase(Locale.ROOT)) ||
                         value.getName().toLowerCase(Locale.ROOT)
-                                .contains(arch.dockerName().toLowerCase(Locale.ROOT))
+                                .contains(arch.platformName().toLowerCase(Locale.ROOT))
                     ) {
                         return nameHasCurrentOS;
                     } else {
@@ -134,8 +134,8 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                                             .replace(separator + os.name().toLowerCase(Locale.ROOT), "")
                                             .replace(separator + arch.name(), "")
                                             .replace(separator + arch.name().toLowerCase(Locale.ROOT), "")
-                                            .replace(separator + arch.dockerName(), "")
-                                            .replace(separator + arch.dockerName().toUpperCase(Locale.ROOT), "")
+                                            .replace(separator + arch.platformName(), "")
+                                            .replace(separator + arch.platformName().toUpperCase(Locale.ROOT), "")
                                             .replace(separator + "macos", "")
                                             .replace(separator + "osx", "")
                                             .replace(separator + "mac-386", "");

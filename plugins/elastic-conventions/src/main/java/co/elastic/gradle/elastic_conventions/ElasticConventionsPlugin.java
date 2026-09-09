@@ -21,8 +21,6 @@ package co.elastic.gradle.elastic_conventions;
 import co.elastic.gradle.cli.base.BaseCLiExtension;
 import co.elastic.gradle.cli.base.BaseCliPlugin;
 import co.elastic.gradle.cli.base.CliExtension;
-import co.elastic.gradle.dockerbase.BaseImageExtension;
-import co.elastic.gradle.dockerbase.DockerBaseImageBuildPlugin;
 import co.elastic.gradle.lifecycle.LifecyclePlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;
 import co.elastic.gradle.vault.VaultAuthenticationExtension;
@@ -45,8 +43,6 @@ import org.gradle.api.plugins.PluginContainer;
 import org.gradle.internal.jvm.Jvm;
 
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -109,19 +105,6 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
                 });
         });
 
-        target.getPlugins().withType(DockerBaseImageBuildPlugin.class, unused -> {
-            target.getPlugins().apply(VaultPlugin.class);
-            final BaseImageExtension extension = target.getExtensions().getByType(BaseImageExtension.class);
-            var creds = vault.readAndCacheSecret(getVaultArtifactoryPath(target)).get();
-            try {
-                extension.getOsPackageRepository().set(new URL(
-                        "https://" + creds.get("username") + ":" + creds.get("plaintext") +
-                        "@artifactory.elastic.dev/artifactory/gradle-plugins-os-packages"
-                ));
-            } catch (MalformedURLException e) {
-                throw new GradleException("Can't configure os package repository", e);
-            }
-        });
     }
 
     private void configureCliPlugins(Project target) {
