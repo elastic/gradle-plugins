@@ -5,16 +5,23 @@ steps:
     steps:
       - label: ":pipeline: :gcloud: Gradle Check"
         commands:
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "gcp"
           image: family/cloud-ubuntu-2204
           diskSizeGb: 80
           machineType: 'custom-6-18432'
+        plugins:
+          - elastic/vault-secrets#v0.0.3:
+              path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
+              field: "accesskey"
+              env_var: "DEVELOCITY_API_ACCESS_KEY"
   - group: "arm64 Test"
     steps:
       - label: ":pipeline: :aws-logo:  Gradle Check"
         commands:
+          - 'export DEVELOCITY_ACCESS_KEY="gradle-enterprise.elastic.co=$${DEVELOCITY_API_ACCESS_KEY:?Vault did not inject DEVELOCITY_API_ACCESS_KEY}"'
           - "./gradlew check --continue"
         agents:
           provider: "aws"
@@ -22,3 +29,8 @@ steps:
           instanceType: m6g.4xlarge
           imagePrefix: cloud-ubuntu-2204-aarch64
           diskName: "/dev/xvda"
+        plugins:
+          - elastic/vault-secrets#v0.0.3:
+              path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
+              field: "accesskey"
+              env_var: "DEVELOCITY_API_ACCESS_KEY"
