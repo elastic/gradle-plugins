@@ -55,12 +55,7 @@ public abstract class CompareFileMapTask extends AbstractFileMapTask {
     public FileCollection getToDirs() {
         return getFrom(getMap().get()::values, File::isDirectory).stream()
                 .map(each -> (FileCollection) getFileOperations().fileTree(each))
-                .reduce((tree1, tree2) -> {
-                    final FileCollection files = getFileOperations().immutableFiles();
-                    files.plus(tree1);
-                    files.plus(tree2);
-                    return files;
-                })
+                .reduce(FileCollection::plus)
                 .orElse(getFileOperations().immutableFiles());
     }
 
