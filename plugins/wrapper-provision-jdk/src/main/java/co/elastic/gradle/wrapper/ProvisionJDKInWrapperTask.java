@@ -22,12 +22,14 @@ import co.elastic.gradle.utils.Architecture;
 import co.elastic.gradle.utils.OS;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
+import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.TaskAction;
 
+import javax.inject.Inject;
 import java.io.*;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +61,9 @@ abstract public class ProvisionJDKInWrapperTask extends DefaultTask {
     @Optional
     abstract public Property<String> getAppleM1URLOverride();
 
+    @Inject
+    protected abstract ProjectLayout getProjectLayout();
+
     @TaskAction
     public void extendWrapper() throws IOException {
         final Map<OS, Map<Architecture, String>> checksums = getChecksums().get();
@@ -76,8 +81,8 @@ abstract public class ProvisionJDKInWrapperTask extends DefaultTask {
                 throw new GradleException("Missing checksum for architecture on " + os + " : " + missingArch);
             }
         }
-        final Path gradlewPath = getProject().getRootDir().toPath().resolve("gradlew");
-        final Path gradlewNewPath = getProject().getRootDir().toPath().resolve("gradlew.new");
+        final Path gradlewPath = getProjectLayout().getProjectDirectory().file("gradlew").getAsFile().toPath();
+        final Path gradlewNewPath = getProjectLayout().getProjectDirectory().file("gradlew.new").getAsFile().toPath();
         try (
                 final Stream<String> gradlew = Files.lines(gradlewPath)
         ) {

@@ -3,8 +3,7 @@ Gradle CLI plugins
 
 About
 -----
-Many great tools are available as a statically linked executables that one can just download and run. Often this is more
-desirable than using docker due to size constraints and performance on macs.
+Many great tools are available as statically linked executables that can be downloaded and run directly.
 
 This suit of plugins provides a framework that makes it easy to add support for such tools and implements support for a
 few of them. All tools are downloaded as regular Gradle dependencies, so they will be cached locally and benefit from
@@ -72,30 +71,6 @@ for it from vault.
 
 Available tools
 ----------------
-
-### manifest-tool
-
-```kotlin
-import co.elastic.gradle.cli.manifest.ManifestToolExecTask
-
-plugins {
-    id("co.elastic.cli.manifest-tool")
-}
-cli {
-    manifestTool {
-        // see above for configuration
-    }
-}
-
-tasks.register<ManifestToolExecTask>("manifestTool") {
-    args = listOf("--version")
-}
-```
-
-The `ManifestToolExecTask` extends the
-[Gradle Exec task](https://docs.gradle.org/current/dsl/org.gradle.api.tasks.Exec.html). The plugin configures the task
-so the executable is already set, a prefix is added to each line of the output to mark that it's coming from this tool
-and the environment is not inherited by default as opposed to the standard exec task.
 
 ### snyk
 

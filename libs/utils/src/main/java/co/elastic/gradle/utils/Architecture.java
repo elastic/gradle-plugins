@@ -41,13 +41,13 @@ public enum Architecture {
         return map.getOrDefault(this, name()).toLowerCase();
     }
 
-    public String dockerName() {
+    public String platformName() {
         switch (this) {
             case X86_64:
                 return "amd64";
             case AARCH64:
                 return "arm64";
-            default: throw new IllegalStateException("No docker name for " + this);
+            default: throw new IllegalStateException("No platform name for " + this);
         }
     }
 }

@@ -48,7 +48,7 @@ public class LifecyclePlugin implements Plugin<Project> {
         final TaskProvider<Task> publish = GradleUtils.registerOrGet(target, PUBLISH_TASK_NAME);
         publish.configure(task -> {
             task.setGroup("publishing");
-            task.setDescription("Lifecycle task to publish build artefacts to external repos (e.g. Docker images)");
+            task.setDescription("Lifecycle task to publish build artefacts to external repositories");
             task.dependsOn(tasks.named("build"));
         });
 

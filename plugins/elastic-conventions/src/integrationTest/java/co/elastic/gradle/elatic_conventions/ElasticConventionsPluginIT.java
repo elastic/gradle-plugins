@@ -20,7 +20,6 @@ package co.elastic.gradle.elatic_conventions;
 
 import co.elastic.gradle.TestkitIntegrationTest;
 import co.elastic.gradle.cli.jfrog.JFrogCliExecTask;
-import co.elastic.gradle.cli.manifest.ManifestToolExecTask;
 import co.elastic.gradle.cli.shellcheck.ShellcheckTask;
 import co.elastic.gradle.elastic_conventions.ElasticConventionsPlugin;
 import co.elastic.gradle.snyk.SnykCLIExecTask;
@@ -28,12 +27,13 @@ import co.elastic.gradle.vault.VaultExtension;
 import org.gradle.testkit.runner.BuildResult;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Objects;
+import java.util.HashMap;
+import java.util.Map;
 
 import static co.elastic.gradle.AssertContains.assertContains;
 import static co.elastic.gradle.AssertFiles.assertPathExists;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
@@ -43,6 +43,9 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
                 plugins {
                     id("co.elastic.elastic-conventions")
                 }
+                val remoteCache = buildCache.remote as com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache
+                logger.lifecycle("Develocity remote build cache enabled: ${remoteCache.isEnabled}")
+                logger.lifecycle("Develocity remote build cache push: ${remoteCache.isPush}")
                 """);
         helper.buildScript("""
                 plugins {
@@ -53,7 +56,97 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         final BuildResult result = gradleRunner
                 .withArguments("--warning-mode", "fail", "-s", "check")
                 .build();
+        assertContains(result.getOutput(), "Develocity remote build cache enabled: true");
+        final boolean isCI = System.getenv("BUILD_URL") != null || System.getenv("BUILDKITE_BUILD_URL") != null;
+        assertContains(result.getOutput(), "Develocity remote build cache push: " + isCI);
         System.out.println(result.getOutput());
+    }
+
+    @Test
+    public void ciUsesInjectedDevelocityAccessKeyDuringBootstrap() {
+        helper.settings("""
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                val remoteCache = buildCache.remote as com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache
+                logger.lifecycle("Develocity remote build cache push: ${remoteCache.isPush}")
+                """);
+
+        final Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.put("BUILDKITE_BUILD_URL", "https://buildkite.example/build/1");
+        environment.put("DEVELOCITY_ACCESS_KEY", "gradle-enterprise.elastic.co=test-access-key");
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(environment)
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+
+        assertContains(result.getOutput(), "Develocity remote build cache push: true");
+    }
+
+    @Test
+    public void ciLoadsDevelocityAccessKeyFromVault() {
+        final String secretPath = ElasticConventionsPlugin.DEVELOCITY_ACCESS_KEY_VAULT_PATH;
+        final String cachedKeyPath = ".gradle/secrets/" + secretPath + "/v2/data/accesskey";
+        assertFalse(Files.exists(helper.projectDir().resolve(cachedKeyPath)));
+
+        helper.settings("""
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                val accessKey = develocity.accessKey.get()
+                check(accessKey.isNotBlank()) { "Vault fallback did not configure a Develocity access key" }
+                check(file("%s").readText() == accessKey) {
+                    "Develocity access key does not match the cached Vault secret"
+                }
+                val remoteCache = buildCache.remote as com.gradle.develocity.agent.gradle.buildcache.DevelocityBuildCache
+                check(remoteCache.isEnabled && remoteCache.isPush) { "CI remote cache is not enabled for reads and writes" }
+                logger.lifecycle("Develocity access key loaded from Vault successfully")
+                """.formatted(cachedKeyPath));
+
+        final Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.put("BUILDKITE_BUILD_URL", "https://buildkite.example/build/1");
+        environment.remove("DEVELOCITY_ACCESS_KEY");
+        environment.remove("DEVELOCITY_API_ACCESS_KEY");
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(environment)
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+
+        assertContains(result.getOutput(), "Reading " + secretPath + " from vault (cached value not available or expired)");
+        assertContains(result.getOutput(), "Develocity access key loaded from Vault successfully");
+        assertPathExists(helper.projectDir().resolve(cachedKeyPath));
+    }
+
+    @Test
+    public void ciExplainsMissingDevelocityVaultGrant() {
+        helper.settings("""
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                """);
+
+        final Map<String, String> environment = new HashMap<>(System.getenv());
+        environment.put("BUILDKITE_BUILD_URL", "https://buildkite.example/build/1");
+        environment.remove("DEVELOCITY_ACCESS_KEY");
+        environment.remove("VAULT_TOKEN");
+        environment.remove("VAULT_ROLE_ID");
+        environment.remove("VAULT_SECRET_ID");
+        environment.remove("VAULT_AUTH_GITHUB_TOKEN");
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(environment)
+                .withArguments(
+                        "-Duser.home=" + helper.projectDir().resolve("empty-home"),
+                        "--warning-mode", "fail", "-s", "help"
+                )
+                .buildAndFail();
+
+        assertContains(result.getOutput(),
+                "CI pipelines applying co.elastic.elastic-conventions must be granted read access to " +
+                        "kv/ci-shared/develocity/* in Terrazzo"
+        );
     }
 
     @Test
@@ -96,21 +189,18 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
     public void withCli() {
         helper.buildScript(String.format("""
                    import %s
-                   import %s
                    plugins {
                        id("co.elastic.elastic-conventions")
                        id("co.elastic.cli.jfrog")
-                       id("co.elastic.cli.manifest-tool")
                    }
                                   
                    val jfrog by tasks.registering(JFrogCliExecTask::class)
-                   val manifestTool by tasks.registering(ManifestToolExecTask::class)
                    
                    tasks.check {
-                      dependsOn(jfrog, manifestTool)
+                      dependsOn(jfrog)
                    }
                  
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName())
+                """, JFrogCliExecTask.class.getName())
         );
 
         final BuildResult result = gradleRunner
@@ -124,30 +214,24 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
 
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test
     public void errorMissingProperty() {
         helper.buildScript(String.format("""
                    import %s
-                   import %s
                    plugins {
                        id("co.elastic.elastic-conventions")
                        id("co.elastic.cli.jfrog")
-                       id("co.elastic.cli.manifest-tool")
                    }
                                   
                    val jfrog by tasks.registering(JFrogCliExecTask::class)
-                   val manifestTool by tasks.registering(ManifestToolExecTask::class)
                    
                    tasks.check {
-                      dependsOn(jfrog, manifestTool)
+                      dependsOn(jfrog)
                    }
                  
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName())
+                """, JFrogCliExecTask.class.getName())
         );
 
         final BuildResult result = gradleRunner
@@ -174,41 +258,35 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         """);
         helper.buildScript("p1", String.format("""
                 import %s
-                import %s
                 plugins {                   
                     id("co.elastic.elastic-conventions")
                     id("co.elastic.cli.jfrog")
-                    id("co.elastic.cli.manifest-tool")                    
                 }
                 val jfrog by tasks.registering(JFrogCliExecTask::class)
-                val manifestTool by tasks.registering(ManifestToolExecTask::class)
                
                 tasks.check {
-                   dependsOn(jfrog, manifestTool)
+                   dependsOn(jfrog)
                 }
                 
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName()
+                """, JFrogCliExecTask.class.getName()
         ));
         helper.buildScript("p2", String.format("""
                 import %s
                 import %s
                 import %s
-                import %s
                 plugins {                   
                     id("co.elastic.cli.jfrog")
-                    id("co.elastic.cli.manifest-tool")
                     id("co.elastic.cli.snyk")
                     id("co.elastic.cli.shellcheck")
                     id("co.elastic.elastic-conventions")
                 }
                 val jfrog by tasks.registering(JFrogCliExecTask::class)
-                val manifestTool by tasks.registering(ManifestToolExecTask::class)
                 val snyk by tasks.registering(SnykCLIExecTask::class)
                 val shellCheck by tasks.registering(ShellcheckTask::class)
                 tasks.check {
-                  dependsOn(jfrog, manifestTool, snyk, shellCheck)
+                  dependsOn(jfrog, snyk, shellCheck)
                 }                
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
+                """, JFrogCliExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
         ));
 
         helper.settings("""
@@ -230,50 +308,41 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
 
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
     }
 
     @Test
     public void withCliMultiProjectWithoutRoot() {
         helper.buildScript("p1", String.format("""
                 import %s
-                import %s
                 plugins {                   
                     id("co.elastic.elastic-conventions")
                     id("co.elastic.cli.jfrog")
-                    id("co.elastic.cli.manifest-tool")                    
                 }
                 val jfrog by tasks.registering(JFrogCliExecTask::class)
-                val manifestTool by tasks.registering(ManifestToolExecTask::class)
                
                 tasks.check {
-                   dependsOn(jfrog, manifestTool)
+                   dependsOn(jfrog)
                 }
                 
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName()
+                """, JFrogCliExecTask.class.getName()
         ));
         helper.buildScript("p2", String.format("""
                 import %s
                 import %s
                 import %s
-                import %s
                 plugins {                   
                     id("co.elastic.cli.jfrog")
-                    id("co.elastic.cli.manifest-tool")
                     id("co.elastic.cli.snyk")
                     id("co.elastic.cli.shellcheck")
                     id("co.elastic.elastic-conventions")
                 }
                 val jfrog by tasks.registering(JFrogCliExecTask::class)
-                val manifestTool by tasks.registering(ManifestToolExecTask::class)
                 val snyk by tasks.registering(SnykCLIExecTask::class)
                 val shellCheck by tasks.registering(ShellcheckTask::class)
                 tasks.check {
-                  dependsOn(jfrog, manifestTool, snyk, shellCheck)
+                  dependsOn(jfrog, snyk, shellCheck)
                 }                
-                """, JFrogCliExecTask.class.getName(), ManifestToolExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
+                """, JFrogCliExecTask.class.getName(), SnykCLIExecTask.class.getName(), ShellcheckTask.class.getName()
         ));
 
         helper.settings("""
@@ -295,75 +364,6 @@ public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-x86_64"));
         assertPathExists(helper.projectDir().resolve(".gradle/bin/jfrog-cli-linux-aarch64"));
 
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-darwin-x86_64"));
-        assertPathExists(helper.projectDir().resolve(".gradle/bin/manifest-tool-linux-x86_64"));
-    }
-
-    @Test
-    public void withImageBuildAndLast() throws IOException {
-        Files.copy(
-                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
-                helper.projectDir().resolve("docker-base-image.lock")
-        );
-
-        helper.buildScript("""
-                   plugins {
-                       id("co.elastic.docker-base")
-                       id("co.elastic.docker-component")
-                       id("co.elastic.elastic-conventions")
-                   }
-                   
-                   dockerBaseImage {
-                       fromUbuntu("ubuntu", "20.04")
-                   }
-                   dockerComponentImage {
-                       buildAll {
-                            from(project)
-                       }
-                   }
-                """
-        );
-
-        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
-                .buildAndFail();
-
-        assertContains(scanResult.getOutput(), "[snyk] Tested ");
-
-        gradleRunner.withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty()).build();
-    }
-
-    @Test
-    public void withImageBuildAndFirst() throws IOException {
-        Files.copy(
-                Objects.requireNonNull(getClass().getResourceAsStream("/ubuntu.lockfile.yaml")),
-                helper.projectDir().resolve("docker-base-image.lock")
-        );
-
-        helper.buildScript("""
-                   plugins {
-                       id("co.elastic.elastic-conventions")
-                       id("co.elastic.docker-base")
-                       id("co.elastic.docker-component")                       
-                   }
-                   
-                   dockerBaseImage {
-                       fromUbuntu("ubuntu", "20.04")
-                   }
-                   dockerComponentImage {
-                       buildAll {
-                            from(project)
-                       }
-                   }
-                """
-        );
-
-        final BuildResult scanResult = gradleRunner.withArguments("--warning-mode", "fail", "-S", "dockerComponentImageScanLocal", getVaultPrefixProperty())
-                .buildAndFail();
-
-        assertContains(scanResult.getOutput(), "[snyk] Tested ");
-
-        gradleRunner.withArguments("--warning-mode", "fail", "-S", "resolveAllDependencies", getVaultPrefixProperty()).build();
     }
 
 }

@@ -19,6 +19,7 @@
 package co.elastic.gradle.buildscan.xunit;
 
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.internal.tasks.testing.TestExecuter;
 import org.gradle.api.internal.tasks.testing.TestExecutionSpec;
 import org.gradle.api.provider.ListProperty;
@@ -48,10 +49,10 @@ public abstract class XUnitBuildScanImporterTask extends AbstractTestTask {
     public XUnitBuildScanImporterTask(ProgressLoggerFactory getProgressLoggerFactory) throws IOException {
         super();
         this.getProgressLoggerFactory = getProgressLoggerFactory;
-        File binaryResultsDir = new File(
-                getProject().getBuildDir(),
-                "externalTestImport"
-        );
+        File binaryResultsDir = getProjectLayout().getBuildDirectory()
+                .dir("externalTestImport")
+                .get()
+                .getAsFile();
         Files.createDirectories(
         binaryResultsDir.toPath()
         );
@@ -73,6 +74,9 @@ public abstract class XUnitBuildScanImporterTask extends AbstractTestTask {
 
     @Inject
     protected abstract ProviderFactory getProviderFactory();
+
+    @Inject
+    protected abstract ProjectLayout getProjectLayout();
 
 
     @Override

@@ -4,8 +4,8 @@ import com.github.jk1.license.render.InventoryMarkdownReportRenderer
 import co.elastic.gradle.utils.Architecture
 
 plugins {
-    id("com.gradle.plugin-publish").version("1.2.1").apply(false)
-    id("com.github.jk1.dependency-license-report").version("2.9")
+    id("com.gradle.plugin-publish").version("1.3.1").apply(false)
+    id("com.github.jk1.dependency-license-report").version("3.1.4")
 
     // self-loop
     val versionReleased:String = File("version-released").readText().trim()
@@ -23,7 +23,7 @@ allprojects {
     group = "co.elastic.gradle"
 
     // Some projects are used for testing only, some are empty containers, everything else we publish
-    if (! listOf(":", ":plugins", ":plugins:cli", ":plugins:docker", ":libs", ":libs:test-utils").contains(project.path)) {
+    if (! listOf(":", ":plugins", ":plugins:cli", ":libs", ":libs:test-utils").contains(project.path)) {
         apply(plugin = "java-gradle-plugin")
         apply(plugin = "com.gradle.plugin-publish")
 
