@@ -23,7 +23,7 @@ metadata:
       url: https://docs.elastic.dev/release/cloud-ci/admin
 spec:
   type: Library
-  owner: group:platform-dev-flow
+  owner: group:builder-experience
   lifecycle: beta
   dependsOn:
     - resource:github-repository-elastic-gradle-plugins
@@ -47,7 +47,7 @@ metadata:
 
 spec:
   type: buildkite-pipeline
-  owner: group:platform-dev-flow
+  owner: group:builder-experience
   system: buildkite
   implementation:
     apiVersion: buildkite.elastic.dev/v1
@@ -62,4 +62,4 @@ spec:
       teams:
         everyone:
           access_level: BUILD_AND_READ
-        platform-dev-flow: {}
+        builder-experience: {}
