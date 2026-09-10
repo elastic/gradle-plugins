@@ -33,6 +33,8 @@ import java.util.stream.Collectors;
 
 public abstract class ResolveAllDependenciesTask extends DefaultTask {
 
+    private final Set<Configuration> resolvableConfigurations;
+
     public ResolveAllDependenciesTask() {
         setDescription("Lifecycle task to resolves all external dependencies. " +
                             "This task can be used to cache everything locally so these are not  downloaded while building." +
@@ -43,6 +45,11 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
         getMarkerFile().convention(
                 getProjectLayout().getBuildDirectory().file(getName() + ".marker")
         );
+        resolvableConfigurations = getProject().getConfigurations().stream()
+                .filter(Configuration::isCanBeResolved)
+                // Resolving these will trigger a deprecation warning
+                .filter(each -> ! Set.of("default", "archives").contains(each.getName()))
+                .collect(Collectors.toSet());
     }
 
     @Inject
@@ -54,11 +61,7 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
     @InputFiles
     @PathSensitive(PathSensitivity.NONE)
     public Set<Configuration> getResolvableConfigurations() {
-        return getProject().getConfigurations().stream()
-                .filter(Configuration::isCanBeResolved)
-                // Resolving these will trigger a deprecation warning
-                .filter(each -> ! Set.of("default", "archives").contains(each.getName()))
-                .collect(Collectors.toSet());
+        return resolvableConfigurations;
     }
 
     @TaskAction

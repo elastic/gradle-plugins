@@ -20,12 +20,14 @@ package co.elastic.gradle.cig;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 
+import javax.inject.Inject;
 import java.io.File;
 import java.util.Collection;
 import java.util.Set;
@@ -47,15 +49,18 @@ public abstract class AbstractFileMapTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public FileCollection getFromDirs() {
         return getFrom(getMap().get()::keySet, File::isDirectory).stream()
-                .map( each -> (FileCollection) getProject().fileTree(each))
-                .reduce(                        (tree1, tree2) -> {
-                    final FileCollection files = getProject().files();
+                .map(each -> (FileCollection) getFileOperations().fileTree(each))
+                .reduce((tree1, tree2) -> {
+                    final FileCollection files = getFileOperations().immutableFiles();
                     files.plus(tree1);
                     files.plus(tree2);
                     return files;
                 })
-                .orElse(getProject().files());
+                .orElse(getFileOperations().immutableFiles());
     }
+
+    @Inject
+    protected abstract FileOperations getFileOperations();
 
 
     protected Set<File> getFrom(Supplier<Collection<File>> data, Predicate<File> filter) {

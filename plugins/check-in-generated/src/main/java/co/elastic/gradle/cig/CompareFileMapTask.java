@@ -54,14 +54,14 @@ public abstract class CompareFileMapTask extends AbstractFileMapTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public FileCollection getToDirs() {
         return getFrom(getMap().get()::values, File::isDirectory).stream()
-                .map( each -> (FileCollection) getProject().fileTree(each))
-                .reduce(                        (tree1, tree2) -> {
-                    final FileCollection files = getProject().files();
+                .map(each -> (FileCollection) getFileOperations().fileTree(each))
+                .reduce((tree1, tree2) -> {
+                    final FileCollection files = getFileOperations().immutableFiles();
                     files.plus(tree1);
                     files.plus(tree2);
                     return files;
                 })
-                .orElse(getProject().files());
+                .orElse(getFileOperations().immutableFiles());
     }
 
     @OutputFile
@@ -84,7 +84,7 @@ public abstract class CompareFileMapTask extends AbstractFileMapTask {
                     .toList();
 
             if (!nonEqualFiles.isEmpty()) {
-                Path projectDir = getProject().getProjectDir().toPath();
+                Path projectDir = getProjectLayout().getProjectDirectory().getAsFile().toPath();
                 throw new GradleException(
                         "This projects expects some generated files to be checked in, but it looks like this did not happen.\n" +
                         "Please make sure your working copy is up-to-date and run `./gradlew generate` and commit the changed files.\n " +
