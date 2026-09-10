@@ -21,6 +21,7 @@ package co.elastic.gradle.lifecycle;
 import co.elastic.gradle.utils.RegularFileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.tasks.*;
@@ -33,6 +34,8 @@ import java.util.stream.Collectors;
 
 public abstract class ResolveAllDependenciesTask extends DefaultTask {
 
+    private final ConfigurationContainer configurations;
+
     public ResolveAllDependenciesTask() {
         setDescription("Lifecycle task to resolves all external dependencies. " +
                             "This task can be used to cache everything locally so these are not  downloaded while building." +
@@ -43,6 +46,7 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
         getMarkerFile().convention(
                 getProjectLayout().getBuildDirectory().file(getName() + ".marker")
         );
+        configurations = getProject().getConfigurations();
     }
 
     @Inject
@@ -54,7 +58,7 @@ public abstract class ResolveAllDependenciesTask extends DefaultTask {
     @InputFiles
     @PathSensitive(PathSensitivity.NONE)
     public Set<Configuration> getResolvableConfigurations() {
-        return getProject().getConfigurations().stream()
+        return configurations.stream()
                 .filter(Configuration::isCanBeResolved)
                 // Resolving these will trigger a deprecation warning
                 .filter(each -> ! Set.of("default", "archives").contains(each.getName()))

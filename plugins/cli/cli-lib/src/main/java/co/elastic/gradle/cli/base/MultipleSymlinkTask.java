@@ -40,19 +40,23 @@ import java.util.stream.Collectors;
 
 public abstract class MultipleSymlinkTask extends DefaultTask {
 
+    private final Configuration configuration;
+    private final Path syncedBinaryDir;
+
+    public MultipleSymlinkTask() {
+        configuration = getProject().getConfigurations().getByName(BaseCliPlugin.CONFIGURATION_NAME);
+        syncedBinaryDir = getProject().getRootDir().toPath().resolve(".gradle/bin");
+    }
+
     @Internal
     public Map<File, File> getNameToTargetMap() {
-        final Configuration configuration = getProject().getConfigurations().getByName(BaseCliPlugin.CONFIGURATION_NAME);
         final Set<String> allVersions = configuration.getDependencies().stream()
                 .map(Dependency::getVersion)
                 .collect(Collectors.toSet());
 
         final Map<File, File> result = new HashMap<>(configuration.getFiles().stream()
                 .collect(Collectors.toMap(
-                        value -> BaseCliPlugin.getExecutable(
-                                getProject(),
-                                normalizeName(value.getName(), allVersions)
-                        ),
+                        value -> getExecutable(normalizeName(value.getName(), allVersions)),
                         Function.identity()
                 ))
         );
@@ -141,13 +145,14 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                                             .replace(separator + "mac-386", "");
                                 }
                             }
-                            return BaseCliPlugin.getExecutable(
-                                    getProject(),
-                                    normalizeName(name, allVersions)
-                            );
+                            return getExecutable(normalizeName(name, allVersions));
                         },
                         Function.identity()
                 ));
+    }
+
+    private File getExecutable(String name) {
+        return syncedBinaryDir.resolve(name).toFile();
     }
 
     @InputFiles
