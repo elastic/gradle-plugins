@@ -95,12 +95,12 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                 .build();
         assertContains(result.getOutput(), "top_secret is password1");
         assertContains(result.getOutput(), "db_password is dbpassword1");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data/db_password");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/data/top_secret");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/data/top_secret");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data/db_password");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/v2/data/top_secret");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/v2/data/top_secret");
 
         vaultContainer.stop();
 
@@ -165,6 +165,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                     id("co.elastic.vault")
                 }
                 vault {
+                    engineVersion.set(2)
                     address.set("http://127.0.0.1:8200/")
                     auth {
                      tokenEnv()
@@ -178,6 +179,7 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                     id("co.elastic.vault")
                 }
                 vault {
+                    engineVersion.set(2)
                     address.set("http://127.0.0.1:8200/")
                     auth {
                      tokenEnv()
@@ -238,12 +240,12 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                 .build();
         assertContains(result.getOutput(), "top_secret is password1");
         assertContains(result.getOutput(), "db_password is dbpassword1");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data/db_password");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/data/top_secret");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/data/top_secret");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data/db_password");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/v2/data/top_secret");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/v2/data/top_secret");
     }
 
     @Test
@@ -311,12 +313,12 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                 .build();
         assertContains(result.getOutput(), "top_secret is password1");
         assertContains(result.getOutput(), "db_password is dbpassword1");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data/db_password");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/data/top_secret");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/data/top_secret");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data/db_password");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/v2/data/top_secret");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/v2/data/top_secret");
 
         // Run it again, this time without any credentials passed in, it should still work because the token is cached
         final BuildResult result2 = gradleRunner
@@ -394,12 +396,12 @@ public class VaultPluginIT extends TestkitIntegrationTest {
                 .build();
         assertContains(result.getOutput(), "top_secret is password1");
         assertContains(result.getOutput(), "db_password is dbpassword1");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data");
-        assertCacheLocationExists(".gradle/secrets/secret/testing2/data/db_password");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/data/top_secret");
-        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/data/top_secret");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data");
+        assertCacheLocationExists(".gradle/secrets/secret/testing2/v2/data/db_password");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing/v2/data/top_secret");
+        assertCacheLocationDoesNotExists(".gradle/secrets/secret/testing2/v2/data/top_secret");
 
         // Run it again, this time without any credentials passed in, it should still work because the token is cached
         final BuildResult result2 = gradleRunner
@@ -519,10 +521,10 @@ public class VaultPluginIT extends TestkitIntegrationTest {
 
         assertContains(result.getOutput(), "secret is test");
         assertContains(result.getOutput(), "secret cached is test");
-        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration");
-        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/leaseExpiration");
-        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/data");
-        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/data/key1");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/v1");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/v1/leaseExpiration");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/v1/data");
+        assertCacheLocationExists(".gradle/secrets/secret/ci/elastic-gradle-plugins/gradle-vault-integration/v1/data/key1");
     }
 
     private void assertCacheLocationExists(String other) {
