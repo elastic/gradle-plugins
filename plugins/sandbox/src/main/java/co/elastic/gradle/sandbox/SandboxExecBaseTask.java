@@ -18,7 +18,6 @@
  */
 package co.elastic.gradle.sandbox;
 
-import co.elastic.gradle.utils.GradleUtils;
 import co.elastic.gradle.utils.XunitCreatorTask;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -190,7 +189,7 @@ public abstract class SandboxExecBaseTask extends DefaultTask implements XunitCr
     @Override
     public Provider<Collection<File>> getXunitFiles() {
         return getProviderFactory().provider(
-                () -> ((FileTree) getProject().fileTree(outputsRoot.toFile()).include("**/*.xml")).getFiles()
+                () -> ((FileTree) getFileOperations().fileTree(outputsRoot.toFile()).include("**/*.xml")).getFiles()
         );
     }
 
@@ -325,11 +324,11 @@ public abstract class SandboxExecBaseTask extends DefaultTask implements XunitCr
             String errorMessage = "";
             if (!incorrectFiles.isEmpty()) {
                 errorMessage = "The following outputs should be files, but are in fact directories:" +
-                        GradleUtils.listPathsRelativeToProject(getProject(), incorrectFiles) + "\n";
+                        listPathsRelativeToProject(incorrectFiles) + "\n";
             }
             if (!incorrectDirs.isEmpty()) {
                 errorMessage = "The following outputs should be directories, but are in fact files:" +
-                        GradleUtils.listPathsRelativeToProject(getProject(), incorrectDirs) + "\n";
+                        listPathsRelativeToProject(incorrectDirs) + "\n";
             }
             throw new IllegalArgumentException(errorMessage);
         }
@@ -339,9 +338,9 @@ public abstract class SandboxExecBaseTask extends DefaultTask implements XunitCr
                 // Recurse into directories to get all output files
                 .map(each -> {
                     if (Files.isDirectory(each)) {
-                        return getProject().fileTree(each);
+                        return getFileOperations().fileTree(each);
                     } else {
-                        return getProject().files(each);
+                        return getFileOperations().immutableFiles(each);
                     }
                 })
                 .flatMap(each -> each.getFiles().stream())
@@ -359,6 +358,16 @@ public abstract class SandboxExecBaseTask extends DefaultTask implements XunitCr
                     }
                     createHardlink(source, destination);
                 });
+    }
+
+    private String listPathsRelativeToProject(Collection<Path> files) {
+        if (files.isEmpty()) {
+            return "";
+        }
+        return "\n    " + files.stream()
+                .map(currentProjectPath::relativize)
+                .map(Path::toString)
+                .collect(Collectors.joining("\n    ,"));
     }
 
     private Path getPathInSandbox(File each) {

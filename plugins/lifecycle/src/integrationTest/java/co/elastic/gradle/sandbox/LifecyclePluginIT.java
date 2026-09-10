@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Objects;
 
+import static co.elastic.gradle.AssertFiles.assertPathExists;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LifecyclePluginIT extends TestkitIntegrationTest {
@@ -73,5 +74,31 @@ class LifecyclePluginIT extends TestkitIntegrationTest {
                 Objects.requireNonNull(resultOffline.task(":resolveAllDependencies")).getOutcome()
         );
 
+    }
+
+    @Test
+    void resolvesConfigurationsCreatedAfterTaskRealization() {
+        helper.buildScript("""
+                plugins {
+                   id("co.elastic.lifecycle")
+                }
+
+                tasks.named("resolveAllDependencies").get()
+
+                val lateResolvable = configurations.create("lateResolvable") {
+                    isCanBeConsumed = false
+                    isCanBeResolved = true
+                }
+                lateResolvable.incoming.beforeResolve {
+                    file("late-configuration-resolved").writeText("resolved")
+                }
+                dependencies.add(lateResolvable.name, files("late-dependency.jar"))
+                file("late-dependency.jar").writeText("dependency")
+                """);
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "resolveAllDependencies")
+                .build();
+
+        assertPathExists(helper.projectDir().resolve("late-configuration-resolved"));
     }
 }

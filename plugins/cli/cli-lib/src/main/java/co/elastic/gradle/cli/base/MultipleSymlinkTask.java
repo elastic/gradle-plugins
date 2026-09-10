@@ -40,19 +40,23 @@ import java.util.stream.Collectors;
 
 public abstract class MultipleSymlinkTask extends DefaultTask {
 
+    private final Configuration configuration;
+    private final Path syncedBinaryDir;
+
+    public MultipleSymlinkTask() {
+        configuration = getProject().getConfigurations().getByName(BaseCliPlugin.CONFIGURATION_NAME);
+        syncedBinaryDir = getProject().getRootDir().toPath().resolve(".gradle/bin");
+    }
+
     @Internal
     public Map<File, File> getNameToTargetMap() {
-        final Configuration configuration = getProject().getConfigurations().getByName(BaseCliPlugin.CONFIGURATION_NAME);
         final Set<String> allVersions = configuration.getDependencies().stream()
                 .map(Dependency::getVersion)
                 .collect(Collectors.toSet());
 
         final Map<File, File> result = new HashMap<>(configuration.getFiles().stream()
                 .collect(Collectors.toMap(
-                        value -> BaseCliPlugin.getExecutable(
-                                getProject(),
-                                normalizeName(value.getName(), allVersions)
-                        ),
+                        value -> getExecutable(normalizeName(value.getName(), allVersions)),
                         Function.identity()
                 ))
         );
@@ -82,7 +86,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     .replace(version, "");
         }
         for (Architecture value : Architecture.values()) {
-            targetName = targetName.replace(value.dockerName(), value.name().toLowerCase(Locale.ROOT))
+            targetName = targetName.replace(value.platformName(), value.name().toLowerCase(Locale.ROOT))
                     .replace(value.name(), value.name().toLowerCase(Locale.ROOT));
         }
         targetName = targetName.replace("macos", "darwin")
@@ -96,7 +100,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                         value.getName().toLowerCase(Locale.ROOT)
                                 .contains(arch.name().toLowerCase(Locale.ROOT)) ||
                         value.getName().toLowerCase(Locale.ROOT)
-                                .contains(arch.dockerName().toLowerCase(Locale.ROOT)) ||
+                                .contains(arch.platformName().toLowerCase(Locale.ROOT)) ||
                         value.getName().contains(OS.current().map(
                                 Map.of(OS.DARWIN, "mac")
                         ))
@@ -111,7 +115,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     if (value.getName().toLowerCase(Locale.ROOT)
                                 .contains(arch.name().toLowerCase(Locale.ROOT)) ||
                         value.getName().toLowerCase(Locale.ROOT)
-                                .contains(arch.dockerName().toLowerCase(Locale.ROOT))
+                                .contains(arch.platformName().toLowerCase(Locale.ROOT))
                     ) {
                         return nameHasCurrentOS;
                     } else {
@@ -134,20 +138,21 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                                             .replace(separator + os.name().toLowerCase(Locale.ROOT), "")
                                             .replace(separator + arch.name(), "")
                                             .replace(separator + arch.name().toLowerCase(Locale.ROOT), "")
-                                            .replace(separator + arch.dockerName(), "")
-                                            .replace(separator + arch.dockerName().toUpperCase(Locale.ROOT), "")
+                                            .replace(separator + arch.platformName(), "")
+                                            .replace(separator + arch.platformName().toUpperCase(Locale.ROOT), "")
                                             .replace(separator + "macos", "")
                                             .replace(separator + "osx", "")
                                             .replace(separator + "mac-386", "");
                                 }
                             }
-                            return BaseCliPlugin.getExecutable(
-                                    getProject(),
-                                    normalizeName(name, allVersions)
-                            );
+                            return getExecutable(normalizeName(name, allVersions));
                         },
                         Function.identity()
                 ));
+    }
+
+    private File getExecutable(String name) {
+        return syncedBinaryDir.resolve(name).toFile();
     }
 
     @InputFiles

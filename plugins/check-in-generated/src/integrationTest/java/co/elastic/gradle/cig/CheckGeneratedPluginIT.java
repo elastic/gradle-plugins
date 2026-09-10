@@ -29,6 +29,38 @@ import org.junit.jupiter.api.Test;
 public class CheckGeneratedPluginIT extends TestkitIntegrationTest {
 
     @Test
+    public void detectsChangesInMultipleCheckedInDirectories() {
+        configureMultipleDirectories();
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "generate")
+                .build();
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "verifyGenerated")
+                .build();
+
+        helper.writeFile("second/second.txt", "changed checked-in content");
+
+        BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "verifyGenerated")
+                .buildAndFail();
+        AssertContains.assertContains(result.getOutput(), "second/second.txt");
+    }
+
+    @Test
+    public void detectsChangesInMultipleGeneratedDirectories() {
+        configureMultipleDirectories();
+
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "generate")
+                .build();
+        gradleRunner.withArguments("--warning-mode", "fail", "-s", "verifyGenerated")
+                .build();
+
+        helper.writeFile("build/second/second.txt", "changed generated content");
+
+        BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "verifyGenerated")
+                .buildAndFail();
+        AssertContains.assertContains(result.getOutput(), "second/second.txt");
+    }
+
+    @Test
     public void testPlugin() {
         helper.buildScript("""
                 plugins {
@@ -85,6 +117,29 @@ public class CheckGeneratedPluginIT extends TestkitIntegrationTest {
 
     private void assertVerificationFails() {
         assertVerificationFails(false);
+    }
+
+    private void configureMultipleDirectories() {
+        helper.buildScript("""
+                plugins {
+                   id("co.elastic.check-in-generated")
+                }
+                val doGenerate by tasks.registering {
+                   doLast {
+                      file("build/first").mkdirs()
+                      file("build/second").mkdirs()
+                      file("build/first/first.txt").writeText("first")
+                      file("build/second/second.txt").writeText("second")
+                   }
+                }
+                checkInGenerated {
+                    generatorTask.set(doGenerate)
+                    map.set(mapOf(
+                           project.file("build/first") to project.file("first"),
+                           project.file("build/second") to project.file("second")
+                    ))
+                }
+                """);
     }
 
     private void assertVerificationFails(boolean initial) {

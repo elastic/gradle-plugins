@@ -68,14 +68,14 @@ public abstract class ShellcheckTask extends DefaultTask {
 
     @TaskAction
     void doCheck() throws IOException {
+        Path projectDir = getProjectLayout().getProjectDirectory().getAsFile().toPath();
         getExecOperations().exec(spec -> {
             spec.setEnvironment(Collections.emptyMap());
             spec.setExecutable(getTool().get().getAsFile());
             spec.setStandardOutput(new PrefixingOutputStream("[shellcheck] ", System.out));
             spec.setErrorOutput(new PrefixingOutputStream("[shellcheck] ", System.err));
-            spec.workingDir(getProject().getProjectDir());
+            spec.workingDir(projectDir);
             spec.setIgnoreExitValue(false);
-            Path projectDir = getProject().getProjectDir().toPath();
             List<String> args = new ArrayList<>();
             // Don't read rc so we don't depend on local configuration
             args.add("--norc");

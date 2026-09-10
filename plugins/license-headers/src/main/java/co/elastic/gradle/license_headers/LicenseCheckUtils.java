@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 public class LicenseCheckUtils {
 
@@ -36,8 +37,8 @@ public class LicenseCheckUtils {
 
         for (File file : files) {
             final String[] fileHeader;
-            try {
-                fileHeader = Files.lines(file.toPath()).limit(expectedHeader.length).toArray(String[]::new);
+            try (Stream<String> lines = Files.lines(file.toPath())) {
+                fileHeader = lines.limit(expectedHeader.length).toArray(String[]::new);
             } catch (IOException| UncheckedIOException e) {
                 throw new GradleException("Failed to read " + projectDir.relativize(file.toPath()), e);
             }
