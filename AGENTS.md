@@ -40,3 +40,24 @@ plain `pre-commit` and `gitleaks` resolve to the same pinned versions. Python
 isolated environment, though it does not provision Gitleaks itself.
 
 If Gitleaks detects a secret, treat the finding as exposed, stop immediately, and rotate or revoke the credential before pushing. Never bypass the hook with `--no-verify`, `SKIP=gitleaks`, an allowlist entry, or a GitHub push-protection bypass reason unless the repository owner explicitly authorizes that exact override after reviewing the finding. A request to complete, commit, push, or open a pull request does not constitute override authorization.
+
+## AI attribution
+
+For every AI tool that materially contributes to code, tests, documentation, configuration, or the substance of a change:
+
+- Resolve the tool's runtime identity and add one unformatted trailer to the commit message. Use the exact model or agent slug and reasoning effort whenever exposed; omit unavailable components rather than guessing:
+
+  ```text
+  Assisted-by: <tool name> (<most specific verified runtime identity>)
+  ```
+
+- Repeat the same trailer in the pull-request description.
+- Preserve the spelling and specificity of exposed runtime values; do not shorten a specific model slug to a broader model family.
+- Preserve valid tool-native attribution, such as `Made with [Cursor](https://cursor.com)` or a genuine `Co-authored-by` trailer, in addition to `Assisted-by`.
+- Never invent a bot identity, model name, or email address.
+- Keep trailers on their own lines without bullets, Markdown emphasis, or surrounding underscores.
+- Keep the human author or committer accountable for understanding and verifying the change.
+
+For a squash merge, verify that the final squash commit message contains every attribution trailer. GitHub may populate that message from the pull-request description, commit information, or only the pull-request title depending on repository settings, so putting attribution in the PR description improves preservation but does not guarantee it.
+
+When preparing a commit or pull request, offer to create it with the correct attribution. If the user will create it manually, show the exact trailers to copy into both places.

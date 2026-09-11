@@ -22,7 +22,7 @@ steps:
           diskSizeGb: 80
           machineType: 'custom-6-18432'
         plugins:
-          - elastic/vault-secrets#v0.0.3:
+          - elastic/vault-secrets#v0.1.1:
               path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
               field: "accesskey"
               env_var: "DEVELOCITY_API_ACCESS_KEY"
@@ -39,7 +39,24 @@ steps:
           imagePrefix: cloud-ubuntu-2204-aarch64
           diskName: "/dev/xvda"
         plugins:
-          - elastic/vault-secrets#v0.0.3:
+          - elastic/vault-secrets#v0.1.1:
               path: "kv/ci-shared/develocity/gradle-build-cache-access-key"
               field: "accesskey"
               env_var: "DEVELOCITY_API_ACCESS_KEY"
+
+  - wait
+
+  # Keep the conditional on the group. Buildkite evaluates command-step
+  # conditionals after plugins have run, which is too late for secret-bearing
+  # release steps.
+  - group: ":gradle: Publish tagged release"
+    if: "build.tag != null"
+    steps:
+      - label: ":pipeline: :gcloud: Publish to Gradle Plugin Portal"
+        command: ".buildkite/scripts/publish-plugins.sh"
+        agents:
+          provider: "gcp"
+          image: family/cloud-ubuntu-2204
+          diskSizeGb: 80
+          machineType: 'n4-custom-6-18432'
+          diskType: hyperdisk-balanced
