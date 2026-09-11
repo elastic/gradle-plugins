@@ -2,3 +2,6 @@
 .gradle
 build
 .build-scan.url
+
+# Hermit local state
+.hermit/

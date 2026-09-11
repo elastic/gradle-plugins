@@ -1,6 +1,15 @@
-# gradle-plugins-ci.yml 
+# gradle-plugins-ci.yml
 
 steps:
+  - label: "Pre-commit"
+    key: "pre-commit"
+    command: "echo all good!"
+    plugins:
+      - elastic/hermit#v1.0.2
+      - elastic/pre-commit#v1.0.3
+    agents:
+      image: "docker.elastic.co/ci-agent-images/python-buildkite-agent"
+
   - group: "amd64 Tests"
     steps:
       - label: ":pipeline: :gcloud: Gradle Check"
