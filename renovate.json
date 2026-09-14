@@ -8,11 +8,13 @@
   },
   "packageRules": [
     {
-      "groupName": "Gradle Enterprise Plugin",
+      "description": "Develocity 2025.3 supports Gradle plugin 4.2.x; raise this cap only after verifying server compatibility.",
+      "groupName": "Develocity Plugin",
       "matchDepNames": [
-        "com.gradle.enterprise",
-        "com.gradle.enterprise:com.gradle.enterprise.gradle.plugin"
-      ]
+        "com.gradle.develocity",
+        "com.gradle.develocity:com.gradle.develocity.gradle.plugin"
+      ],
+      "allowedVersions": "<4.3"
     }
   ]
 }
