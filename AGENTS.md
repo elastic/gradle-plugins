@@ -10,6 +10,19 @@ When a change breaks backward compatibility, update `version-next` to the approp
 the same change. If `version-next` already targets that major release, keep it; multiple breaking changes in one
 unreleased version do not each require another major bump.
 
+## Develocity compatibility
+
+Preserve compatibility between the Develocity Gradle plugin and the deployed Develocity server. The server observed
+during the 2.0.0 release was 2025.3.3, which supports plugin 4.2.x; use 4.2.2 until a server upgrade is verified.
+Before changing either Develocity dependency, verify the deployed server version against Gradle's
+[compatibility matrix](https://docs.develocity.ai/2025.3/miscellaneous/compatibility/). Keep the versions in
+`settings.gradle.kts` and `plugins/elastic-conventions/build.gradle.kts` aligned, and preserve the matching
+`allowedVersions` constraint in `renovate.json`.
+
+Build scans are required. Verify a successfully published build scan URL from a build using the changed conventions
+plugin before releasing. A successful Gradle exit code or green CI build is insufficient: incompatible Develocity
+versions can reject build scan uploads without failing the build. Do not release while scan publication is failing.
+
 ## Secret scanning
 
 **Never place credentials, tokens, private keys, cookies, or production secret values in tracked files, examples, tests, prompts, logs, or generated output.** Use the approved Vault-backed secret store and runtime injection mechanism instead.

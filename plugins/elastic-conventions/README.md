@@ -5,6 +5,11 @@ Applies the following conventions:
 - configures Develocity build scans and its remote Gradle build cache
 - cli plugins and snyk api token
 
+The bundled Develocity Gradle plugin is kept on 4.2.x for compatibility with the Develocity 2025.3 server.
+Before upgrading it, verify [server compatibility](https://docs.develocity.ai/2025.3/miscellaneous/compatibility/)
+and update both plugin declarations and the version cap in `renovate.json`. A successful Gradle build does not
+guarantee that its build scan was accepted; verify a published build scan URL in CI after changing this dependency.
+
 The remote cache at `https://gradle-enterprise.elastic.co` is enabled for all builds.
 Local builds read from it but do not push; Jenkins and Buildkite builds both read and push.
 Develocity reads its access key from the standard `DEVELOCITY_ACCESS_KEY` environment

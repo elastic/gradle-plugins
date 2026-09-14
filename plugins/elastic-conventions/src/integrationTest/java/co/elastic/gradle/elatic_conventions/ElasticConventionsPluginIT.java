@@ -34,8 +34,36 @@ import java.util.Map;
 import static co.elastic.gradle.AssertContains.assertContains;
 import static co.elastic.gradle.AssertFiles.assertPathExists;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
+
+    @Test
+    public void publishesBuildScan() {
+        final String accessKey = System.getenv("DEVELOCITY_ACCESS_KEY");
+        assumeTrue(accessKey != null && !accessKey.isBlank(),
+                "Requires the Develocity access key injected by CI");
+
+        helper.settings("""
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                develocity.buildScan {
+                    uploadInBackground.set(false)
+                    buildScanPublished {
+                        println("Conventions build scan published: ${buildScanUri}")
+                    }
+                }
+                """);
+
+        final BuildResult result = gradleRunner
+                .withArguments("--scan", "--console=plain", "help")
+                .build();
+
+        assertContains(result.getOutput(),
+                "Conventions build scan published: " + ElasticConventionsPlugin.DEVELOCITY_SERVER + "/s/");
+        System.out.println(result.getOutput());
+    }
 
     @Test
     public void withLifecycle() {

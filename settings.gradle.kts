@@ -1,7 +1,7 @@
 import java.io.File
 
 plugins {
-    id("com.gradle.develocity").version("4.5.1")
+    id("com.gradle.develocity").version("4.2.2")
     id("co.elastic.elastic-conventions").version(File("version-released").readText().trim())
 }
 
