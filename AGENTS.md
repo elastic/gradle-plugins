@@ -4,6 +4,12 @@
 
 See [README.md](README.md) for why this repository exists, who or what uses it, and its responsibility boundary.
 
+## Versioning
+
+When a change breaks backward compatibility, update `version-next` to the appropriate next major version as part of
+the same change. If `version-next` already targets that major release, keep it; multiple breaking changes in one
+unreleased version do not each require another major bump.
+
 ## Secret scanning
 
 **Never place credentials, tokens, private keys, cookies, or production secret values in tracked files, examples, tests, prompts, logs, or generated output.** Use the approved Vault-backed secret store and runtime injection mechanism instead.
