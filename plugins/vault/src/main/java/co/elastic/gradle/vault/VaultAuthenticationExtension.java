@@ -18,11 +18,17 @@
  */
 package co.elastic.gradle.vault;
 
+import org.gradle.api.GradleException;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.ProviderFactory;
+import org.gradle.process.ExecOperations;
+import org.gradle.process.ExecResult;
 
 import javax.inject.Inject;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -47,6 +53,9 @@ abstract public class VaultAuthenticationExtension {
 
     @Inject
     abstract protected ProviderFactory getProviderFactory();
+
+    @Inject
+    abstract protected ExecOperations getExecOperations();
 
     @SuppressWarnings("unused")
     public void tokenFile(File path) {
@@ -253,5 +262,81 @@ abstract public class VaultAuthenticationExtension {
             }
         }
     }
+
+    @SuppressWarnings("unused")
+    public void ghCli() {
+        authMethods.add(new GithubCli("gh"));
+    }
+
+    public class GithubCli implements VaultAuthMethod {
+
+        private final String executable;
+        private GithubCliResult result;
+
+        GithubCli(String executable) {
+            this.executable = executable;
+        }
+
+        public Provider<String> getToken() {
+            return getProviderFactory().provider(() -> {
+                final GithubCliResult currentResult = getResult();
+                if (currentResult.token() == null) {
+                    throw new GradleException(currentResult.explanation());
+                }
+                return currentResult.token();
+            });
+        }
+
+        @Override
+        public boolean isMethodUsable() {
+            return getResult().token() != null;
+        }
+
+        @Override
+        public String getExplanation() {
+            return getResult().explanation();
+        }
+
+        private synchronized GithubCliResult getResult() {
+            if (result == null) {
+                result = runGhAuthToken();
+            }
+            return result;
+        }
+
+        private GithubCliResult runGhAuthToken() {
+            final ByteArrayOutputStream standardOutput = new ByteArrayOutputStream();
+            try {
+                final ExecResult execResult = getExecOperations().exec(spec -> {
+                    spec.commandLine(executable, "auth", "token");
+                    spec.setStandardOutput(standardOutput);
+                    spec.setErrorOutput(OutputStream.nullOutputStream());
+                    spec.setIgnoreExitValue(true);
+                });
+                if (execResult.getExitValue() != 0) {
+                    return new GithubCliResult(
+                            null,
+                            "Tried to obtain a GitHub token using `gh auth token`, but the command exited with code "
+                                    + execResult.getExitValue()
+                    );
+                }
+                final String token = standardOutput.toString(StandardCharsets.UTF_8).trim();
+                if (token.isEmpty()) {
+                    return new GithubCliResult(
+                            null,
+                            "Tried to obtain a GitHub token using `gh auth token`, but the command returned an empty token"
+                    );
+                }
+                return new GithubCliResult(token, "Using GitHub token from `gh auth token`");
+            } catch (GradleException e) {
+                return new GithubCliResult(
+                        null,
+                        "Tried to obtain a GitHub token using `gh auth token`, but the command could not be started"
+                );
+            }
+        }
+    }
+
+    private record GithubCliResult(String token, String explanation) {}
 
 }
