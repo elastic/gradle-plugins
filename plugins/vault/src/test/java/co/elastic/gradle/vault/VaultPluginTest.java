@@ -18,6 +18,7 @@
  */
 package co.elastic.gradle.vault;
 
+import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.testfixtures.ProjectBuilder;
@@ -33,6 +34,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VaultPluginTest {
@@ -106,6 +108,56 @@ class VaultPluginTest {
         assertEquals(
                 "Tried to obtain a GitHub token using `gh auth token`, but the command could not be started",
                 githubCli.getExplanation()
+        );
+    }
+
+    @Test
+    void offlineModeUsesExpiredCachedSecret() throws IOException {
+        final Path cacheDir = testProject.getProjectDir().toPath().resolve(".gradle/secrets/secret/testing/v1");
+        Files.createDirectories(cacheDir.resolve("data"));
+        Files.writeString(cacheDir.resolve("leaseExpiration"), "0");
+        Files.writeString(cacheDir.resolve("data/password"), "cached-value");
+        testProject.getGradle().getStartParameter().setOffline(true);
+        testProject.getPluginManager().apply(VaultPlugin.class);
+
+        final VaultExtension vault = testProject.getExtensions().getByType(VaultExtension.class);
+
+        assertEquals("cached-value", vault.readAndCacheSecret("secret/testing").get().get("password"));
+    }
+
+    @Test
+    void offlineModeRejectsUncachedSecret() {
+        testProject.getGradle().getStartParameter().setOffline(true);
+        testProject.getPluginManager().apply(VaultPlugin.class);
+        final VaultExtension vault = testProject.getExtensions().getByType(VaultExtension.class);
+
+        final GradleException exception = assertThrows(
+                GradleException.class,
+                () -> vault.readAndCacheSecret("secret/testing").get()
+        );
+
+        assertEquals(
+                "Cannot read Vault secret 'secret/testing' because Gradle is running with --offline and no cached value " +
+                        "is available. Remove --offline to read the secret from Vault.",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    void offlineModeRejectsUncachedRead() {
+        testProject.getGradle().getStartParameter().setOffline(true);
+        testProject.getPluginManager().apply(VaultPlugin.class);
+        final VaultExtension vault = testProject.getExtensions().getByType(VaultExtension.class);
+
+        final GradleException exception = assertThrows(
+                GradleException.class,
+                () -> vault.readSecret("secret/testing").get()
+        );
+
+        assertEquals(
+                "Cannot read Vault secret 'secret/testing' because Gradle is running with --offline. " +
+                        "Remove --offline to read the secret from Vault.",
+                exception.getMessage()
         );
     }
 }

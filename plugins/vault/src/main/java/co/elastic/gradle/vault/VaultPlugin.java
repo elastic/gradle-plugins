@@ -35,10 +35,13 @@ public class VaultPlugin implements Plugin<PluginAware> {
     @Override
     public void apply(@Nonnull PluginAware target) {
         final File rootDir;
+        final boolean offline;
         if (target instanceof Settings settings) {
             rootDir = settings.getRootDir();
+            offline = settings.getGradle().getStartParameter().isOffline();
         } else if (target instanceof Project project) {
             rootDir = project.getRootDir();
+            offline = project.getGradle().getStartParameter().isOffline();
         } else {
             throw new GradleException("Can't apply plugin to " + target.getClass());
         }
@@ -47,6 +50,7 @@ public class VaultPlugin implements Plugin<PluginAware> {
                 VaultExtension.class,
                 new File(rootDir, ".gradle/secrets")
         );
+        extension.setOffline(offline);
         extension.getExtensions().create("auth", VaultAuthenticationExtension.class);
     }
 

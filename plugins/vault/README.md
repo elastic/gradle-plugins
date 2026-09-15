@@ -72,6 +72,13 @@ Returns the same provider while caching the secret until its lease expires. The
 engine version without changing the extension-wide `engineVersion`; this is useful when
 a build consumes secrets from both KV v1 and KV v2 mounts.
 
+### Offline mode
+
+When Gradle runs with `--offline`, `readAndCacheSecret` returns a locally cached value without connecting to Vault. An
+expired cached value is accepted because it cannot be refreshed while offline. If no cached value exists, the provider
+fails with an explanation instead of attempting a network connection. `readSecret` always fails in offline mode because
+it does not use the local cache.
+
 ### Authentication
 
 The `auth {` section supports multiple ways of accessing vault. Multiple ways can be configured in which case they will 
