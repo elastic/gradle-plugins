@@ -63,14 +63,15 @@ logger.lifecycle("top_secret is {}", vault.readSecret("secret/testing").get()["t
 #### `readSecret`
 
 Returns a [Provider<Map<String,String>>](https://docs.gradle.org/current/javadoc/org/gradle/api/provider/Provider.html) 
-with keys and values populated with the secrets from vault.  
+with keys and values populated with the secrets from vault. The `readSecret(path, engineVersion)` overload reads a path
+with a specific KV engine version without changing the extension-wide `engineVersion`.
 
 #### `readAndCacheSecret`
 
 Returns the same provider while caching the secret until its lease expires. The
-`readAndCacheSecret(path, engineVersion)` overload reads a path with the specified KV
-engine version without changing the extension-wide `engineVersion`; this is useful when
-a build consumes secrets from both KV v1 and KV v2 mounts.
+`readAndCacheSecret(path, engineVersion)` overload reads a path with the specified KV engine version without changing
+the extension-wide `engineVersion`. The per-call overloads are useful when a build consumes secrets from both KV v1 and
+KV v2 mounts.
 
 ### Offline mode
 

@@ -249,6 +249,50 @@ public class VaultPluginIT extends TestkitIntegrationTest {
     }
 
     @Test
+    void canReadSecretsFromKvV1AndV2Mounts() throws VaultException {
+        final var host = vaultContainer.getHost();
+        final var firstMappedPort = vaultContainer.getFirstMappedPort();
+        final Vault vault = new Vault(
+                new VaultConfig()
+                        .token("my-root-token")
+                        .address("http://" + host + ":" + firstMappedPort)
+                        .engineVersion(1)
+                        .build()
+        );
+        vault.logical().write(
+                "sys/mounts/kv-v1",
+                Map.of("type", "kv", "options", Map.of("version", "1"))
+        );
+        vault.logical().write("kv-v1/testing", Map.of("value", "from-kv-v1"));
+
+        helper.settings(String.format("""
+                   import %s
+                   rootProject.name = "integration-test"
+                   plugins {
+                       id("co.elastic.vault")
+                   }
+                   configure<VaultExtension> {
+                      engineVersion.set(1)
+                      address.set("http://%s:%s/")
+                      auth {
+                        tokenEnv("MY_ENV_TOKEN")
+                      }
+                   }
+                   val vault = the<VaultExtension>()
+                   logger.lifecycle("kv v1 value is {}", vault.readSecret("kv-v1/testing").get()["value"])
+                   logger.lifecycle("kv v2 value is {}", vault.readSecret("secret/testing", 2).get()["top_secret"])
+                """, VaultExtension.class.getName(), host, firstMappedPort));
+
+        final BuildResult result = gradleRunner
+                .withEnvironment(Collections.singletonMap("MY_ENV_TOKEN", "my-root-token"))
+                .withArguments("--warning-mode", "fail", "-s", "help")
+                .build();
+
+        assertContains(result.getOutput(), "kv v1 value is from-kv-v1");
+        assertContains(result.getOutput(), "kv v2 value is password1");
+    }
+
+    @Test
     void canReadVaultSecretsWithRoles() throws VaultException {
         final var host = vaultContainer.getHost();
         final var firstMappedPort = vaultContainer.getFirstMappedPort();
