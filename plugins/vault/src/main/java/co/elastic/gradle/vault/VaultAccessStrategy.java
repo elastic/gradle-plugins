@@ -86,6 +86,17 @@ public class VaultAccessStrategy {
                     tokenAction,
                     engineVersion
             );
+        } else if (authMethod instanceof VaultAuthenticationExtension.GithubCli) {
+            return authAndStoreToken(vault, (driver) -> {
+                        try {
+                            return driver.auth().loginByGithub(((VaultAuthenticationExtension.GithubCli) authMethod).getToken().get());
+                        } catch (VaultException e) {
+                            throw new GradleException("Failed to authenticate to vault", e);
+                        }
+                    },
+                    tokenAction,
+                    engineVersion
+            );
         } else {
             throw new IllegalStateException("Unsupported auth method " + authMethod.getClass());
         }

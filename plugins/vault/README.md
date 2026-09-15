@@ -40,6 +40,7 @@ configure<VaultExtension> {
     ghTokenEnv() // Will look for a GitHub Token in the VAULT_AUTH_GITHUB_TOKEN environment variable
     ghTokenFile(file("theres/no/such/file"))
     ghTokenFile() // Will look for a GitHub Token in the ~/.elastic/github.token file
+    ghCli() // Will get a GitHub token by running `gh auth token`
   }
 }
 val vault = the<VaultExtension>()                  
@@ -74,10 +75,10 @@ a build consumes secrets from both KV v1 and KV v2 mounts.
 ### Authentication
 
 The `auth {` section supports multiple ways of accessing vault. Multiple ways can be configured in which case they will 
-be tried in the order in which they were defined. If an authentication method is available it will we used, 
-the plugin checks for the existence of the files or environmental variables only and expects that these will work if 
-present. This can be used to authenticate to vault differently in different contexts (e.g. GH token could be used locally
-and role and secret id in CI).
+be tried in the order in which they were defined. If an authentication method is available it will be used. The plugin
+checks whether the configured credential source is available and expects it to work if present. This can be used to
+authenticate to vault differently in different contexts (e.g. GH token could be used locally and role and secret id in
+CI).
 
 ### `tokenEnv()` or `tokenEnv(String name)`
 
@@ -108,6 +109,12 @@ Authenticates to vault using the GitHub API token from the contents of the file 
 Note that the GitHub token might require to be authenticated to specific organisations if the vault policies check for this.
 A vault token is stored in the local filesystem in a file readable only by the current user and re-used while it's not
 expired to speed up future usages of the plugin.
+
+### `ghCli()`
+
+Authenticates to vault using the GitHub API token returned by `gh auth token`. The method is available when the GitHub
+CLI is installed and authenticated. A vault token is stored in the local filesystem in a file readable only by the
+current user and re-used while it's not expired to speed up future usages of the plugin.
 
 ### Configuration
 

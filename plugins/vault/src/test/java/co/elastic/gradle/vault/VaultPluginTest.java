@@ -19,12 +19,21 @@
 package co.elastic.gradle.vault;
 
 import org.gradle.api.Project;
+import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VaultPluginTest {
 
@@ -46,5 +55,57 @@ class VaultPluginTest {
     @Test
     void pluginCanBeAppliedOnProject() {
         testProject.getPluginManager().apply(VaultPlugin.class);
+    }
+
+    @Test
+    void githubCliCanBeConfigured() {
+        testProject.getPluginManager().apply(VaultPlugin.class);
+        final VaultExtension vault = testProject.getExtensions().getByType(VaultExtension.class);
+        final VaultAuthenticationExtension authentication = ((ExtensionAware) vault).getExtensions()
+                .getByType(VaultAuthenticationExtension.class);
+
+        authentication.ghCli();
+
+        assertInstanceOf(
+                VaultAuthenticationExtension.GithubCli.class,
+                authentication.getAuthMethods().get(0)
+        );
+    }
+
+    @Test
+    void githubCliReadsAndCachesToken(@TempDir Path tempDir) throws IOException {
+        final Path executable = tempDir.resolve("gh");
+        Files.writeString(executable, """
+                #!/bin/sh
+                printf 'called\\n' >> "$(dirname "$0")/calls"
+                printf '%s\\n' "$@" > "$(dirname "$0")/arguments"
+                printf 'value-from-cli\\n'
+                """);
+        assertTrue(executable.toFile().setExecutable(true));
+
+        final VaultAuthenticationExtension extension = testProject.getObjects()
+                .newInstance(VaultAuthenticationExtension.class);
+        final VaultAuthenticationExtension.GithubCli githubCli = extension.new GithubCli(executable.toString());
+
+        assertTrue(githubCli.isMethodUsable());
+        assertEquals("Using GitHub token from `gh auth token`", githubCli.getExplanation());
+        assertEquals("value-from-cli", githubCli.getToken().get());
+        assertEquals(List.of("auth", "token"), Files.readAllLines(tempDir.resolve("arguments")));
+        assertEquals(List.of("called"), Files.readAllLines(tempDir.resolve("calls")));
+    }
+
+    @Test
+    void githubCliIsUnavailableWhenCommandCannotStart(@TempDir Path tempDir) {
+        final VaultAuthenticationExtension extension = testProject.getObjects()
+                .newInstance(VaultAuthenticationExtension.class);
+        final VaultAuthenticationExtension.GithubCli githubCli = extension.new GithubCli(
+                tempDir.resolve("does-not-exist").toString()
+        );
+
+        assertFalse(githubCli.isMethodUsable());
+        assertEquals(
+                "Tried to obtain a GitHub token using `gh auth token`, but the command could not be started",
+                githubCli.getExplanation()
+        );
     }
 }
