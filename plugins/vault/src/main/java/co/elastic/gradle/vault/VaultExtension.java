@@ -50,6 +50,7 @@ abstract public class VaultExtension implements ExtensionAware {
     public static final long EXPIRATION_BUFFER = MILLISECONDS.convert(2, SECONDS);
 
     private final File cacheDir;
+    private boolean offline;
 
     public VaultExtension(File cacheDir) {
         this.cacheDir = cacheDir;
@@ -69,6 +70,10 @@ abstract public class VaultExtension implements ExtensionAware {
     @Inject
     abstract protected ProviderFactory getProviderFactory();
 
+    void setOffline(boolean offline) {
+        this.offline = offline;
+    }
+
     @SuppressWarnings("unused")
     public void auth(Action<VaultAuthenticationExtension> spec) {
         spec.execute(getAuthExtension());
@@ -85,9 +90,18 @@ abstract public class VaultExtension implements ExtensionAware {
 
     @SuppressWarnings("unused")
     public Provider<Map<String, String>> readSecret(String path) {
+        return readSecret(path, getEngineVersion().get());
+    }
+
+    /**
+     * Reads a secret using a specific KV engine version without changing the extension-wide default.
+     */
+    @SuppressWarnings("unused")
+    public Provider<Map<String, String>> readSecret(String path, int engineVersion) {
         return getProviderFactory().provider(() -> {
+            requireOnline(path, false);
             logger.lifecycle("Reading " + path + " from vault");
-            LogicalResponse response = getDataFromVault(path);
+            LogicalResponse response = getDataFromVault(path, engineVersion);
             final Map<String, String> data = response.getData();
             if (data.isEmpty()) {
                 throw new GradleException("No data was available in vault path " + path);
@@ -110,12 +124,13 @@ abstract public class VaultExtension implements ExtensionAware {
         final Path leaseExpiration = versionedCacheDir.resolve("leaseExpiration");
         final Path dataPath = versionedCacheDir.resolve("data");
 
-        final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath);
+        final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath, offline);
         if (cachedData != null) {
             return getProviderFactory().provider(() -> cachedData);
         }
 
         return getProviderFactory().provider(() -> {
+            requireOnline(path, true);
             logger.lifecycle("Reading " + path + " from vault (cached value not available or expired)");
 
             LogicalResponse response = getDataFromVault(path, engineVersion);
@@ -169,27 +184,41 @@ abstract public class VaultExtension implements ExtensionAware {
         return response;
     }
 
-    private Map<String, String> tryReadCache(Path leaseExpiration, Path data) {
+    private Map<String, String> tryReadCache(Path leaseExpiration, Path data, boolean allowExpired) {
         if (Files.exists(leaseExpiration)) {
             try {
                 final long expireMillis = Long.parseLong(Files.readString(leaseExpiration));
-                if (isValidLease(expireMillis)) {
-                    return Files.list(data).collect(Collectors.toMap(
-                            path -> path.getFileName().toString(),
-                            path -> {
-                                try {
-                                    return Files.readString(path);
-                                } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
+                if (allowExpired || isValidLease(expireMillis)) {
+                    try (var files = Files.list(data)) {
+                        return files.collect(Collectors.toMap(
+                                path -> path.getFileName().toString(),
+                                path -> {
+                                    try {
+                                        return Files.readString(path);
+                                    } catch (IOException e) {
+                                        throw new UncheckedIOException(e);
+                                    }
                                 }
-                            }
-                    ));
+                        ));
+                    }
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
         }
         return null;
+    }
+
+    private void requireOnline(String path, boolean cacheable) {
+        if (offline) {
+            final String cacheMessage = cacheable
+                    ? " and no cached value is available"
+                    : "";
+            throw new GradleException(
+                    "Cannot read Vault secret '" + path + "' because Gradle is running with --offline" + cacheMessage + ". " +
+                            "Remove --offline to read the secret from Vault."
+            );
+        }
     }
 
     private void writeCacheDir(Path path, String content) {
