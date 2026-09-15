@@ -90,10 +90,18 @@ abstract public class VaultExtension implements ExtensionAware {
 
     @SuppressWarnings("unused")
     public Provider<Map<String, String>> readSecret(String path) {
+        return readSecret(path, getEngineVersion().get());
+    }
+
+    /**
+     * Reads a secret using a specific KV engine version without changing the extension-wide default.
+     */
+    @SuppressWarnings("unused")
+    public Provider<Map<String, String>> readSecret(String path, int engineVersion) {
         return getProviderFactory().provider(() -> {
             requireOnline(path, false);
             logger.lifecycle("Reading " + path + " from vault");
-            LogicalResponse response = getDataFromVault(path);
+            LogicalResponse response = getDataFromVault(path, engineVersion);
             final Map<String, String> data = response.getData();
             if (data.isEmpty()) {
                 throw new GradleException("No data was available in vault path " + path);

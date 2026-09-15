@@ -151,7 +151,7 @@ class VaultPluginTest {
 
         final GradleException exception = assertThrows(
                 GradleException.class,
-                () -> vault.readSecret("secret/testing").get()
+                () -> vault.readSecret("secret/testing", 2).get()
         );
 
         assertEquals(
