@@ -39,6 +39,28 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
+    public void vaultBackedSnykExplainsConfigurationCacheLimitation() throws java.io.IOException {
+        final var cache = helper.projectDir().resolve(".gradle/secrets/kv/fixture/snyk_api_key/v2");
+        Files.createDirectories(cache.resolve("data"));
+        Files.writeString(cache.resolve("data/apikey"), "fixture-snyk-key");
+        Files.writeString(cache.resolve("leaseExpiration"), "0");
+        helper.buildScript("""
+                import co.elastic.gradle.snyk.SnykCLIExecTask
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                vault.engineVersion.set(2)
+                tasks.register<SnykCLIExecTask>("scan") {
+                    commandLine("/bin/sh", "-c", "test ${'$'}SNYK_TOKEN = fixture-snyk-key")
+                }
+                """);
+        final BuildResult result = gradleRunner.withArguments(
+                "--offline", "--configuration-cache", "-Pco.elastic.vault_prefix=kv/fixture", "scan"
+        ).build();
+        assertContains(result.getOutput(), "Configuration cache entry discarded");
+    }
+
+    @Test
     public void snykCredentialsAreReadOnlyWhenTheTaskExecutes() {
         helper.buildScript("""
                 import co.elastic.gradle.snyk.SnykCLIExecTask

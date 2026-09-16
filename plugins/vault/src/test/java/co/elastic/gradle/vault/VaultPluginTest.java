@@ -18,18 +18,29 @@
  */
 package co.elastic.gradle.vault;
 
+import com.sun.net.httpserver.HttpServer;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.ExtensionAware;
+import org.gradle.api.provider.Provider;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,6 +51,55 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VaultPluginTest {
 
     private Project testProject;
+
+    @Test
+    void concurrentProjectCacheMissesFetchOnce(@TempDir Path tempDir) throws Exception {
+        final AtomicInteger requests = new AtomicInteger();
+        final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/kv/data/testing", exchange -> {
+            requests.incrementAndGet();
+            byte[] body = """
+                    {"data":{"data":{"apikey":"fixture-key","organization":"fixture-org"},"metadata":{}},"lease_duration":3600,"renewable":false,"lease_id":""}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        server.start();
+        final var executor = Executors.newFixedThreadPool(8);
+        try {
+            Path token = tempDir.resolve("token");
+            Files.writeString(token, "fixture-vault-token");
+            List<Provider<Map<String, String>>> readers = new ArrayList<>();
+            for (int index = 0; index < 8; index++) {
+                Project project = ProjectBuilder.builder().withParent(testProject).withName("p" + index).build();
+                project.getPluginManager().apply(VaultPlugin.class);
+                VaultExtension vault = project.getExtensions().getByType(VaultExtension.class);
+                vault.getAddress().set("http://127.0.0.1:" + server.getAddress().getPort());
+                vault.auth(auth -> auth.tokenFile(token.toFile()));
+                readers.add(vault.readAndCacheSecret("kv/testing", 2));
+            }
+            assertEquals(0, requests.get());
+            final CountDownLatch start = new CountDownLatch(1);
+            List<Future<Map<String, String>>> results = new ArrayList<>();
+            for (var reader : readers) {
+                results.add(executor.submit(() -> {
+                    start.await();
+                    return reader.get();
+                }));
+            }
+            start.countDown();
+            for (var result : results) {
+                assertEquals(Map.of("apikey", "fixture-key", "organization", "fixture-org"), result.get(30, TimeUnit.SECONDS));
+            }
+            assertEquals(1, requests.get());
+        } finally {
+            executor.shutdownNow();
+            server.stop(0);
+        }
+    }
 
     @BeforeEach
     void setUp(@TempDir Path tempDir) {

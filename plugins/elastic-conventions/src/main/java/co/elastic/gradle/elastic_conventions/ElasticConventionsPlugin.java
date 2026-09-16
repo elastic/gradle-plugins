@@ -100,15 +100,19 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
         configureCliPlugins(target);
 
-        target.getTasks().withType(SnykCLIExecTask.class).configureEach(task ->
-                task.doFirst(unused -> {
-                    target.getLogger().info("Configuring Snyk token env var for " + task.getPath());
-                    task.environment(
-                            "SNYK_TOKEN",
-                            vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey")
-                    );
-                })
-        );
+        target.getTasks().withType(SnykCLIExecTask.class).configureEach(task -> {
+            final String snykVaultPath = getSnykVaultPath(target);
+            task.notCompatibleWithConfigurationCache(
+                    "Execution-time Vault access retains the Vault extension, which is not configuration-cache compatible"
+            );
+            task.doFirst(unused -> {
+                task.getLogger().info("Configuring Snyk token env var for " + task.getPath());
+                task.environment(
+                        "SNYK_TOKEN",
+                        vault.readAndCacheSecret(snykVaultPath).get().get("apikey")
+                );
+            });
+        });
 
     }
 

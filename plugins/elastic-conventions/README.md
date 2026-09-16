@@ -22,3 +22,7 @@ field from the shared KV v2 secret
 be granted read access to `kv/ci-shared/develocity/*` in Terrazzo. Configuration fails
 with a grant-specific error if a CI build has neither the environment variable nor access
 to the shared Vault secret.
+
+Snyk credentials are read only when a scan executes. Vault-backed Snyk tasks are not compatible
+with Gradle configuration caching because execution retains the Vault extension. Ordinary tasks
+can still configure without a cached Snyk secret, including in offline mode.

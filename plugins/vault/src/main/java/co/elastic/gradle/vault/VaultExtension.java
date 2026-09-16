@@ -46,6 +46,9 @@ import static java.util.concurrent.TimeUnit.*;
 
 abstract public class VaultExtension implements ExtensionAware {
 
+    // Project extensions share the same on-disk cache within a Gradle process.
+    private static final Object CACHE_LOCK = new Object();
+
     private static final Logger logger = Logging.getLogger(VaultExtension.class);
     public static final long EXPIRATION_BUFFER = MILLISECONDS.convert(2, SECONDS);
 
@@ -124,34 +127,33 @@ abstract public class VaultExtension implements ExtensionAware {
         final Path leaseExpiration = versionedCacheDir.resolve("leaseExpiration");
         final Path dataPath = versionedCacheDir.resolve("data");
 
-        final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath, offline);
-        if (cachedData != null) {
-            return getProviderFactory().provider(() -> cachedData);
-        }
-
         return getProviderFactory().provider(() -> {
-            requireOnline(path, true);
-            logger.lifecycle("Reading " + path + " from vault (cached value not available or expired)");
+            synchronized (CACHE_LOCK) {
+                // Recheck at execution time, after any other project has finished populating the cache.
+                final Map<String, String> cachedData = tryReadCache(leaseExpiration, dataPath, offline);
+                if (cachedData != null) {
+                    return cachedData;
+                }
+                requireOnline(path, true);
+                logger.lifecycle("Reading " + path + " from vault (cached value not available or expired)");
 
-            LogicalResponse response = getDataFromVault(path, engineVersion);
-
-            writeCacheDir(
-                    leaseExpiration,
-                    String.valueOf(
-                            System.currentTimeMillis() + MILLISECONDS.convert(
-                                    (response.getLeaseDuration() == 0) ?
-                                            SECONDS.convert(1, DAYS) :
-                                            response.getLeaseDuration(),
-                                    SECONDS
-                            )
-                    )
-            );
-            final Map<String, String> data = response.getData();
-            data.forEach((key, value) -> {
-                writeCacheDir(dataPath.resolve(key), value);
-            });
-
-            return data;
+                LogicalResponse response = getDataFromVault(path, engineVersion);
+                final Map<String, String> data = response.getData();
+                data.forEach((key, value) -> writeCacheDir(dataPath.resolve(key), value));
+                // Publish the lease only after all values have been written.
+                writeCacheDir(
+                        leaseExpiration,
+                        String.valueOf(
+                                System.currentTimeMillis() + MILLISECONDS.convert(
+                                        (response.getLeaseDuration() == 0) ?
+                                                SECONDS.convert(1, DAYS) :
+                                                response.getLeaseDuration(),
+                                        SECONDS
+                                )
+                        )
+                );
+                return data;
+            }
         });
     }
 
