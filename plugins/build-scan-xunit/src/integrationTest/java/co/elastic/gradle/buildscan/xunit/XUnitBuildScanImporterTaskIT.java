@@ -86,6 +86,27 @@ public class XUnitBuildScanImporterTaskIT extends TestkitIntegrationTest {
     }
 
     @Test
+    public void successfulTestWithoutOutput() {
+        helper.writeFile("sample.xml", """
+                <testsuite name="suite" tests="1" failures="0" time="0.01">
+                    <testcase name="without output" classname="suite" time="0.01"/>
+                </testsuite>
+                """);
+        helper.buildScript("""
+                import co.elastic.gradle.buildscan.xunit.XUnitBuildScanImporterTask
+                plugins {
+                    id("co.elastic.build-scan.xunit")
+                }
+                tasks.register<XUnitBuildScanImporterTask>("testImport") {
+                    from(file("sample.xml"))
+                }
+                """);
+
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "testImport").build();
+        Assertions.assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":testImport")).getOutcome());
+    }
+
+    @Test
     public void standaloneFromFile()  {
         helper.buildScript(String.format("""
                 import %s
