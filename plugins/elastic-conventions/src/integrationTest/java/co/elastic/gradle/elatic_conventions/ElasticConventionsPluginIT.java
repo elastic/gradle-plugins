@@ -39,6 +39,41 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class ElasticConventionsPluginIT extends TestkitIntegrationTest {
 
     @Test
+    public void snykCredentialsAreReadOnlyWhenTheTaskExecutes() {
+        helper.buildScript("""
+                import co.elastic.gradle.snyk.SnykCLIExecTask
+                plugins {
+                    id("co.elastic.elastic-conventions")
+                }
+                vault.engineVersion.set(2)
+                vault.address.set("http://127.0.0.1:1")
+                val prepareSecret by tasks.registering {
+                    doLast {
+                        val cache = file(".gradle/secrets/kv/fixture/snyk_api_key/v2")
+                        cache.resolve("data").mkdirs()
+                        cache.resolve("data/apikey").writeText("fixture-snyk-key")
+                        cache.resolve("leaseExpiration").writeText("0")
+                    }
+                }
+                tasks.register<SnykCLIExecTask>("scan") {
+                    dependsOn(prepareSecret)
+                    commandLine("/bin/sh", "-c", "test ${'$'}SNYK_TOKEN = fixture-snyk-key")
+                }
+                tasks.register<SnykCLIExecTask>("skippedScan") {
+                    onlyIf { false }
+                    commandLine("/bin/sh", "-c", "exit 1")
+                }
+                """);
+
+        final String cachePath = ".gradle/secrets/kv/fixture/snyk_api_key/v2/data/apikey";
+        gradleRunner.withArguments("--offline", "-Pco.elastic.vault_prefix=kv/fixture", "help", "skippedScan").build();
+        assertFalse(Files.exists(helper.projectDir().resolve(cachePath)));
+
+        gradleRunner.withArguments("--offline", "-Pco.elastic.vault_prefix=kv/fixture", "scan").build();
+        assertPathExists(helper.projectDir().resolve(cachePath));
+    }
+
+    @Test
     public void publishesBuildScan() {
         final String accessKey = System.getenv("DEVELOCITY_ACCESS_KEY");
         assumeTrue(accessKey != null && !accessKey.isBlank(),

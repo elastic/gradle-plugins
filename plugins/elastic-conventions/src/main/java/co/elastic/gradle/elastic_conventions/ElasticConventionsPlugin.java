@@ -100,15 +100,15 @@ public class ElasticConventionsPlugin implements Plugin<PluginAware> {
 
         configureCliPlugins(target);
 
-        target.afterEvaluate(unused -> {
-                target.getTasks().withType(SnykCLIExecTask.class, task -> {
+        target.getTasks().withType(SnykCLIExecTask.class).configureEach(task ->
+                task.doFirst(unused -> {
                     target.getLogger().info("Configuring Snyk token env var for " + task.getPath());
                     task.environment(
                             "SNYK_TOKEN",
                             vault.readAndCacheSecret(getSnykVaultPath(target)).get().get("apikey")
                     );
-                });
-        });
+                })
+        );
 
     }
 
