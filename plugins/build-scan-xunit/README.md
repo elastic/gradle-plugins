@@ -20,26 +20,39 @@ Usage
 
 ### Integration with other plugins
 
+The plugin automatically creates an import task for each task implementing
+`co.elastic.gradle.utils.XunitCreatorTask`. The interface exposes the generated XML reports through
+`getXunitFiles()`, a `Provider<Collection<File>>`. The import task runs as a finalizer when the producer did work.
+
 ```kotlin
-import co.elastic.gradle.sandbox.SandboxExecTask
+import co.elastic.gradle.utils.XunitCreatorTask
+import java.io.File
 
 plugins {
     id("co.elastic.build-scan.xunit")
-    id("co.elastic.sandbox")
 }
 
-tasks.register < SandboxExecTask::class > {
-    setCommandLine(listOf("cp", "-v", "sample.xml", "sample-produced.xml"))
-    runsSystemBinary("cp")
-    reads("sample.xml")
-    writes("sample-produced.xml")
+abstract class XunitReportTask : DefaultTask(), XunitCreatorTask {
+    @get:InputFile
+    abstract val sourceReport: RegularFileProperty
+
+    @OutputFiles
+    abstract override fun getXunitFiles(): Property<Collection<File>>
+
+    @TaskAction
+    fun generateReport() {
+        sourceReport.get().asFile.copyTo(xunitFiles.get().single(), overwrite = true)
+    }
+}
+
+tasks.register<XunitReportTask>("test") {
+    sourceReport.set(layout.projectDirectory.file("sample.xml"))
+    xunitFiles.set(listOf(layout.projectDirectory.file("sample-produced.xml").asFile))
 }
 ```
 
-The sandbox plugin integrates with tasks that implement the `XunitCreatorTask` interface, such as `SandboxExecTask` from
-the [sandbox plugin](../sandbox/README.md). The plugin autoconfigures an import task for each xunit creator task. The
-way this is set up also works with retries of the sandbox exec task so that if tests pass on a retry the tests that
-initially failed will be marked as flaky.
+This example copies an existing report to demonstrate automatic import. A test-running task can implement the
+same interface to expose its own reports. Reports imported again after a retry mark initially failing tests as flaky.
 
 ## Standalone usage
 

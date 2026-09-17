@@ -77,11 +77,11 @@ public class ExternalTestExecuter implements TestExecuter<TestExecutionSpec> {
 
                         // Cannot switch on types ...
                         if (testCase.status() instanceof TestCaseSuccess success) {
-                            Optional.of(success.stdout()).ifPresent(stdout -> processor.output(
+                            Optional.ofNullable(success.stdout()).ifPresent(stdout -> processor.output(
                                     methodDescriptor.getId(),
                                     new DefaultTestOutputEvent(TestOutputEvent.Destination.StdOut, stdout)
                             ));
-                            Optional.of(success.stderr()).ifPresent(stderr -> processor.output(
+                            Optional.ofNullable(success.stderr()).ifPresent(stderr -> processor.output(
                                     methodDescriptor.getId(),
                                     new DefaultTestOutputEvent(TestOutputEvent.Destination.StdErr, stderr)
                             ));

@@ -121,11 +121,13 @@ using the [Vault Plugin](../vault/README.md):
 ```kotlin
 import co.elastic.gradle.snyk.SnykCLIExecTask
 
-tasks.withType<SnykCLIExecTask> {
-    environment(
-        "SNYK_TOKEN",
-        vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
-    )
+tasks.withType<SnykCLIExecTask>().configureEach {
+    doFirst {
+        environment(
+            "SNYK_TOKEN",
+            vault.readAndCacheSecret("secret/ci/elastic-gradle-plugins/snyk_api_key").get()["apikey"].toString()
+        )
+    }
 }
 ```
 

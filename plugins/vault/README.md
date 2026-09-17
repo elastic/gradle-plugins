@@ -73,6 +73,10 @@ Returns the same provider while caching the secret until its lease expires. The
 the extension-wide `engineVersion`. The per-call overloads are useful when a build consumes secrets from both KV v1 and
 KV v2 mounts.
 
+Cache access is lazy: creating the provider does not read files or contact Vault. Cache lookups and refreshes
+are coordinated across project extensions within the Gradle process, so concurrent misses share one fetch
+and readers do not observe partially written values.
+
 ### Offline mode
 
 When Gradle runs with `--offline`, `readAndCacheSecret` returns a locally cached value without connecting to Vault. An
