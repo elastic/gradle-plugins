@@ -33,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Function;
@@ -62,20 +63,17 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
         );
 
 
-        final Map<File, File> currentArch = getDefaultSymlink(configuration, Architecture.current(), allVersions);
+        final Map<File, File> currentArch = new HashMap<>();
+        if (OS.current().equals(OS.DARWIN)) {
+            // Select an emulated fallback for each tool, even when another tool has a native binary.
+            currentArch.putAll(getDefaultSymlink(configuration, Architecture.X86_64, allVersions));
+        }
+        currentArch.putAll(getDefaultSymlink(configuration, Architecture.current(), allVersions));
         if (!currentArch.isEmpty()) {
             result.putAll(currentArch);
             return result;
-        } else {
-            if (OS.current().equals(OS.DARWIN)) {
-                // Some tools don't (yet) support ARM on MacOS but work with emulation
-                final Map<File, File> alternative = getDefaultSymlink(configuration, Architecture.X86_64, allVersions);
-                if (!alternative.isEmpty()) {
-                    result.putAll(alternative);
-                    return result;
-                }
-            }
         }
+
         throw new GradleException("Could not find the architecture specific binary from " + configuration.getFiles());
     }
 
@@ -157,12 +155,12 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
 
     @InputFiles
     public Set<File> getTarget() {
-        return getNameToTargetMap().keySet();
+        return new HashSet<>(getNameToTargetMap().values());
     }
 
     @OutputFiles
     public Collection<File> getLinkName() {
-        return getNameToTargetMap().values();
+        return getNameToTargetMap().keySet();
     }
 
     @TaskAction
@@ -172,7 +170,7 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     getLogger().lifecycle("Linking {}", linkName);
                     final Path linkPath = linkName.toPath();
                     try {
-                        if (Files.exists(linkPath)) {
+                        if (Files.exists(linkPath, LinkOption.NOFOLLOW_LINKS)) {
                             Files.delete(linkPath);
                         }
                         if (!Files.exists(linkPath.getParent())) {
