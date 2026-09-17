@@ -19,7 +19,6 @@
 package co.elastic.gradle.buildscan.xunit;
 
 import co.elastic.gradle.TestkitIntegrationTest;
-import co.elastic.gradle.sandbox.SandboxExecTask;
 import org.apache.commons.io.IOUtils;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.TaskOutcome;
@@ -45,30 +44,66 @@ public class XUnitBuildScanImporterTaskIT extends TestkitIntegrationTest {
     }
 
     @Test
-    public void sandboxIntegration()  {
-        helper.buildScript(String.format("""
-                import %s
-                plugins {
-                   id("co.elastic.build-scan.xunit")
-                   id("co.elastic.sandbox")
-                }
-                
-                val test by tasks.registering(SandboxExecTask::class) {
-                    setCommandLine(listOf("cp", "-v", "sample.xml", "sample-produced.xml"))
-                    runsSystemBinary("cp")
-                    reads("sample.xml")
-                    writes("sample-produced.xml")
-                }
-                """, SandboxExecTask.class.getName()
-        ));
+    public void xunitCreatorIntegration() {
+        helper.buildScript("""
+                import co.elastic.gradle.utils.XunitCreatorTask
+                import java.io.File
 
+                plugins {
+                    id("co.elastic.build-scan.xunit")
+                }
+
+                abstract class XunitReportTask : DefaultTask(), XunitCreatorTask {
+                    @get:InputFile
+                    abstract val sourceReport: RegularFileProperty
+
+                    @OutputFiles
+                    abstract override fun getXunitFiles(): Property<Collection<File>>
+
+                    @TaskAction
+                    fun generateReport() {
+                        sourceReport.get().asFile.copyTo(xunitFiles.get().single(), overwrite = true)
+                    }
+                }
+
+                tasks.register<XunitReportTask>("test") {
+                    sourceReport.set(layout.projectDirectory.file("sample.xml"))
+                    xunitFiles.set(listOf(layout.projectDirectory.file("sample-produced.xml").asFile))
+                }
+                """);
 
         final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "-s", "test").build();
         Assertions.assertTrue(Files.exists(helper.projectDir().resolve("sample-produced.xml")));
+        Assertions.assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":testxunitImport")).getOutcome());
 
         assertContains(result.getOutput(), "failure test name FAILED");
         assertContains(result.getOutput(), "4 tests completed, 2 failed, 1 skipped");
         assertContains(result.getOutput(), "8 tests completed, 4 failed, 2 skipped");
+
+        final BuildResult secondRun = gradleRunner.withArguments("--warning-mode", "fail", "-s", "test").build();
+        Assertions.assertEquals(TaskOutcome.UP_TO_DATE, Objects.requireNonNull(secondRun.task(":test")).getOutcome());
+        Assertions.assertEquals(TaskOutcome.SKIPPED, Objects.requireNonNull(secondRun.task(":testxunitImport")).getOutcome());
+    }
+
+    @Test
+    public void successfulTestWithoutOutput() {
+        helper.writeFile("sample.xml", """
+                <testsuite name="suite" tests="1" failures="0" time="0.01">
+                    <testcase name="without output" classname="suite" time="0.01"/>
+                </testsuite>
+                """);
+        helper.buildScript("""
+                import co.elastic.gradle.buildscan.xunit.XUnitBuildScanImporterTask
+                plugins {
+                    id("co.elastic.build-scan.xunit")
+                }
+                tasks.register<XUnitBuildScanImporterTask>("testImport") {
+                    from(file("sample.xml"))
+                }
+                """);
+
+        final BuildResult result = gradleRunner.withArguments("--warning-mode", "fail", "testImport").build();
+        Assertions.assertEquals(TaskOutcome.SUCCESS, Objects.requireNonNull(result.task(":testImport")).getOutcome());
     }
 
     @Test

@@ -18,7 +18,6 @@ Gradle plugins
 - [co.elastic.license-headers](plugins/license-headers/README.md): Enforce license headers in source files
 - [co.elastic.lifecycle](plugins/lifecycle/README.md): extended lifecycle tasks
 - [co.elastic.lifecycle-multi-arch](plugins/lifecycle/README.md): support for building on multiple architectures
-- [co.elastic.gradle.sandbox](plugins/sandbox/README.md): Run commands with build avoidance in isolation
 - [co.elastic.gradle.vault](plugins/vault/README.md): Integration with [vault](https://www.vaultproject.io/)
 - [co.elastic.wrapper-provision-jdk](plugins/wrapper-provision-jdk/README.md): Extend the wrapper script to include provisioning of the JDK
 
