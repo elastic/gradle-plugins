@@ -88,7 +88,8 @@ public abstract class MultipleSymlinkTask extends DefaultTask {
                     .replace(value.name(), value.name().toLowerCase(Locale.ROOT));
         }
         targetName = targetName.replace("macos", "darwin")
-                .replace("mac-386", "darwin-x86_64");
+                .replace("mac-386", "darwin-x86_64")
+                .replace(".legacy-transform", "");
         return targetName;
     }
 

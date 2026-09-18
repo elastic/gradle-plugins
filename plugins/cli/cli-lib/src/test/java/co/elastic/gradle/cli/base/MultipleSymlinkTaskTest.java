@@ -49,6 +49,7 @@ class MultipleSymlinkTaskTest {
         });
         for (String coordinate : List.of(
                 "fixture:manifest-tool:v1.0.3:darwin-amd64",
+                "fixture:manifest-tool:v1.0.3:linux-amd64.legacy-transform",
                 "fixture:snyk:v1.1187.0:macos",
                 "fixture:native:v1.0.0:darwin-amd64",
                 "fixture:native:v1.0.0:darwin-arm64")) {
@@ -68,6 +69,7 @@ class MultipleSymlinkTaskTest {
             Path bin = project.getRootDir().toPath().resolve(".gradle/bin");
             assertTrue(links.containsKey(bin.resolve("manifest-tool").toFile()), links.toString());
             assertEquals("manifest-tool-v1.0.3-darwin-amd64", links.get(bin.resolve("manifest-tool").toFile()).getName());
+            assertTrue(links.containsKey(bin.resolve("manifest-tool-linux-x86_64").toFile()), links.toString());
             assertEquals("snyk-v1.1187.0-macos", links.get(bin.resolve("snyk").toFile()).getName());
             assertEquals("native-v1.0.0-darwin-arm64", links.get(bin.resolve("native").toFile()).getName());
             assertTrue(task.getTarget().containsAll(links.values()));
