@@ -27,7 +27,5 @@ The pipeline reads the shared Gradle Plugin Portal key and secret from CI Vault 
 `elastic/gradle-plugins` repository is already granted access in Terrazzo; do not copy the credential to a developer
 machine or print it in build output.
 
-If the Vault read is denied, follow the internal
-[Gradle Plugin Portal publishing guide](https://codex.elastic.dev/r/platform-engineering-productivity/releasing-software-at-elastic/releasing-on-prem-outside-of-the-unified-release/publishing-to-the-gradle-plugin-portal)
-and open an Artifact Management request through [ela.st/engprod-request](https://ela.st/engprod-request). Include the
-repository, Buildkite pipeline, owning team, plugin IDs or namespace, and planned release date.
+If the Vault read is denied, contact Control Plane Hosted Foundations in `#cp-hosted-foundations`. Include the
+repository, Buildkite pipeline, plugin IDs or namespace, and planned release date.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "local>elastic/renovate-config:platform-devflow"
+    "local>elastic/renovate-config:default"
   ],
   "pre-commit": {
     "enabled": true
