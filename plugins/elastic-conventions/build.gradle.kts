@@ -22,12 +22,10 @@ dependencies {
     implementation(project(":plugins:lifecycle"))
     implementation(project(":plugins:vault"))
     implementation(project(":plugins:cli:cli-lib"))
-    implementation(project(":plugins:cli:jfrog"))
     implementation(project(":plugins:cli:shellcheck"))
     implementation(project(":plugins:cli:snyk"))
 
     integrationTestImplementation(project(":plugins:vault"))
-    integrationTestImplementation(project(":plugins:cli:jfrog"))
     integrationTestImplementation(project(":plugins:cli:shellcheck"))
     integrationTestImplementation(project(":plugins:cli:snyk"))
 }
